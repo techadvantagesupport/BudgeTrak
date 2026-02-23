@@ -405,7 +405,8 @@ object EnglishStrings : AppStrings {
         joinWarningBody = "Joining a family group will replace your local budget data with the group's shared data. Your current transactions, goals, and settings will be overwritten. This cannot be undone.",
         dissolveError = "Failed to reach server \u2014 try again later",
         enterNickname = "Your name",
-        createGroupTitle = "Create Group"
+        createGroupTitle = "Create Group",
+        renameDevice = "Rename Device"
     )
 
     // ── Help Screen Strings ──

@@ -90,7 +90,6 @@ object FirestoreService {
 
     suspend fun updateDeviceMetadata(groupId: String, deviceId: String, syncVersion: Long) {
         val data = mapOf(
-            "deviceId" to deviceId,
             "lastSyncVersion" to syncVersion,
             "lastSeen" to System.currentTimeMillis()
         )
@@ -98,7 +97,7 @@ object FirestoreService {
             .document(groupId)
             .collection("devices")
             .document(deviceId)
-            .set(data)
+            .set(data, SetOptions.merge())
             .await()
     }
 
@@ -113,6 +112,8 @@ object FirestoreService {
         if (!doc.exists()) return null
         return DeviceRecord(
             deviceId = doc.getString("deviceId") ?: deviceId,
+            deviceName = doc.getString("deviceName") ?: "",
+            isAdmin = doc.getBoolean("isAdmin") ?: false,
             lastSyncVersion = doc.getLong("lastSyncVersion") ?: 0L,
             lastSeen = doc.getLong("lastSeen") ?: 0L
         )
@@ -229,6 +230,15 @@ object FirestoreService {
                 lastSeen = doc.getLong("lastSeen") ?: 0L
             )
         }
+    }
+
+    suspend fun updateDeviceName(groupId: String, deviceId: String, newName: String) {
+        db.collection("groups")
+            .document(groupId)
+            .collection("devices")
+            .document(deviceId)
+            .set(mapOf("deviceName" to newName), SetOptions.merge())
+            .await()
     }
 
     suspend fun removeDevice(groupId: String, deviceId: String) {

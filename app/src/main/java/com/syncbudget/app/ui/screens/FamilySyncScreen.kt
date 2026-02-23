@@ -114,6 +114,7 @@ fun FamilySyncScreen(
     onGeneratePairingCode: () -> Unit,
     generatedPairingCode: String?,
     onDismissPairingCode: () -> Unit,
+    onRenameDevice: (deviceId: String, newName: String) -> Unit = { _, _ -> },
     onHelpClick: () -> Unit = {},
     onBack: () -> Unit
 ) {
@@ -124,6 +125,9 @@ fun FamilySyncScreen(
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var createNicknameInput by remember { mutableStateOf("") }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameTargetDevice by remember { mutableStateOf<DeviceInfo?>(null) }
+    var renameInput by remember { mutableStateOf("") }
     var showJoinDialog by remember { mutableStateOf(false) }
     var joinCodeInput by remember { mutableStateOf("") }
     var joinNicknameInput by remember { mutableStateOf("") }
@@ -424,7 +428,15 @@ fun FamilySyncScreen(
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (isAdmin) Modifier.clickable {
+                                    renameTargetDevice = device
+                                    renameInput = device.deviceName
+                                    showRenameDialog = true
+                                } else Modifier
+                            )
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
@@ -759,6 +771,51 @@ fun FamilySyncScreen(
                         showJoinWarning = false
                         joinCodeInput = ""
                         joinNicknameInput = ""
+                    }) {
+                        Text(S.common.cancel)
+                    }
+                }
+            )
+        }
+
+        // Rename device dialog (admin only)
+        if (showRenameDialog && renameTargetDevice != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showRenameDialog = false
+                    renameTargetDevice = null
+                    renameInput = ""
+                },
+                title = { Text(S.sync.renameDevice) },
+                text = {
+                    OutlinedTextField(
+                        value = renameInput,
+                        onValueChange = { renameInput = it.take(20) },
+                        label = { Text(S.sync.enterNickname) },
+                        singleLine = true,
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val target = renameTargetDevice!!
+                            onRenameDevice(target.deviceId, renameInput.trim())
+                            showRenameDialog = false
+                            renameTargetDevice = null
+                            renameInput = ""
+                        },
+                        enabled = renameInput.isNotBlank()
+                    ) {
+                        Text(S.common.ok)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showRenameDialog = false
+                        renameTargetDevice = null
+                        renameInput = ""
                     }) {
                         Text(S.common.cancel)
                     }

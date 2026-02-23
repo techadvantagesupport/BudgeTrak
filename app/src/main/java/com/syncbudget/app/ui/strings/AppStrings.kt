@@ -429,7 +429,8 @@ data class SyncStrings(
     val joinWarningBody: String,
     val dissolveError: String,
     val enterNickname: String,
-    val createGroupTitle: String
+    val createGroupTitle: String,
+    val renameDevice: String
 )
 
 // ── Help Screen Strings ──

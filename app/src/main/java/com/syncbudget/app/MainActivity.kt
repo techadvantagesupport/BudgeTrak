@@ -313,6 +313,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // Check if an expense transaction is already accounted for in the budget
+            // (recurring expenses and amortization are built into the safe budget amount)
+            fun isBudgetAccountedExpense(txn: Transaction): Boolean {
+                if (txn.type != TransactionType.EXPENSE) return false
+                val recurringCatId = categories.find { it.tag == "recurring" }?.id
+                val amortCatId = categories.find { it.tag == "amortization" }?.id
+                return txn.categoryAmounts.any {
+                    it.categoryId == recurringCatId || it.categoryId == amortCatId
+                }
+            }
+
             // Foreground flag
             DisposableEffect(Unit) {
                 syncPrefs.edit().putBoolean("isInForeground", true).apply()
@@ -527,17 +538,6 @@ class MainActivity : ComponentActivity() {
 
             // Percent tolerance for matching
             val percentTolerance = matchPercent / 100f
-
-            // Check if an expense transaction is already accounted for in the budget
-            // (recurring expenses and amortization are built into the safe budget amount)
-            fun isBudgetAccountedExpense(txn: Transaction): Boolean {
-                if (txn.type != TransactionType.EXPENSE) return false
-                val recurringCatId = categories.find { it.tag == "recurring" }?.id
-                val amortCatId = categories.find { it.tag == "amortization" }?.id
-                return txn.categoryAmounts.any {
-                    it.categoryId == recurringCatId || it.categoryId == amortCatId
-                }
-            }
 
             // Helper to add a transaction with budget effects
             fun addTransactionWithBudgetEffect(txn: Transaction) {
@@ -1782,6 +1782,20 @@ class MainActivity : ComponentActivity() {
                         },
                         generatedPairingCode = generatedPairingCode,
                         onDismissPairingCode = { generatedPairingCode = null },
+                        onRenameDevice = { targetDeviceId, newName ->
+                            val gId = syncGroupId ?: return@FamilySyncScreen
+                            coroutineScope.launch {
+                                try {
+                                    FirestoreService.updateDeviceName(gId, targetDeviceId, newName)
+                                    // If renaming self, also update local prefs
+                                    if (targetDeviceId == localDeviceId) {
+                                        GroupManager.setDeviceName(context, newName)
+                                    }
+                                    // Refresh device list
+                                    syncDevices = GroupManager.getDevices(gId)
+                                } catch (_: Exception) {}
+                            }
+                        },
                         onHelpClick = { currentScreen = "family_sync_help" },
                         onBack = {
                             generatedPairingCode = null
