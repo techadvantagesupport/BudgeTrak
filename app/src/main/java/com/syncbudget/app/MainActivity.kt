@@ -158,11 +158,15 @@ class MainActivity : ComponentActivity() {
             // Budget state
             var isManualBudgetEnabled by remember { mutableStateOf(prefs.getBoolean("isManualBudgetEnabled", false)) }
             var manualBudgetAmount by remember { mutableDoubleStateOf(
-                prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull()
+                try {
+                    prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull()
+                } catch (_: ClassCastException) { null }
                     ?: prefs.getFloat("manualBudgetAmount", 0f).toDouble()
             ) }
             var availableCash by remember { mutableDoubleStateOf(
-                prefs.getString("availableCash", null)?.toDoubleOrNull()
+                try {
+                    prefs.getString("availableCash", null)?.toDoubleOrNull()
+                } catch (_: ClassCastException) { null }
                     ?: prefs.getFloat("availableCash", 0f).toDouble()
             ) }
             var budgetStartDate by remember {
@@ -447,10 +451,11 @@ class MainActivity : ComponentActivity() {
                                 val syncedStartDate = merged.budgetStartDate?.let {
                                     try { LocalDate.parse(it) } catch (_: Exception) { null }
                                 }
-                                if (syncedStartDate != null) {
+                                val budgetStartChanged = syncedStartDate != null && syncedStartDate != budgetStartDate
+                                if (budgetStartChanged) {
                                     budgetStartDate = syncedStartDate
                                     lastRefreshDate = LocalDate.now()
-                                    // Use synced availableCash if available, otherwise fall back to budgetAmount
+                                    // Use synced availableCash from admin reset
                                     availableCash = if (merged.availableCash_clock > 0L) merged.availableCash else budgetAmount
                                 }
                                 // Write all synced settings to app_prefs
@@ -467,9 +472,9 @@ class MainActivity : ComponentActivity() {
                                     .putFloat("matchPercent", merged.matchPercent)
                                     .putInt("matchDollar", merged.matchDollar)
                                     .putInt("matchChars", merged.matchChars)
-                                if (syncedStartDate != null) {
+                                if (budgetStartChanged) {
                                     prefsEditor
-                                        .putString("budgetStartDate", syncedStartDate.toString())
+                                        .putString("budgetStartDate", budgetStartDate.toString())
                                         .putString("lastRefreshDate", lastRefreshDate.toString())
                                         .putString("availableCash", availableCash.toString())
                                 }
@@ -1408,7 +1413,13 @@ class MainActivity : ComponentActivity() {
                             savePeriodLedger()
                             if (isSyncConfigured) {
                                 val clock = lamportClock.tick()
-                                sharedSettings = sharedSettings.copy(budgetStartDate = budgetStartDate?.toString(), budgetStartDate_clock = clock, lastChangedBy = localDeviceId)
+                                sharedSettings = sharedSettings.copy(
+                                    budgetStartDate = budgetStartDate?.toString(),
+                                    budgetStartDate_clock = clock,
+                                    availableCash = availableCash,
+                                    availableCash_clock = clock,
+                                    lastChangedBy = localDeviceId
+                                )
                                 SharedSettingsRepository.save(context, sharedSettings)
                             }
                             prefs.edit()
@@ -1720,7 +1731,16 @@ class MainActivity : ComponentActivity() {
                                             matchPercent = merged.matchPercent
                                             matchDollar = merged.matchDollar
                                             matchChars = merged.matchChars
-                                            prefs.edit()
+                                            val syncedStartDate = merged.budgetStartDate?.let {
+                                                try { LocalDate.parse(it) } catch (_: Exception) { null }
+                                            }
+                                            val budgetStartChanged = syncedStartDate != null && syncedStartDate != budgetStartDate
+                                            if (budgetStartChanged) {
+                                                budgetStartDate = syncedStartDate
+                                                lastRefreshDate = LocalDate.now()
+                                                availableCash = if (merged.availableCash_clock > 0L) merged.availableCash else budgetAmount
+                                            }
+                                            val prefsEditor = prefs.edit()
                                                 .putString("currencySymbol", merged.currency)
                                                 .putString("budgetPeriod", merged.budgetPeriod)
                                                 .putInt("resetHour", merged.resetHour)
@@ -1733,7 +1753,13 @@ class MainActivity : ComponentActivity() {
                                                 .putFloat("matchPercent", merged.matchPercent)
                                                 .putInt("matchDollar", merged.matchDollar)
                                                 .putInt("matchChars", merged.matchChars)
-                                                .apply()
+                                            if (budgetStartChanged) {
+                                                prefsEditor
+                                                    .putString("budgetStartDate", budgetStartDate.toString())
+                                                    .putString("lastRefreshDate", lastRefreshDate.toString())
+                                                    .putString("availableCash", availableCash.toString())
+                                            }
+                                            prefsEditor.apply()
                                         }
                                         result.catIdRemap?.let { remap ->
                                             val rj = org.json.JSONObject(remap.mapKeys { it.key.toString() })

@@ -265,7 +265,8 @@ fun BudgetConfigScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = { showResetBudgetConfirm = true },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLocked
                 ) {
                     Text(S.budgetConfig.startResetBudget)
                 }
