@@ -16,6 +16,7 @@ import com.syncbudget.app.data.TransactionRepository
 import android.util.Base64
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 
 class SyncWorker(
     appContext: Context,
@@ -23,14 +24,20 @@ class SyncWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
+        // Acquire sync lock to prevent race with foreground sync
+        if (!syncLock.tryLock()) return Result.success()
+        try {
+            return doSyncWork()
+        } finally {
+            syncLock.unlock()
+        }
+    }
+
+    private suspend fun doSyncWork(): Result {
         val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
         val groupId = syncPrefs.getString("groupId", null) ?: return Result.success()
         // TODO(security): Move encryption key to EncryptedSharedPreferences
         val keyBase64 = syncPrefs.getString("encryptionKey", null) ?: return Result.success()
-
-        // Check if app is in foreground — skip to avoid race
-        val isInForeground = syncPrefs.getBoolean("isInForeground", false)
-        if (isInForeground) return Result.success()
 
         val encryptionKey = Base64.decode(keyBase64, Base64.NO_WRAP)
         val deviceId = SyncIdGenerator.getOrCreateDeviceId(applicationContext)
@@ -84,6 +91,8 @@ class SyncWorker(
     }
 
     companion object {
+        /** Lock shared between SyncWorker and foreground sync to prevent concurrent syncs. */
+        val syncLock = ReentrantLock()
         private const val WORK_NAME = "sync_budget_background_sync"
 
         fun schedule(context: Context) {

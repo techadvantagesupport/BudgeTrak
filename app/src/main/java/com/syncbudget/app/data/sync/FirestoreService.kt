@@ -71,6 +71,9 @@ object FirestoreService {
         encryptedPayload: String,
         version: Long
     ) {
+        require(groupId.isNotBlank()) { "Group ID required" }
+        require(sourceDeviceId.isNotBlank()) { "Device ID required" }
+        require(version > 0) { "Version must be positive" }
         val data = mapOf(
             "version" to version,
             "sourceDeviceId" to sourceDeviceId,
@@ -172,6 +175,10 @@ object FirestoreService {
     }
 
     suspend fun createPairingCode(groupId: String, code: String, encryptedKey: String, expiresAt: Long) {
+        require(groupId.matches(Regex("^[a-f0-9]{12}$"))) { "Invalid group ID format" }
+        require(code.matches(Regex("^[A-Z2-9]{6}$"))) { "Invalid pairing code format" }
+        require(encryptedKey.isNotBlank()) { "Encryption key required" }
+        require(expiresAt > System.currentTimeMillis()) { "Expiry must be in the future" }
         val data = mapOf(
             "groupId" to groupId,
             "encryptedKey" to encryptedKey,
@@ -185,8 +192,10 @@ object FirestoreService {
     }
 
     suspend fun redeemPairingCode(code: String): PairingData? {
+        val normalized = code.uppercase().trim()
+        if (!normalized.matches(Regex("^[A-Z2-9]{6}$"))) return null
         val doc = db.collection("pairing_codes")
-            .document(code.uppercase())
+            .document(normalized)
             .get()
             .await()
 
@@ -199,7 +208,7 @@ object FirestoreService {
         val key = doc.getString("encryptedKey") ?: return null
 
         // Delete the code after redemption (one-time use)
-        db.collection("pairing_codes").document(code.uppercase()).delete().await()
+        db.collection("pairing_codes").document(normalized).delete().await()
 
         return PairingData(groupId, key)
     }

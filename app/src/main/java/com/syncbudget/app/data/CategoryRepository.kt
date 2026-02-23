@@ -21,6 +21,7 @@ object CategoryRepository {
             obj.put("deleted", c.deleted)
             obj.put("name_clock", c.name_clock)
             obj.put("iconName_clock", c.iconName_clock)
+            obj.put("tag_clock", c.tag_clock)
             obj.put("deleted_clock", c.deleted_clock)
             jsonArray.put(obj)
         }
@@ -48,6 +49,7 @@ object CategoryRepository {
                     deleted = obj.optBoolean("deleted", false),
                     name_clock = obj.optLong("name_clock", 0L),
                     iconName_clock = obj.optLong("iconName_clock", 0L),
+                    tag_clock = obj.optLong("tag_clock", 0L),
                     deleted_clock = obj.optLong("deleted_clock", 0L)
                 )
             )

@@ -93,10 +93,9 @@ object DeltaBuilder {
         val fields = mutableMapOf<String, FieldDelta>()
         if (cat.name_clock > lastPushedClock) fields["name"] = FieldDelta(cat.name, cat.name_clock)
         if (cat.iconName_clock > lastPushedClock) fields["iconName"] = FieldDelta(cat.iconName, cat.iconName_clock)
+        if (cat.tag_clock > lastPushedClock) fields["tag"] = FieldDelta(cat.tag, cat.tag_clock)
         if (cat.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(cat.deleted, cat.deleted_clock)
         if (fields.isEmpty()) return null
-        // Include tag as metadata only when there are real field changes to send
-        if (cat.tag.isNotEmpty()) fields["tag"] = FieldDelta(cat.tag, 0L)
         return RecordDelta("category", "upsert", cat.id, cat.deviceId, fields)
     }
 

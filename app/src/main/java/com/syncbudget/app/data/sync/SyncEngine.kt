@@ -82,12 +82,20 @@ class SyncEngine(
                 // Device not registered and no snapshot — possibly removed from group
                 return SyncResult(success = false, error = "removed_from_group")
             }
+            // Apply snapshot for new devices, then continue to fetch post-snapshot deltas
+            var snapshotApplied = false
+            var snapshotState: FullState? = null
             if (deviceRecord == null && snapshot != null) {
-                // New device joining — apply snapshot first
-                return applySnapshot(snapshot)
+                snapshotState = decryptSnapshot(snapshot)
+                if (snapshotState == null) {
+                    return SyncResult(success = false, error = "Failed to decrypt snapshot")
+                }
+                lastSyncVersion = snapshot.snapshotVersion
+                FirestoreService.updateDeviceMetadata(groupId, deviceId, snapshot.snapshotVersion)
+                snapshotApplied = true
             }
 
-            // Step 2: Fetch remote deltas
+            // Step 2: Fetch remote deltas (including post-snapshot deltas for new devices)
             val remoteDeltas = FirestoreService.fetchDeltas(groupId, lastSyncVersion)
 
             // Step 3: Decrypt and deserialize remote deltas
@@ -105,14 +113,22 @@ class SyncEngine(
                 }
             }
 
-            // Step 4: Per-field CRDT merge
-            var mergedTxns = transactions.toMutableList()
-            var mergedRe = recurringExpenses.toMutableList()
-            var mergedIs = incomeSources.toMutableList()
-            var mergedSg = savingsGoals.toMutableList()
-            var mergedAe = amortizationEntries.toMutableList()
-            var mergedCat = categories.toMutableList()
-            var mergedSettings = sharedSettings
+            // Step 4: Per-field CRDT merge — use snapshot state as base if applied
+            val baseTxns = snapshotState?.transactions ?: transactions
+            val baseRe = snapshotState?.recurringExpenses ?: recurringExpenses
+            val baseIs = snapshotState?.incomeSources ?: incomeSources
+            val baseSg = snapshotState?.savingsGoals ?: savingsGoals
+            val baseAe = snapshotState?.amortizationEntries ?: amortizationEntries
+            val baseCat = snapshotState?.categories ?: categories
+            val baseSettings = snapshotState?.sharedSettings ?: sharedSettings
+
+            var mergedTxns = baseTxns.toMutableList()
+            var mergedRe = baseRe.toMutableList()
+            var mergedIs = baseIs.toMutableList()
+            var mergedSg = baseSg.toMutableList()
+            var mergedAe = baseAe.toMutableList()
+            var mergedCat = baseCat.toMutableList()
+            var mergedSettings = baseSettings
             var settingsChanged = false
             var budgetRecalcNeeded = false
             val catIdRemap = existingCatIdRemap.toMutableMap() // remote ID -> local ID (seeded from persistent map)
@@ -197,6 +213,12 @@ class SyncEngine(
                         mergedTxns[i] = txn.copy(categoryAmounts = remapped)
                     }
                 }
+                // Prune stale remap entries: remove mappings whose source ID
+                // no longer appears in any transaction's categoryAmounts
+                val usedCatIds = mergedTxns.flatMapTo(mutableSetOf()) { txn ->
+                    txn.categoryAmounts.map { it.categoryId }
+                }
+                catIdRemap.keys.removeAll { it !in usedCatIds }
             }
 
             // Step 6: Push local changes
@@ -224,6 +246,11 @@ class SyncEngine(
 
             var deltasPushed = 0
             if (localDeltas.isNotEmpty()) {
+                // Persist clock BEFORE push for idempotency: if push succeeds but
+                // app crashes before persisting, we won't re-push the same deltas.
+                // If push fails, snapshot convergence ensures eventual consistency.
+                lastPushedClock = lamportClock.value
+
                 val packet = DeltaPacket(
                     sourceDeviceId = deviceId,
                     timestamp = Instant.now(),
@@ -236,7 +263,6 @@ class SyncEngine(
                 val version = FirestoreService.getNextDeltaVersion(groupId)
                 FirestoreService.pushDelta(groupId, deviceId, encoded, version)
                 deltasPushed = localDeltas.size
-                lastPushedClock = lamportClock.value
             }
 
             // Step 7: Update metadata
@@ -293,19 +319,19 @@ class SyncEngine(
                 android.util.Log.w("SyncEngine", "Failed to check/resolve admin claim", e)
             }
 
-            val hasRemoteChanges = packets.isNotEmpty()
+            val hasChanges = packets.isNotEmpty() || snapshotApplied
             return SyncResult(
                 success = true,
                 deltasReceived = packets.sumOf { it.changes.size },
                 deltasPushed = deltasPushed,
-                budgetRecalcNeeded = budgetRecalcNeeded,
-                mergedTransactions = if (hasRemoteChanges) mergedTxns else null,
-                mergedRecurringExpenses = if (hasRemoteChanges) mergedRe else null,
-                mergedIncomeSources = if (hasRemoteChanges) mergedIs else null,
-                mergedSavingsGoals = if (hasRemoteChanges) mergedSg else null,
-                mergedAmortizationEntries = if (hasRemoteChanges) mergedAe else null,
-                mergedCategories = if (hasRemoteChanges) mergedCat else null,
-                mergedSharedSettings = if (settingsChanged) mergedSettings else null,
+                budgetRecalcNeeded = budgetRecalcNeeded || snapshotApplied,
+                mergedTransactions = if (hasChanges) mergedTxns else null,
+                mergedRecurringExpenses = if (hasChanges) mergedRe else null,
+                mergedIncomeSources = if (hasChanges) mergedIs else null,
+                mergedSavingsGoals = if (hasChanges) mergedSg else null,
+                mergedAmortizationEntries = if (hasChanges) mergedAe else null,
+                mergedCategories = if (hasChanges) mergedCat else null,
+                mergedSharedSettings = if (settingsChanged || snapshotApplied) mergedSettings else null,
                 pendingAdminClaim = adminClaim,
                 catIdRemap = catIdRemap
             )
@@ -342,6 +368,17 @@ class SyncEngine(
             )
         } catch (e: Exception) {
             SyncResult(success = false, error = "Failed to apply snapshot: ${e.message}")
+        }
+    }
+
+    private suspend fun decryptSnapshot(snapshot: SnapshotRecord): FullState? {
+        return try {
+            val encrypted = Base64.decode(snapshot.encryptedData, Base64.NO_WRAP)
+            val decrypted = CryptoHelper.decryptWithKey(encrypted, encryptionKey)
+            val json = JSONObject(String(decrypted))
+            SnapshotManager.deserializeFullState(json)
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -542,6 +579,7 @@ class SyncEngine(
             deleted = f["deleted"]?.value as? Boolean ?: false,
             name_clock = f["name"]?.clock ?: 0L,
             iconName_clock = f["iconName"]?.clock ?: 0L,
+            tag_clock = f["tag"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L
         )
     }

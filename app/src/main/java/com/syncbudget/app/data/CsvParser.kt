@@ -92,11 +92,12 @@ private fun cleanMerchantName(raw: String): String {
 
 fun serializeTransactionsCsv(transactions: List<Transaction>): String {
     val sb = StringBuilder()
-    sb.appendLine("id,type,date,source,amount,categoryAmounts,isUserCategorized")
+    sb.appendLine("id,type,date,source,amount,categoryAmounts,isUserCategorized,isBudgetIncome,deviceId,deleted,source_clock,amount_clock,date_clock,type_clock,categoryAmounts_clock,isUserCategorized_clock,isBudgetIncome_clock,deleted_clock")
     for (t in transactions) {
         val categoryAmountsStr = t.categoryAmounts.joinToString(";") { "${it.categoryId}:${it.amount}" }
         val escapedSource = "\"${t.source.replace("\"", "\"\"")}\""
-        sb.appendLine("${t.id},${t.type.name},${t.date},$escapedSource,${t.amount},\"$categoryAmountsStr\",${t.isUserCategorized}")
+        val escapedDeviceId = "\"${t.deviceId.replace("\"", "\"\"")}\""
+        sb.appendLine("${t.id},${t.type.name},${t.date},$escapedSource,${t.amount},\"$categoryAmountsStr\",${t.isUserCategorized},${t.isBudgetIncome},$escapedDeviceId,${t.deleted},${t.source_clock},${t.amount_clock},${t.date_clock},${t.type_clock},${t.categoryAmounts_clock},${t.isUserCategorized_clock},${t.isBudgetIncome_clock},${t.deleted_clock}")
     }
     return sb.toString()
 }
@@ -147,6 +148,19 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
                          else generateTransactionId(usedIds)
                 usedIds.add(id)
 
+                // Parse optional sync metadata (columns 7-17, backward compatible)
+                val isBudgetIncome = if (fields.size > 7) fields[7].trim().toBooleanStrictOrNull() ?: false else false
+                val deviceId = if (fields.size > 8) fields[8].trim() else ""
+                val deleted = if (fields.size > 9) fields[9].trim().toBooleanStrictOrNull() ?: false else false
+                val sourceClock = if (fields.size > 10) fields[10].trim().toLongOrNull() ?: 0L else 0L
+                val amountClock = if (fields.size > 11) fields[11].trim().toLongOrNull() ?: 0L else 0L
+                val dateClock = if (fields.size > 12) fields[12].trim().toLongOrNull() ?: 0L else 0L
+                val typeClock = if (fields.size > 13) fields[13].trim().toLongOrNull() ?: 0L else 0L
+                val catAmountsClock = if (fields.size > 14) fields[14].trim().toLongOrNull() ?: 0L else 0L
+                val isUserCatClock = if (fields.size > 15) fields[15].trim().toLongOrNull() ?: 0L else 0L
+                val isBudgetIncomeClock = if (fields.size > 16) fields[16].trim().toLongOrNull() ?: 0L else 0L
+                val deletedClock = if (fields.size > 17) fields[17].trim().toLongOrNull() ?: 0L else 0L
+
                 transactions.add(
                     Transaction(
                         id = id,
@@ -155,7 +169,18 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
                         source = source,
                         categoryAmounts = categoryAmounts,
                         amount = amount,
-                        isUserCategorized = isUserCategorized
+                        isUserCategorized = isUserCategorized,
+                        isBudgetIncome = isBudgetIncome,
+                        deviceId = deviceId,
+                        deleted = deleted,
+                        source_clock = sourceClock,
+                        amount_clock = amountClock,
+                        date_clock = dateClock,
+                        type_clock = typeClock,
+                        categoryAmounts_clock = catAmountsClock,
+                        isUserCategorized_clock = isUserCatClock,
+                        isBudgetIncome_clock = isBudgetIncomeClock,
+                        deleted_clock = deletedClock
                     )
                 )
             } catch (e: Exception) {

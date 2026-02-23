@@ -196,11 +196,12 @@ object CrdtMerge {
             id = local.id,
             name = if (shouldAcceptRemote(local.name_clock, remote.name_clock, localDeviceId, remoteDeviceId)) remote.name else local.name,
             iconName = if (shouldAcceptRemote(local.iconName_clock, remote.iconName_clock, localDeviceId, remoteDeviceId)) remote.iconName else local.iconName,
-            tag = local.tag.ifEmpty { remote.tag },
+            tag = if (shouldAcceptRemote(local.tag_clock, remote.tag_clock, localDeviceId, remoteDeviceId)) remote.tag else local.tag,
             deviceId = local.deviceId,
             deleted = mergedDeleted,
             name_clock = maxOf(local.name_clock, remote.name_clock),
             iconName_clock = maxOf(local.iconName_clock, remote.iconName_clock),
+            tag_clock = maxOf(local.tag_clock, remote.tag_clock),
             deleted_clock = mergedDeletedClock
         )
     }

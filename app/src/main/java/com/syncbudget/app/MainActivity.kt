@@ -328,6 +328,11 @@ class MainActivity : ComponentActivity() {
                 }
 
                 while (true) {
+                    // Acquire sync lock to prevent race with SyncWorker
+                    if (!SyncWorker.syncLock.tryLock()) {
+                        delay(5_000)
+                        continue
+                    }
                     try {
                         syncStatus = "syncing"
                         // Load persisted category ID remap
@@ -350,6 +355,9 @@ class MainActivity : ComponentActivity() {
                             existingCatIdRemap = existingRemap
                         )
                         if (result.success) {
+                            // Capture pre-merge transaction IDs for availableCash adjustment
+                            val premergeLocalTxnIds = transactions.map { it.id }.toSet()
+
                             Snapshot.withMutableSnapshot {
                                 result.mergedTransactions?.let { merged ->
                                     transactions.clear()
@@ -382,6 +390,25 @@ class MainActivity : ComponentActivity() {
                             result.mergedSavingsGoals?.let { saveSavingsGoals() }
                             result.mergedAmortizationEntries?.let { saveAmortizationEntries() }
                             result.mergedCategories?.let { saveCategories() }
+                            // Adjust availableCash for new remote transactions (#9)
+                            if (result.mergedTransactions != null && budgetStartDate != null) {
+                                val newRemoteTxns = result.mergedTransactions!!.filter {
+                                    it.deviceId != localDeviceId && it.id !in premergeLocalTxnIds
+                                }
+                                var cashChanged = false
+                                for (txn in newRemoteTxns) {
+                                    if (!txn.deleted && !txn.date.isBefore(budgetStartDate)) {
+                                        if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
+                                            availableCash -= txn.amount
+                                            cashChanged = true
+                                        } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
+                                            availableCash += txn.amount
+                                            cashChanged = true
+                                        }
+                                    }
+                                }
+                                if (cashChanged) persistAvailableCash()
+                            }
                             result.mergedSharedSettings?.let { merged ->
                                 sharedSettings = merged
                                 // Apply synced settings to local state
@@ -455,7 +482,12 @@ class MainActivity : ComponentActivity() {
                             // Handle auto-leave on removal
                             if (result.error == "removed_from_group" || result.error == "group_deleted") {
                                 GroupManager.leaveGroup(context)
-                                syncPrefs.edit().remove("catIdRemap").apply()
+                                syncPrefs.edit()
+                                    .remove("catIdRemap")
+                                    .remove("lastSyncVersion")
+                                    .remove("lastPushedClock")
+                                    .remove("lastSuccessfulSync")
+                                    .apply()
                                 isSyncConfigured = false
                                 syncGroupId = null
                                 isSyncAdmin = false
@@ -463,12 +495,16 @@ class MainActivity : ComponentActivity() {
                                 lastSyncTime = null
                                 syncDevices = emptyList()
                                 pendingAdminClaim = null
+                                staleDays = 0
+                                syncErrorMessage = null
                                 return@LaunchedEffect
                             }
                         }
                     } catch (e: Exception) {
                         android.util.Log.e("SyncLoop", "Foreground sync failed", e)
                         syncStatus = "error"
+                    } finally {
+                        SyncWorker.syncLock.unlock()
                     }
                     delay(60_000)
                 }
@@ -572,15 +608,21 @@ class MainActivity : ComponentActivity() {
                         availableCash += budgetAmount * missedPeriods
                         lastRefreshDate = today
 
-                        // Record period ledger entry
-                        periodLedger.add(
-                            PeriodLedgerEntry(
-                                periodStartDate = LocalDateTime.now(),
-                                appliedAmount = budgetAmount,
-                                clockAtReset = lamportClock.value
+                        // Record period ledger entry (deduplicate across devices)
+                        val nowDateTime = LocalDateTime.now()
+                        val alreadyRecorded = periodLedger.any {
+                            it.periodStartDate.toLocalDate() == nowDateTime.toLocalDate()
+                        }
+                        if (!alreadyRecorded) {
+                            periodLedger.add(
+                                PeriodLedgerEntry(
+                                    periodStartDate = nowDateTime,
+                                    appliedAmount = budgetAmount,
+                                    clockAtReset = lamportClock.value
+                                )
                             )
-                        )
-                        savePeriodLedger()
+                            savePeriodLedger()
+                        }
 
                         // Update savings goals totalSavedSoFar for non-paused, non-complete items
                         for (period in 0 until missedPeriods) {
@@ -1579,13 +1621,21 @@ class MainActivity : ComponentActivity() {
                         onLeaveGroup = {
                             coroutineScope.launch {
                                 GroupManager.leaveGroup(context)
-                                syncPrefs.edit().remove("catIdRemap").apply()
+                                syncPrefs.edit()
+                                    .remove("catIdRemap")
+                                    .remove("lastSyncVersion")
+                                    .remove("lastPushedClock")
+                                    .remove("lastSuccessfulSync")
+                                    .apply()
                                 isSyncConfigured = false
                                 syncGroupId = null
                                 isSyncAdmin = false
                                 syncStatus = "off"
                                 lastSyncTime = null
                                 syncDevices = emptyList()
+                                pendingAdminClaim = null
+                                staleDays = 0
+                                syncErrorMessage = null
                             }
                         },
                         onDissolveGroup = {
@@ -1595,13 +1645,21 @@ class MainActivity : ComponentActivity() {
                                 coroutineScope.launch {
                                     try {
                                         GroupManager.dissolveGroup(context, gId)
-                                        syncPrefs.edit().remove("catIdRemap").apply()
+                                        syncPrefs.edit()
+                                            .remove("catIdRemap")
+                                            .remove("lastSyncVersion")
+                                            .remove("lastPushedClock")
+                                            .remove("lastSuccessfulSync")
+                                            .apply()
                                         isSyncConfigured = false
                                         syncGroupId = null
                                         isSyncAdmin = false
                                         syncStatus = "off"
                                         lastSyncTime = null
                                         syncDevices = emptyList()
+                                        pendingAdminClaim = null
+                                        staleDays = 0
+                                        syncErrorMessage = null
                                     } catch (_: Exception) {
                                         syncStatus = "error"
                                         android.widget.Toast.makeText(context, strings.sync.dissolveError, android.widget.Toast.LENGTH_LONG).show()

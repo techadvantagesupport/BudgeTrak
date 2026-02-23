@@ -10,5 +10,6 @@ data class Category(
     val deleted: Boolean = false,
     val name_clock: Long = 0L,
     val iconName_clock: Long = 0L,
+    val tag_clock: Long = 0L,
     val deleted_clock: Long = 0L
 )
