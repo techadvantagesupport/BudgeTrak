@@ -38,7 +38,8 @@ data class SyncBudgetColors(
     val cardText: Color,
     val displayBackground: Color,
     val displayBorder: Color,
-    val userCategoryIconTint: Color
+    val userCategoryIconTint: Color,
+    val accentTint: Color
 )
 
 val LocalSyncBudgetColors = staticCompositionLocalOf {
@@ -49,7 +50,8 @@ val LocalSyncBudgetColors = staticCompositionLocalOf {
         cardText = DarkCardText,
         displayBackground = DarkDisplayBackground,
         displayBorder = DarkDisplayBorder,
-        userCategoryIconTint = LightCardBackground
+        userCategoryIconTint = LightCardBackground,
+        accentTint = DarkCardText
     )
 }
 
@@ -169,7 +171,8 @@ fun SyncBudgetTheme(
             cardText = DarkCardText,
             displayBackground = DarkDisplayBackground,
             displayBorder = DarkDisplayBorder,
-            userCategoryIconTint = LightCardBackground
+            userCategoryIconTint = LightCardBackground,
+            accentTint = DarkCardText
         )
     } else {
         SyncBudgetColors(
@@ -179,7 +182,8 @@ fun SyncBudgetTheme(
             cardText = LightCardText,
             displayBackground = LightDisplayBackground,
             displayBorder = LightDisplayBorder,
-            userCategoryIconTint = LightCardBackground
+            userCategoryIconTint = LightCardBackground,
+            accentTint = LightCardBackground
         )
     }
 

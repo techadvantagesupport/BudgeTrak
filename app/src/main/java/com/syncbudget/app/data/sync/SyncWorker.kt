@@ -13,7 +13,9 @@ import com.syncbudget.app.data.RecurringExpenseRepository
 import com.syncbudget.app.data.SavingsGoalRepository
 import com.syncbudget.app.data.SharedSettingsRepository
 import com.syncbudget.app.data.TransactionRepository
+import com.syncbudget.app.data.TransactionType
 import android.util.Base64
+import java.time.LocalDate
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
@@ -71,6 +73,9 @@ class SyncWorker(
         )
 
         if (result.success) {
+            // Capture pre-merge transaction IDs for cash adjustment
+            val premergeLocalTxnIds = transactions.map { it.id }.toSet()
+
             // Save merged data back to JSON files
             result.mergedTransactions?.let { TransactionRepository.save(applicationContext, it) }
             result.mergedRecurringExpenses?.let { RecurringExpenseRepository.save(applicationContext, it) }
@@ -84,6 +89,43 @@ class SyncWorker(
                 val json = JSONObject(remap.mapKeys { it.key.toString() })
                 syncPrefs.edit().putString("catIdRemap", json.toString()).apply()
             }
+
+            // Adjust availableCash for new remote transactions (matches foreground logic)
+            if (result.mergedTransactions != null) {
+                val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                val budgetStartDate = appPrefs.getString("budgetStartDate", null)?.let {
+                    try { LocalDate.parse(it) } catch (_: Exception) { null }
+                }
+                if (budgetStartDate != null) {
+                    val mergedCats = result.mergedCategories ?: categories
+                    val recurringCatId = mergedCats.find { it.tag == "recurring" }?.id
+                    val amortCatId = mergedCats.find { it.tag == "amortization" }?.id
+                    val newRemoteTxns = result.mergedTransactions!!.filter {
+                        it.deviceId != deviceId && it.id !in premergeLocalTxnIds
+                    }
+                    var cash = appPrefs.getString("availableCash", null)?.toDoubleOrNull()
+                        ?: appPrefs.getFloat("availableCash", 0f).toDouble()
+                    var cashChanged = false
+                    for (txn in newRemoteTxns) {
+                        val isBudgetAccounted = txn.type == TransactionType.EXPENSE &&
+                            txn.categoryAmounts.any { it.categoryId == recurringCatId || it.categoryId == amortCatId }
+                        if (!txn.deleted && !txn.date.isBefore(budgetStartDate)) {
+                            if (txn.type == TransactionType.EXPENSE && !isBudgetAccounted) {
+                                cash -= txn.amount
+                                cashChanged = true
+                            } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
+                                cash += txn.amount
+                                cashChanged = true
+                            }
+                        }
+                    }
+                    if (cashChanged) {
+                        if (cash.isNaN() || cash.isInfinite()) cash = 0.0
+                        appPrefs.edit().putString("availableCash", cash.toString()).apply()
+                    }
+                }
+            }
+
             return Result.success()
         }
 

@@ -222,6 +222,7 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(4.dp))
             HelpBulletText(S.settingsHelp.paidSave)
             HelpBulletText(S.settingsHelp.paidLoad)
+            HelpBulletText(S.settingsHelp.paidAdFree)
             Spacer(modifier = Modifier.height(8.dp))
             HelpBodyText(
                 S.settingsHelp.paidNote,

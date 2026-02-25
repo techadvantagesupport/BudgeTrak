@@ -761,6 +761,8 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
 
             BodyText(S.transactionsHelp.loadPasswordNote)
             Spacer(modifier = Modifier.height(8.dp))
+            BodyText(S.transactionsHelp.fullRestoreNote)
+            Spacer(modifier = Modifier.height(8.dp))
             BodyText(S.transactionsHelp.loadDuplicateNote)
             Spacer(modifier = Modifier.height(8.dp))
 

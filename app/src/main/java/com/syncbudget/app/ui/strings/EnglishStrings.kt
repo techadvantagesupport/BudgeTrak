@@ -351,6 +351,7 @@ object EnglishStrings : AppStrings {
         leaveGroup = "Leave Group",
         dissolveGroup = "Dissolve Group",
         syncNow = "Sync Now",
+        syncCashToAdmin = "Sync Available Cash to Admin",
         lastSynced = { time -> "Last synced: $time" },
         syncing = "Syncing...",
         syncError = "Sync error",
@@ -459,6 +460,12 @@ object EnglishStrings : AppStrings {
         chartRangeBullet = "Range button (left) \u2014 cycles through time ranges: 7 days, 30 days, 90 days, or All Time",
         chartSpendingBullet = "\"Spending\" title (center) \u2014 the chart label",
         chartToggleBullet = "Chart type toggle (right) \u2014 switch between pie chart and bar chart views",
+        chartIconsTitle = "Pie Chart Icons",
+        chartIconsBody = "Category icons are displayed inside their pie wedges in a contrasting color " +
+            "(white on dark wedges, black on light wedges) for readability. Categories with " +
+            "very small slices (less than 4% of spending) have their icons stacked along the " +
+            "left margin of the chart in the wedge's color. Tap any icon to see the category " +
+            "name and amount.",
         chartPaletteTitle = "Chart Palette",
         chartPaletteBody = "The colors used in the chart can be changed in Settings under \"Chart Palette\". " +
             "Three palettes are available: Bright, Pastel, and Sunset. Each palette automatically " +
@@ -629,11 +636,12 @@ object EnglishStrings : AppStrings {
         matchingNote = "The defaults work well for most users. Increase the tolerances if you find " +
             "the app is missing matches, or decrease them if you're seeing too many false positives.",
         paidTitle = "Paid User",
-        paidBody = "When checked, this unlocks premium features:",
+        paidBody = "When checked, this unlocks premium features and removes the ad banner:",
         paidSave = "Save transactions \u2014 export to CSV or encrypted file",
         paidLoad = "Load transactions \u2014 import from bank CSV, app CSV, or encrypted backup",
+        paidAdFree = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
         paidNote = "When Paid User is not enabled, the Save and Load icons on the Transactions " +
-            "screen appear dimmed and are non-functional.",
+            "screen appear dimmed and are non-functional, and a small ad banner appears at the top of every screen.",
         categoriesTitle = "Categories",
         categoriesBody = "Categories let you classify your transactions for better spending insight. " +
             "Each category has a name and an icon.",
@@ -720,8 +728,10 @@ object EnglishStrings : AppStrings {
         fieldDateDesc = "Tap the calendar icon to pick a date.",
         fieldMerchant = "Merchant / Source",
         fieldMerchantDesc = "Type the name of the payee (expenses) or income source.",
-        fieldCategory = "Category",
-        fieldCategoryDesc = "Tap to open the category picker. You can select one or multiple categories.",
+        fieldCategory = "Category (required)",
+        fieldCategoryDesc = "Tap to open the category picker. You must select at least one category. " +
+            "You can select multiple categories to split the transaction. " +
+            "The border turns red if you try to save without a category.",
         fieldAmount = "Amount",
         fieldAmountDesc = "Enter the transaction amount.",
         singleCatTitle = "Single Category",
@@ -819,6 +829,11 @@ object EnglishStrings : AppStrings {
             "You must enter the password used when the file was saved.",
         loadPasswordNote = "For encrypted files, the password field appears automatically when you select the " +
             "encrypted format. The \"Select File\" button is disabled until you enter at least 8 characters.",
+        fullRestoreNote = "When loading a full backup, \"Load All Data & Overwrite\" replaces ALL app data " +
+            "(transactions, categories, settings, goals, etc.) with the backup contents. " +
+            "Any transactions or changes made after the save was created will be lost and must " +
+            "be re-entered or reloaded from a bank CSV. \"Load Transactions Only\" is the safer " +
+            "option \u2014 it imports just the transactions without overwriting anything else.",
         loadDuplicateNote = "After loading, each imported transaction is checked for duplicates against your " +
             "existing transactions. If duplicates are found, you'll be prompted to resolve them " +
             "one at a time (see Duplicate Detection above).",
@@ -889,7 +904,9 @@ object EnglishStrings : AppStrings {
         autoRecalcBody = "The Safe Budget Amount updates automatically whenever you change income sources, " +
             "recurring expenses, or the budget period. No manual recalculation is needed.",
         startResetTitle = "Start/Reset Budget",
-        startResetBody = "Tap \"Start/Reset Budget\" when you first set up or need a fresh start. This:",
+        startResetBody = "Tap \"Start/Reset Budget\" when you first set up or need a fresh start. " +
+            "In a Family Sync group, only the admin device can reset the budget \u2014 " +
+            "this button is disabled on non-admin devices. This:",
         resetBullet1 = "Recalculates the safe budget amount",
         resetBullet2 = "Resets the budget start date to today",
         resetBullet3 = "Sets available cash to one period's budget amount",
@@ -1226,9 +1243,10 @@ object EnglishStrings : AppStrings {
         adminRoleTitle = "The Admin Role",
         adminRoleBody = "The person who creates the family group becomes the admin. The admin can " +
             "change shared budget settings (currency, budget period, reset schedule), " +
-            "generate pairing codes to invite new devices, set the family timezone, " +
-            "enable transaction attribution, and dissolve the group. Non-admin members " +
-            "can view settings but cannot change them.",
+            "start or reset the budget, generate pairing codes to invite new devices, " +
+            "set the family timezone, enable transaction attribution, and dissolve the " +
+            "group. Non-admin members can view settings but cannot change them, and the " +
+            "Start/Reset Budget button is disabled on their devices.",
         gettingStartedTitle = "Getting Started",
         gettingStartedBody = "To set up Family Sync: Open Settings, tap Family Sync, and tap " +
             "\"Create Family Group\". A sync group is created with you as admin. " +

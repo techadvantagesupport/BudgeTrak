@@ -78,6 +78,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
@@ -86,6 +87,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import com.syncbudget.app.ui.theme.AdAwareDialog
@@ -115,7 +117,11 @@ import com.syncbudget.app.data.parseSyncBudgetCsv
 import com.syncbudget.app.data.parseUsBank
 import com.syncbudget.app.data.FullBackupSerializer
 import com.syncbudget.app.data.serializeTransactionsCsv
+import androidx.compose.foundation.ScrollState
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
+import com.syncbudget.app.ui.components.CURRENCY_SUFFIX_SYMBOLS
 import com.syncbudget.app.ui.components.PieChartEditor
 import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.ui.strings.LocalStrings
@@ -129,6 +135,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private enum class SaveFormat(val label: String) {
     CSV("CSV"),
@@ -2355,6 +2362,15 @@ fun TransactionDialog(
         )
     }
     var lastEditedCatId by remember { mutableStateOf<Int?>(null) }
+    var userOwnedFields by remember {
+        mutableStateOf(buildSet {
+            if (editTransaction != null && editTransaction.categoryAmounts.size > 1) {
+                add("total")
+                editTransaction.categoryAmounts.forEach { add(it.categoryId.toString()) }
+            }
+        })
+    }
+    var autoFilledField by remember { mutableStateOf<String?>(null) }
 
     // Move value dialog state (category deselection)
     var showMoveValueDialog by remember { mutableStateOf(false) }
@@ -2381,6 +2397,66 @@ fun TransactionDialog(
         }
     }
 
+    fun recomputeAutoFill(skipField: String? = null) {
+        if (usePercentage) return
+
+        val totalOwned = "total" in userOwnedFields
+        val nonOwnedCats = selectedCats.filter { it.id.toString() !in userOwnedFields }
+
+        // Determine new auto-fill target
+        val newTarget: String? = when {
+            !totalOwned -> "total"
+            nonOwnedCats.size == 1 -> nonOwnedCats[0].id.toString()
+            else -> null
+        }
+
+        // Skip filling into the field the user is actively clearing
+        val effectiveTarget = if (newTarget == skipField) null else newTarget
+
+        // Clear old auto-fill if target changed
+        val oldTarget = autoFilledField
+        if (oldTarget != null && oldTarget != effectiveTarget) {
+            if (oldTarget == "total") {
+                if ("total" !in userOwnedFields) totalAmountText = ""
+            } else {
+                val catId = oldTarget.toIntOrNull()
+                if (catId != null && catId.toString() !in userOwnedFields) {
+                    categoryAmountTexts[catId] = ""
+                }
+            }
+        }
+
+        // Compute new auto-fill
+        when (effectiveTarget) {
+            "total" -> {
+                val sum = selectedCats.sumOf {
+                    (categoryAmountTexts[it.id] ?: "").toDoubleOrNull() ?: 0.0
+                }
+                val hasAnyValue = selectedCats.any {
+                    (categoryAmountTexts[it.id] ?: "").toDoubleOrNull() != null
+                }
+                totalAmountText = if (hasAnyValue) formatAmount(sum, maxDecimals) else ""
+                autoFilledField = "total"
+            }
+            null -> {
+                autoFilledField = null
+            }
+            else -> {
+                val targetCatId = effectiveTarget.toInt()
+                val total = totalAmountText.toDoubleOrNull()
+                val otherSum = selectedCats
+                    .filter { it.id != targetCatId }
+                    .sumOf { (categoryAmountTexts[it.id] ?: "").toDoubleOrNull() ?: 0.0 }
+                if (total != null && total - otherSum >= 0) {
+                    categoryAmountTexts[targetCatId] = formatAmount(total - otherSum, maxDecimals)
+                } else {
+                    categoryAmountTexts[targetCatId] = ""
+                }
+                autoFilledField = effectiveTarget
+            }
+        }
+    }
+
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
         unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -2392,8 +2468,18 @@ fun TransactionDialog(
 
     // Category picker dialog state
     var showCategoryPicker by remember { mutableStateOf(false) }
+    var pickerHasOpened by remember { mutableStateOf(false) }
+    if (showCategoryPicker) pickerHasOpened = true
+
+    // Scroll state for auto-scrolling to mode buttons after category selection
+    val scrollState = rememberScrollState()
+    var modeButtonsOffset by remember { mutableIntStateOf(0) }
+
+    // Currency prefix/suffix
+    val isCurrencySuffix = currencySymbol in CURRENCY_SUFFIX_SYMBOLS
 
     val focusManager = LocalFocusManager.current
+    val scrollScope = rememberCoroutineScope()
 
     AdAwareDialog(
         onDismissRequest = onDismiss,
@@ -2439,12 +2525,22 @@ fun TransactionDialog(
                 Column(
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState()),
+                        .verticalScroll(scrollState),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Auto-dismiss pie chart when < 2 categories
                     LaunchedEffect(selectedCats.size) {
                         if (selectedCats.size < 2) showPieChart = false
+                    }
+
+                    // Auto-scroll to mode buttons after category picker closes
+                    LaunchedEffect(showCategoryPicker) {
+                        if (!showCategoryPicker && pickerHasOpened && selectedCats.size > 1) {
+                            delay(150)
+                            if (modeButtonsOffset > 0) {
+                                scrollState.animateScrollTo(modeButtonsOffset)
+                            }
+                        }
                     }
 
                     // Date field
@@ -2492,7 +2588,10 @@ fun TransactionDialog(
                                     else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
                                     RoundedCornerShape(8.dp)
                                 )
-                                .clickable { showCategoryPicker = true }
+                                .clickable {
+                                    focusManager.clearFocus()
+                                    showCategoryPicker = true
+                                }
                                 .padding(horizontal = 12.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -2534,12 +2633,14 @@ fun TransactionDialog(
                     val singleAmountInvalid = showValidation && (singleAmountText.toDoubleOrNull()?.let { it <= 0 } != false)
                     OutlinedTextField(
                         value = singleAmountText,
-                        onValueChange = { singleAmountText = it },
+                        onValueChange = { if (isValidAmountInput(it, maxDecimals)) singleAmountText = it },
                         label = { Text(S.transactions.amount) },
                         isError = singleAmountInvalid,
                         supportingText = if (singleAmountInvalid) ({
                             Text("e.g. 42.50", color = Color(0xFFF44336))
                         }) else null,
+                        prefix = if (!isCurrencySuffix) ({ Text(currencySymbol) }) else null,
+                        suffix = if (isCurrencySuffix) ({ Text(currencySymbol) }) else null,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = if (maxDecimals > 0) KeyboardType.Decimal else KeyboardType.Number
                         ),
@@ -2557,7 +2658,11 @@ fun TransactionDialog(
                     val inactiveColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f)
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onGloballyPositioned { coords ->
+                                modeButtonsOffset = coords.positionInParent().y.toInt()
+                            },
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -2648,38 +2753,44 @@ fun TransactionDialog(
                         if (totalAmountText.isNotEmpty() && !isValidAmountInput(totalAmountText, maxDecimals)) {
                             delay(1000L)
                             totalAmountText = ""
+                            userOwnedFields = userOwnedFields - "total"
+                            recomputeAutoFill()
                         }
                     }
                     OutlinedTextField(
                         value = totalAmountText,
                         onValueChange = { newVal ->
-                            totalAmountText = newVal
-                            // In amount mode: auto-fill last empty category if total is valid
-                            if (!usePercentage && isValidAmountInput(newVal, maxDecimals)) {
-                                val total = newVal.toDoubleOrNull()
-                                if (total != null && total > 0) {
-                                    val empty = selectedCats.filter {
-                                        (categoryAmountTexts[it.id] ?: "").toDoubleOrNull() == null
-                                    }
-                                    if (empty.size == 1) {
-                                        val filledSum = selectedCats.filter { it.id != empty[0].id }.sumOf {
-                                            (categoryAmountTexts[it.id] ?: "").toDoubleOrNull() ?: 0.0
-                                        }
-                                        val remaining = total - filledSum
-                                        if (remaining >= 0) {
-                                            categoryAmountTexts[empty[0].id] = formatAmount(remaining, maxDecimals)
-                                        }
+                            if (isValidAmountInput(newVal, maxDecimals)) {
+                                totalAmountText = newVal
+                                if (!usePercentage) {
+                                    if (newVal.isNotEmpty()) {
+                                        userOwnedFields = userOwnedFields + "total"
+                                        recomputeAutoFill()
+                                    } else {
+                                        userOwnedFields = userOwnedFields - "total"
+                                        recomputeAutoFill(skipField = "total")
                                     }
                                 }
                             }
                         },
                         label = { Text(S.transactions.total) },
+                        prefix = if (!isCurrencySuffix) ({ Text(currencySymbol) }) else null,
+                        suffix = if (isCurrencySuffix) ({ Text(currencySymbol) }) else null,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = if (maxDecimals > 0) KeyboardType.Decimal else KeyboardType.Number
                         ),
                         colors = textFieldColors,
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { state ->
+                                if (state.isFocused && modeButtonsOffset > 0) {
+                                    scrollScope.launch {
+                                        delay(500L)
+                                        scrollState.animateScrollTo(modeButtonsOffset)
+                                    }
+                                }
+                            }
                     )
 
                     // Pie chart mode or per-category text fields
@@ -2714,6 +2825,8 @@ fun TransactionDialog(
                                     if (!valid) {
                                         delay(1000L)
                                         categoryAmountTexts[cat.id] = ""
+                                        userOwnedFields = userOwnedFields - cat.id.toString()
+                                        recomputeAutoFill()
                                     }
                                 }
                             }
@@ -2721,52 +2834,52 @@ fun TransactionDialog(
                             OutlinedTextField(
                                 value = catText,
                                 onValueChange = { newVal ->
-                                    categoryAmountTexts[cat.id] = newVal
-                                    lastEditedCatId = cat.id
+                                    val validInput = if (usePercentage) isValidPercentInput(newVal)
+                                        else isValidAmountInput(newVal, maxDecimals)
+                                    if (validInput) {
+                                        categoryAmountTexts[cat.id] = newVal
 
-                                    if (usePercentage) {
-                                        // Auto-fill last empty percentage
-                                        if (isValidPercentInput(newVal) && newVal.isNotEmpty()) {
-                                            val empty = selectedCats.filter {
-                                                val t = categoryAmountTexts[it.id] ?: ""
-                                                t.toIntOrNull()?.let { v -> v in 0..100 } != true
-                                            }
-                                            if (empty.size == 1) {
-                                                val filledSum = selectedCats
-                                                    .filter { it.id != empty[0].id }
-                                                    .sumOf { (categoryAmountTexts[it.id] ?: "").toIntOrNull() ?: 0 }
-                                                val remaining = 100 - filledSum
-                                                if (remaining in 0..100) {
-                                                    categoryAmountTexts[empty[0].id] = remaining.toString()
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        // Amount mode auto-fill
-                                        if (isValidAmountInput(newVal, maxDecimals) && newVal.isNotEmpty()) {
-                                            val allFilled = selectedCats.all {
-                                                (categoryAmountTexts[it.id] ?: "").toDoubleOrNull() != null
-                                            }
-                                            if (allFilled && totalAmountText.isBlank()) {
-                                                val sum = selectedCats.sumOf {
-                                                    (categoryAmountTexts[it.id] ?: "").toDoubleOrNull() ?: 0.0
-                                                }
-                                                if (sum > 0) totalAmountText = formatAmount(sum, maxDecimals)
-                                            }
-                                            if (!allFilled) {
-                                                val total = totalAmountText.toDoubleOrNull()
+                                        if (usePercentage) {
+                                            if (newVal.isNotEmpty()) {
+                                                lastEditedCatId = cat.id
+                                                userOwnedFields = userOwnedFields + cat.id.toString()
+                                                // Auto-fill last empty percentage
                                                 val empty = selectedCats.filter {
-                                                    (categoryAmountTexts[it.id] ?: "").toDoubleOrNull() == null
+                                                    val t = categoryAmountTexts[it.id] ?: ""
+                                                    t.toIntOrNull()?.let { v -> v in 0..100 } != true
                                                 }
-                                                if (total != null && total > 0 && empty.size == 1) {
+                                                if (empty.size == 1) {
                                                     val filledSum = selectedCats
                                                         .filter { it.id != empty[0].id }
-                                                        .sumOf { (categoryAmountTexts[it.id] ?: "").toDoubleOrNull() ?: 0.0 }
-                                                    val remaining = total - filledSum
-                                                    if (remaining >= 0) {
-                                                        categoryAmountTexts[empty[0].id] = formatAmount(remaining, maxDecimals)
+                                                        .sumOf { (categoryAmountTexts[it.id] ?: "").toIntOrNull() ?: 0 }
+                                                    val remaining = 100 - filledSum
+                                                    if (remaining in 0..100) {
+                                                        categoryAmountTexts[empty[0].id] = remaining.toString()
                                                     }
                                                 }
+                                            } else {
+                                                userOwnedFields = userOwnedFields - cat.id.toString()
+                                                // Kill debounce so it doesn't overwrite cleared values
+                                                lastEditedCatId = null
+                                                // Clear non-user-owned cats (auto-filled values)
+                                                selectedCats.forEach { c ->
+                                                    if (c.id.toString() !in userOwnedFields) {
+                                                        categoryAmountTexts[c.id] = ""
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Amount mode
+                                            if (newVal.isNotEmpty()) {
+                                                // Claiming the auto-filled field: release total
+                                                if (autoFilledField == cat.id.toString()) {
+                                                    userOwnedFields = userOwnedFields - "total"
+                                                }
+                                                userOwnedFields = userOwnedFields + cat.id.toString()
+                                                recomputeAutoFill()
+                                            } else {
+                                                userOwnedFields = userOwnedFields - cat.id.toString()
+                                                recomputeAutoFill(skipField = cat.id.toString())
                                             }
                                         }
                                     }
@@ -2776,7 +2889,9 @@ fun TransactionDialog(
                                     keyboardType = if (usePercentage) KeyboardType.Number
                                         else (if (maxDecimals > 0) KeyboardType.Decimal else KeyboardType.Number)
                                 ),
-                                suffix = if (usePercentage) ({ Text("%") }) else null,
+                                prefix = if (!usePercentage && !isCurrencySuffix) ({ Text(currencySymbol) }) else null,
+                                suffix = if (usePercentage) ({ Text("%") })
+                                    else if (isCurrencySuffix) ({ Text(currencySymbol) }) else null,
                                 colors = textFieldColors,
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
@@ -2795,6 +2910,9 @@ fun TransactionDialog(
                                     val sum = selectedCats.sumOf { (categoryAmountTexts[it.id] ?: "").toInt() }
                                     if (sum != 100) {
                                         delay(500L)
+                                        // Abort if editing was cancelled or category was cleared
+                                        if (lastEditedCatId == null) return@LaunchedEffect
+                                        if (editedId.toString() !in userOwnedFields) return@LaunchedEffect
                                         val editedPct = (categoryAmountTexts[editedId] ?: "").toIntOrNull()
                                             ?: return@LaunchedEffect
                                         val otherCats = selectedCats.filter { it.id != editedId }
@@ -2821,6 +2939,8 @@ fun TransactionDialog(
                                             }
                                             adjusted.forEach { (id, v) ->
                                                 categoryAmountTexts[id] = v.coerceIn(0, 100).toString()
+                                                // Debounce overwrote user's value — no longer user-owned
+                                                userOwnedFields = userOwnedFields - id.toString()
                                             }
                                         } else if (remaining >= 0 && otherSum == 0) {
                                             val each = remaining / otherCats.size
@@ -2828,6 +2948,7 @@ fun TransactionDialog(
                                             otherCats.forEachIndexed { i, c ->
                                                 categoryAmountTexts[c.id] =
                                                     (each + if (i < extra) 1 else 0).toString()
+                                                userOwnedFields = userOwnedFields - c.id.toString()
                                             }
                                         }
                                         lastEditedCatId = null

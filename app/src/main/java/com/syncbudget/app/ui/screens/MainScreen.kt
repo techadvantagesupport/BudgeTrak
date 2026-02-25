@@ -246,7 +246,8 @@ fun MainScreen(
     dateFormatPattern: String = "yyyy-MM-dd",
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     syncStatus: String = "off",
-    staleDays: Int = 0
+    staleDays: Int = 0,
+    remoteCrdtCash: Double? = null
 ) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
@@ -399,6 +400,18 @@ fun MainScreen(
                 }
             }
 
+            // Out-of-sync indicator (debug)
+            if (remoteCrdtCash != null && kotlin.math.abs(remoteCrdtCash - availableCash) > 0.01) {
+                Text(
+                    text = "Remote cash: ${formatCurrency(remoteCrdtCash, currencySymbol)} (diff: ${formatCurrency(remoteCrdtCash - availableCash, currencySymbol)})",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFF44336),
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                )
+            }
+
             // Stale device warning banner
             if (staleDays >= 60) {
                 val (staleBannerColor, staleBannerText) = when {
@@ -532,16 +545,16 @@ fun MainScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { onNavigate("transactions") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.headerText, modifier = Modifier.size(32.dp))
+                    Icon(Icons.AutoMirrored.Filled.List, S.dashboard.transactions, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
                 }
                 IconButton(onClick = { onNavigate("future_expenditures") }, modifier = Modifier.size(48.dp)) {
-                    Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = S.dashboard.savingsGoals, tint = customColors.headerText, modifier = Modifier.size(32.dp))
+                    Icon(painter = painterResource(id = R.drawable.ic_coins), contentDescription = S.dashboard.savingsGoals, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
                 }
                 IconButton(onClick = { onNavigate("amortization") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Filled.Schedule, S.dashboard.amortization, tint = customColors.headerText, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Filled.Schedule, S.dashboard.amortization, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
                 }
                 IconButton(onClick = { onNavigate("recurring_expenses") }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Filled.Sync, S.dashboard.recurringExpenses, tint = customColors.headerText, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Filled.Sync, S.dashboard.recurringExpenses, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
                 }
             }
         }

@@ -319,18 +319,12 @@ class MainActivity : ComponentActivity() {
             var pendingAdminClaim by remember { mutableStateOf<AdminClaim?>(null) }
 
             // availableCash may go negative (= overspent). Guard against NaN/Infinity.
+            // Only persists to local prefs. CRDT sync of availableCash happens
+            // exclusively during budget reset to avoid LWW conflicts between devices
+            // that independently compute cash from the same synced transactions.
             fun persistAvailableCash() {
                 if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
                 prefs.edit().putString("availableCash", availableCash.toString()).apply()
-                if (isSyncConfigured) {
-                    val acClock = lamportClock.tick()
-                    sharedSettings = sharedSettings.copy(
-                        availableCash = availableCash,
-                        availableCash_clock = acClock,
-                        lastChangedBy = localDeviceId
-                    )
-                    SharedSettingsRepository.save(context, sharedSettings)
-                }
             }
 
             // Check if an expense transaction is already accounted for in the budget
@@ -468,11 +462,22 @@ class MainActivity : ComponentActivity() {
                                     try { LocalDate.parse(it) } catch (_: Exception) { null }
                                 }
                                 val budgetStartChanged = syncedStartDate != null && syncedStartDate != budgetStartDate
+                                // Detect if admin pushed a new availableCash (reset or manual sync).
+                                // Only non-admin devices adopt remote cash — admin is authoritative.
+                                val lastSeenAcClock = syncPrefs.getLong("lastSeenAvailableCash_clock", 0L)
+                                val cashPushedByRemote = !isSyncAdmin &&
+                                    merged.availableCash_clock > lastSeenAcClock &&
+                                    merged.lastChangedBy != localDeviceId
                                 if (budgetStartChanged) {
                                     budgetStartDate = syncedStartDate
                                     lastRefreshDate = LocalDate.now()
                                     // Use synced availableCash from admin reset
                                     availableCash = if (merged.availableCash_clock > 0L) merged.availableCash else budgetAmount
+                                    syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
+                                } else if (cashPushedByRemote) {
+                                    // Admin used "Sync Cash to Admin" — adopt their value
+                                    availableCash = merged.availableCash
+                                    syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
                                 }
                                 // Write all synced settings to app_prefs
                                 val prefsEditor = prefs.edit()
@@ -493,6 +498,8 @@ class MainActivity : ComponentActivity() {
                                         .putString("budgetStartDate", budgetStartDate.toString())
                                         .putString("lastRefreshDate", lastRefreshDate.toString())
                                         .putString("availableCash", availableCash.toString())
+                                } else if (cashPushedByRemote) {
+                                    prefsEditor.putString("availableCash", availableCash.toString())
                                 }
                                 prefsEditor.apply()
                             }
@@ -694,12 +701,14 @@ class MainActivity : ComponentActivity() {
                             .putString("availableCash", availableCash.toString())
                             .putString("lastRefreshDate", lastRefreshDate.toString())
                             .apply()
-                        // Sync availableCash to family group
-                        if (isSyncConfigured) {
-                            val acClock = lamportClock.tick()
+
+                        // Admin pushes refreshed cash to CRDT so non-admin devices
+                        // can adopt it on next sync
+                        if (isSyncConfigured && isSyncAdmin) {
+                            val clock = lamportClock.tick()
                             sharedSettings = sharedSettings.copy(
                                 availableCash = availableCash,
-                                availableCash_clock = acClock,
+                                availableCash_clock = clock,
                                 lastChangedBy = localDeviceId
                             )
                             SharedSettingsRepository.save(context, sharedSettings)
@@ -707,6 +716,90 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 true // return value for remember
+            }
+
+            // ── One-time CRDT state dump to Downloads ──
+            remember {
+                try {
+                    val dlDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                    val dump = StringBuilder()
+                    dump.appendLine("=== CRDT State Dump ${java.time.LocalDateTime.now()} ===")
+                    dump.appendLine("DeviceId: $localDeviceId")
+                    dump.appendLine("isAdmin: $isSyncAdmin")
+                    dump.appendLine("isSyncConfigured: $isSyncConfigured")
+                    dump.appendLine()
+                    dump.appendLine("── App Prefs ──")
+                    dump.appendLine("availableCash (prefs): ${prefs.getString("availableCash", "MISSING")}")
+                    dump.appendLine("availableCash (state): $availableCash")
+                    dump.appendLine("budgetStartDate: $budgetStartDate")
+                    dump.appendLine("lastRefreshDate: $lastRefreshDate")
+                    dump.appendLine("budgetPeriod: $budgetPeriod")
+                    dump.appendLine("budgetAmount (derived): $budgetAmount")
+                    dump.appendLine("safeBudgetAmount (derived): $safeBudgetAmount")
+                    dump.appendLine("isManualBudget: $isManualBudgetEnabled  manualAmount: $manualBudgetAmount")
+                    dump.appendLine()
+                    dump.appendLine("── SharedSettings (CRDT) ──")
+                    dump.appendLine("availableCash: ${sharedSettings.availableCash}  clock: ${sharedSettings.availableCash_clock}")
+                    dump.appendLine("budgetStartDate: ${sharedSettings.budgetStartDate}  clock: ${sharedSettings.budgetStartDate_clock}")
+                    dump.appendLine("budgetPeriod: ${sharedSettings.budgetPeriod}  clock: ${sharedSettings.budgetPeriod_clock}")
+                    dump.appendLine("manualBudgetAmount: ${sharedSettings.manualBudgetAmount}  clock: ${sharedSettings.manualBudgetAmount_clock}")
+                    dump.appendLine("isManualBudgetEnabled: ${sharedSettings.isManualBudgetEnabled}  clock: ${sharedSettings.isManualBudgetEnabled_clock}")
+                    dump.appendLine("currency: ${sharedSettings.currency}  clock: ${sharedSettings.currency_clock}")
+                    dump.appendLine("lastChangedBy: ${sharedSettings.lastChangedBy}")
+                    dump.appendLine()
+                    dump.appendLine("── Transactions (active, in current period) ──")
+                    val activeTxns = transactions.filter { !it.deleted }
+                    val periodTxns = if (budgetStartDate != null) activeTxns.filter { !it.date.isBefore(budgetStartDate) } else activeTxns
+                    var totalExpense = 0.0
+                    var totalIncome = 0.0
+                    for (txn in periodTxns.sortedBy { it.date }) {
+                        val budgetAccounted = if (txn.type == TransactionType.EXPENSE) isBudgetAccountedExpense(txn) else false
+                        dump.appendLine("  ${txn.date} ${txn.type} ${txn.amount} '${txn.source}' dev=${txn.deviceId.take(8)}… budgetAccounted=$budgetAccounted clk=${txn.amount_clock}")
+                        if (txn.type == TransactionType.EXPENSE && !budgetAccounted) totalExpense += txn.amount
+                        else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) totalIncome += txn.amount
+                    }
+                    dump.appendLine("Period expense total (non-budget-accounted): $totalExpense")
+                    dump.appendLine("Period extra income total: $totalIncome")
+                    dump.appendLine("Expected cash = budgetAmount($budgetAmount) - expenses($totalExpense) + income($totalIncome) = ${budgetAmount - totalExpense + totalIncome}")
+                    dump.appendLine("Actual cash = $availableCash")
+                    dump.appendLine("Difference = ${availableCash - (budgetAmount - totalExpense + totalIncome)}")
+                    dump.appendLine()
+                    dump.appendLine("── Period Ledger ──")
+                    for (entry in periodLedger) {
+                        dump.appendLine("  ${entry.periodStartDate} applied=${entry.appliedAmount} clock=${entry.clockAtReset}")
+                    }
+                    dump.appendLine("=== End CRDT Dump ===")
+                    // Use MediaStore to write to Downloads (works without permissions on Android 10+)
+                    val resolver = context.contentResolver
+                    val existing = resolver.query(
+                        android.provider.MediaStore.Files.getContentUri("external"),
+                        arrayOf(android.provider.MediaStore.MediaColumns._ID),
+                        "${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} = ?",
+                        arrayOf("sync_diag.txt", "Download/"),
+                        null
+                    )
+                    val uri = if (existing != null && existing.moveToFirst()) {
+                        val id = existing.getLong(0)
+                        existing.close()
+                        android.content.ContentUris.withAppendedId(
+                            android.provider.MediaStore.Files.getContentUri("external"), id
+                        )
+                    } else {
+                        existing?.close()
+                        val values = android.content.ContentValues().apply {
+                            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "sync_diag.txt")
+                            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/")
+                        }
+                        resolver.insert(android.provider.MediaStore.Files.getContentUri("external"), values)
+                    }
+                    if (uri != null) {
+                        resolver.openOutputStream(uri, "wa")?.use { it.write((dump.toString() + "\n").toByteArray()) }
+                    }
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "Diag write failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                }
+                true
             }
 
             SyncBudgetTheme(strings = strings) {
@@ -777,6 +870,7 @@ class MainActivity : ComponentActivity() {
                         budgetPeriod = budgetPeriod,
                         syncStatus = syncStatus,
                         staleDays = staleDays,
+                        remoteCrdtCash = if (isSyncConfigured) sharedSettings.availableCash else null,
                         onSupercharge = { allocations, modes ->
                             var totalDeducted = 0.0
                             for ((goalId, amount) in allocations) {
@@ -1770,10 +1864,18 @@ class MainActivity : ComponentActivity() {
                                                 try { LocalDate.parse(it) } catch (_: Exception) { null }
                                             }
                                             val budgetStartChanged = syncedStartDate != null && syncedStartDate != budgetStartDate
+                                            val lastSeenAcClock2 = syncPrefs.getLong("lastSeenAvailableCash_clock", 0L)
+                                            val cashPushedByRemote2 = !isSyncAdmin &&
+                                                merged.availableCash_clock > lastSeenAcClock2 &&
+                                                merged.lastChangedBy != localDeviceId
                                             if (budgetStartChanged) {
                                                 budgetStartDate = syncedStartDate
                                                 lastRefreshDate = LocalDate.now()
                                                 availableCash = if (merged.availableCash_clock > 0L) merged.availableCash else budgetAmount
+                                                syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
+                                            } else if (cashPushedByRemote2) {
+                                                availableCash = merged.availableCash
+                                                syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
                                             }
                                             val prefsEditor = prefs.edit()
                                                 .putString("currencySymbol", merged.currency)
@@ -1788,7 +1890,7 @@ class MainActivity : ComponentActivity() {
                                                 .putFloat("matchPercent", merged.matchPercent)
                                                 .putInt("matchDollar", merged.matchDollar)
                                                 .putInt("matchChars", merged.matchChars)
-                                            if (budgetStartChanged) {
+                                            if (budgetStartChanged || cashPushedByRemote2) {
                                                 prefsEditor
                                                     .putString("budgetStartDate", budgetStartDate.toString())
                                                     .putString("lastRefreshDate", lastRefreshDate.toString())
@@ -1856,6 +1958,22 @@ class MainActivity : ComponentActivity() {
                                     syncDevices = GroupManager.getDevices(gId)
                                 } catch (_: Exception) {}
                             }
+                        },
+                        onSyncCashToAdmin = {
+                            // Push admin's local availableCash to SharedSettings CRDT
+                            // so all devices pick it up on next sync
+                            val acClock = lamportClock.tick()
+                            sharedSettings = sharedSettings.copy(
+                                availableCash = availableCash,
+                                availableCash_clock = acClock,
+                                lastChangedBy = localDeviceId
+                            )
+                            SharedSettingsRepository.save(context, sharedSettings)
+                            android.widget.Toast.makeText(
+                                context,
+                                "Available cash synced: ${availableCash}",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
                         },
                         onHelpClick = { currentScreen = "family_sync_help" },
                         onBack = {

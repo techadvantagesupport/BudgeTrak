@@ -351,6 +351,7 @@ object SpanishStrings : AppStrings {
         leaveGroup = "Salir del Grupo",
         dissolveGroup = "Disolver Grupo",
         syncNow = "Sincronizar Ahora",
+        syncCashToAdmin = "Sincronizar Efectivo con Admin",
         lastSynced = { time -> "\u00daltima sincronizaci\u00f3n: $time" },
         syncing = "Sincronizando...",
         syncError = "Error de sincronizaci\u00f3n",
@@ -458,6 +459,12 @@ object SpanishStrings : AppStrings {
         chartRangeBullet = "Bot\u00f3n de rango (izquierda) \u2014 alterna entre rangos de tiempo: 7 d\u00edas, 30 d\u00edas, 90 d\u00edas o Todo",
         chartSpendingBullet = "T\u00edtulo \"Gastos\" (centro) \u2014 la etiqueta del gr\u00e1fico",
         chartToggleBullet = "Selector de tipo de gr\u00e1fico (derecha) \u2014 alterna entre gr\u00e1fico circular y gr\u00e1fico de barras",
+        chartIconsTitle = "Iconos del gr\u00e1fico circular",
+        chartIconsBody = "Los iconos de categor\u00eda se muestran dentro de sus segmentos del gr\u00e1fico en un color " +
+            "contrastante (blanco sobre segmentos oscuros, negro sobre segmentos claros). Las categor\u00edas " +
+            "con segmentos muy peque\u00f1os (menos del 4% del gasto) tienen sus iconos apilados en el " +
+            "margen izquierdo del gr\u00e1fico en el color del segmento. Toca cualquier icono para ver " +
+            "el nombre y monto de la categor\u00eda.",
         chartPaletteTitle = "Paleta de gr\u00e1ficos",
         chartPaletteBody = "Los colores del gr\u00e1fico se pueden cambiar en Ajustes en \"Paleta de gr\u00e1ficos\". " +
             "Hay tres paletas disponibles: Vibrante, Pastel y Atardecer. Cada paleta se ajusta " +
@@ -628,11 +635,12 @@ object SpanishStrings : AppStrings {
         matchingNote = "Los valores predeterminados funcionan bien para la mayor\u00eda. Aumenta las tolerancias si la " +
             "app no detecta coincidencias, o reduc\u00e9las si ves demasiados falsos positivos.",
         paidTitle = "Usuario de pago",
-        paidBody = "Al activarlo, se desbloquean funciones premium:",
+        paidBody = "Al activarlo, se desbloquean funciones premium y se elimina el banner publicitario:",
         paidSave = "Guardar transacciones \u2014 exportar a CSV o archivo cifrado",
         paidLoad = "Cargar transacciones \u2014 importar desde CSV bancario, CSV de la app o respaldo cifrado",
+        paidAdFree = "Experiencia sin anuncios \u2014 el banner en la parte superior de todas las pantallas se oculta",
         paidNote = "Cuando el Usuario de pago no est\u00e1 activado, los iconos de Guardar y Cargar en la pantalla " +
-            "de Transacciones aparecen atenuados y no funcionan.",
+            "de Transacciones aparecen atenuados y no funcionan, y un peque\u00f1o banner publicitario aparece en la parte superior de cada pantalla.",
         categoriesTitle = "Categor\u00edas",
         categoriesBody = "Las categor\u00edas te permiten clasificar tus transacciones para un mejor an\u00e1lisis de gastos. " +
             "Cada categor\u00eda tiene un nombre y un icono.",
@@ -719,8 +727,10 @@ object SpanishStrings : AppStrings {
         fieldDateDesc = "Toca el icono de calendario para elegir una fecha.",
         fieldMerchant = "Comercio / Fuente",
         fieldMerchantDesc = "Escribe el nombre del beneficiario (gastos) o la fuente de ingreso.",
-        fieldCategory = "Categor\u00eda",
-        fieldCategoryDesc = "Toca para abrir el selector de categor\u00edas. Puedes seleccionar una o varias.",
+        fieldCategory = "Categor\u00eda (requerida)",
+        fieldCategoryDesc = "Toca para abrir el selector de categor\u00edas. Debes seleccionar al menos una categor\u00eda. " +
+            "Puedes seleccionar varias para dividir la transacci\u00f3n. " +
+            "El borde se pone rojo si intentas guardar sin categor\u00eda.",
         fieldAmount = "Monto",
         fieldAmountDesc = "Ingresa el monto de la transacci\u00f3n.",
         singleCatTitle = "Una sola categor\u00eda",
@@ -818,6 +828,11 @@ object SpanishStrings : AppStrings {
             "Debes ingresar la contrase\u00f1a usada al guardar el archivo.",
         loadPasswordNote = "Para archivos cifrados, el campo de contrase\u00f1a aparece autom\u00e1ticamente al seleccionar el " +
             "formato cifrado. El bot\u00f3n \"Seleccionar archivo\" se desactiva hasta que ingreses al menos 8 caracteres.",
+        fullRestoreNote = "Al cargar un respaldo completo, \"Cargar todos los datos y sobrescribir\" reemplaza TODOS los datos " +
+            "de la app (transacciones, categor\u00edas, configuraci\u00f3n, metas, etc.) con el contenido del respaldo. " +
+            "Cualquier transacci\u00f3n o cambio realizado despu\u00e9s de crear el respaldo se perder\u00e1 y deber\u00e1 " +
+            "volver a ingresarse o recargarse desde un CSV bancario. \"Cargar solo transacciones\" es la opci\u00f3n " +
+            "m\u00e1s segura \u2014 importa solo las transacciones sin sobrescribir nada m\u00e1s.",
         loadDuplicateNote = "Despu\u00e9s de cargar, cada transacci\u00f3n importada se verifica contra tus " +
             "transacciones existentes. Si se encuentran duplicados, se te pedir\u00e1 que los resuelvas " +
             "uno por uno (consulta Detecci\u00f3n de duplicados arriba).",
@@ -888,7 +903,9 @@ object SpanishStrings : AppStrings {
         autoRecalcBody = "El Presupuesto Seguro se actualiza autom\u00e1ticamente cuando cambias fuentes de ingreso, " +
             "gastos recurrentes o el per\u00edodo del presupuesto. No se necesita rec\u00e1lculo manual.",
         startResetTitle = "Iniciar/Restablecer presupuesto",
-        startResetBody = "Toca \"Iniciar/Restablecer\" cuando configures por primera vez o necesites empezar de cero. Esto:",
+        startResetBody = "Toca \"Iniciar/Restablecer\" cuando configures por primera vez o necesites empezar de cero. " +
+            "En un grupo de Sincronizaci\u00f3n Familiar, solo el dispositivo administrador puede restablecer " +
+            "el presupuesto \u2014 este bot\u00f3n est\u00e1 desactivado en dispositivos no administradores. Esto:",
         resetBullet1 = "Recalcula el presupuesto seguro",
         resetBullet2 = "Restablece la fecha de inicio del presupuesto a hoy",
         resetBullet3 = "Fija el efectivo disponible en el monto de un per\u00edodo",
@@ -1225,9 +1242,10 @@ object SpanishStrings : AppStrings {
         adminRoleTitle = "El Rol de Administrador",
         adminRoleBody = "La persona que crea el grupo familiar se convierte en administrador. El admin puede " +
             "cambiar la configuraci\u00f3n compartida del presupuesto (moneda, per\u00edodo, horario de reinicio), " +
-            "generar c\u00f3digos de emparejamiento, configurar la zona horaria familiar, " +
-            "habilitar la atribuci\u00f3n de transacciones y disolver el grupo. Los miembros no admin " +
-            "pueden ver la configuraci\u00f3n pero no pueden cambiarla.",
+            "iniciar o restablecer el presupuesto, generar c\u00f3digos de emparejamiento para invitar nuevos dispositivos, " +
+            "configurar la zona horaria familiar, habilitar la atribuci\u00f3n de transacciones y disolver el " +
+            "grupo. Los miembros no admin pueden ver la configuraci\u00f3n pero no pueden cambiarla, y el " +
+            "bot\u00f3n Iniciar/Restablecer Presupuesto est\u00e1 desactivado en sus dispositivos.",
         gettingStartedTitle = "Primeros Pasos",
         gettingStartedBody = "Para configurar la sincronizaci\u00f3n: Abre Configuraci\u00f3n, toca Sincronizaci\u00f3n Familiar y " +
             "toca \"Crear Grupo Familiar\". Se crear\u00e1 un grupo contigo como admin. " +

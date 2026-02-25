@@ -239,6 +239,10 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.dashboardHelp.chartToggleBullet)
             Spacer(modifier = Modifier.height(10.dp))
 
+            HelpSubSectionTitle(S.dashboardHelp.chartIconsTitle)
+            HelpBodyText(S.dashboardHelp.chartIconsBody)
+            Spacer(modifier = Modifier.height(10.dp))
+
             HelpSubSectionTitle(S.dashboardHelp.chartPaletteTitle)
             HelpBodyText(S.dashboardHelp.chartPaletteBody)
             Spacer(modifier = Modifier.height(16.dp))

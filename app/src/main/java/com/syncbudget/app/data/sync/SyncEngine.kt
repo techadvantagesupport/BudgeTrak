@@ -47,6 +47,18 @@ class SyncEngine(
 
     private val prefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
 
+    init {
+        // One-time migration: reset lastPushedClock that was inflated by the old
+        // code (which set it to lamportClock.value after merge with remote epoch
+        // clocks).  Re-pushing all local data is safe — CRDT merge is idempotent.
+        if (!prefs.getBoolean("pushClockFixApplied", false)) {
+            prefs.edit()
+                .putLong("lastPushedClock", 0L)
+                .putBoolean("pushClockFixApplied", true)
+                .apply()
+        }
+    }
+
     private var lastSyncVersion: Long
         get() = prefs.getLong("lastSyncVersion", 0L)
         set(value) = prefs.edit().putLong("lastSyncVersion", value).apply()
@@ -246,10 +258,14 @@ class SyncEngine(
 
             var deltasPushed = 0
             if (localDeltas.isNotEmpty()) {
-                // Persist clock BEFORE push for idempotency: if push succeeds but
-                // app crashes before persisting, we won't re-push the same deltas.
-                // If push fails, snapshot convergence ensures eventual consistency.
-                lastPushedClock = lamportClock.value
+                // Track the max clock of records actually being pushed, NOT the
+                // merged lamport value.  After merging remote packets the lamport
+                // clock can jump far above locally-stamped field clocks, which
+                // would cause DeltaBuilder to skip those fields on the next sync.
+                val maxDeltaClock = localDeltas.maxOf { delta ->
+                    delta.fields.values.maxOfOrNull { it.clock } ?: 0L
+                }
+                lastPushedClock = maxDeltaClock
 
                 val packet = DeltaPacket(
                     sourceDeviceId = deviceId,

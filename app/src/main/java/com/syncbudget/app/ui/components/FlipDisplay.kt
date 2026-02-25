@@ -45,6 +45,8 @@ val CURRENCY_DECIMALS = mapOf(
     "Fr" to 2
 )
 
+val CURRENCY_SUFFIX_SYMBOLS = setOf("€", "Fr")
+
 fun formatCurrency(amount: Double, currencySymbol: String): String {
     val decimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
     return "$currencySymbol${"%.${decimals}f".format(amount)}"
@@ -213,7 +215,7 @@ fun FlipDisplay(
                 Text(
                     text = bottomLabel,
                     style = MaterialTheme.typography.bodySmall,
-                    color = colors.cardText.copy(alpha = 0.7f),
+                    color = colors.accentTint,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center
                 )
