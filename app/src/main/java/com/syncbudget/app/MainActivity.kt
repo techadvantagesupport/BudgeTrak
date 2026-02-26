@@ -47,6 +47,7 @@ import com.syncbudget.app.data.sync.FirestoreService
 import com.syncbudget.app.data.sync.GroupManager
 import java.time.ZoneId
 import com.syncbudget.app.data.sync.LamportClock
+import com.syncbudget.app.data.sync.PeriodLedgerCorrector
 import com.syncbudget.app.data.sync.PeriodLedgerEntry
 import com.syncbudget.app.data.sync.PeriodLedgerRepository
 import com.syncbudget.app.data.sync.SyncEngine
@@ -361,6 +362,139 @@ class MainActivity : ComponentActivity() {
                 return txn.categoryAmounts.any {
                     it.categoryId == recurringCatId || it.categoryId == amortCatId
                 }
+            }
+
+            // ── One-time migration: clean up broken records from past sync bugs ──
+            remember {
+                val migrationKey = "recordCleanupV1Applied"
+                if (!prefs.getBoolean(migrationKey, false)) {
+                    var txnChanged = false
+                    var catChanged = false
+                    var reChanged = false
+                    var isChanged = false
+                    var sgChanged = false
+                    var aeChanged = false
+
+                    // 1. Tombstone skeleton transactions (amount=0, empty source)
+                    transactions.forEachIndexed { i, t ->
+                        if (t.amount == 0.0 && t.source.isBlank() && !t.deleted) {
+                            transactions[i] = t.copy(deleted = true,
+                                deleted_clock = if (t.deleted_clock > 0) t.deleted_clock
+                                    else lamportClock.tick())
+                            txnChanged = true
+                        }
+                    }
+
+                    // 2. Re-stamp records with zero field clocks so they can
+                    //    sync properly (these were created before sync was set up,
+                    //    or arrived as partial deltas before the piggyback fix).
+                    val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
+                    transactions.forEachIndexed { i, t ->
+                        if (!t.deleted && t.source.isNotBlank() && t.source_clock == 0L) {
+                            val clock = lamportClock.tick()
+                            transactions[i] = t.copy(
+                                deviceId = if (t.deviceId.isEmpty()) deviceId else t.deviceId,
+                                source_clock = clock, amount_clock = clock,
+                                date_clock = clock, type_clock = clock,
+                                categoryAmounts_clock = if (t.categoryAmounts.isNotEmpty()) clock else 0L,
+                                isUserCategorized_clock = clock,
+                                isBudgetIncome_clock = clock
+                            )
+                            txnChanged = true
+                        }
+                    }
+                    categories.forEachIndexed { i, c ->
+                        if (!c.deleted && c.name.isNotBlank() && c.name_clock == 0L) {
+                            val clock = lamportClock.tick()
+                            categories[i] = c.copy(
+                                deviceId = if (c.deviceId.isEmpty()) deviceId else c.deviceId,
+                                name_clock = clock, iconName_clock = clock,
+                                tag_clock = if (c.tag.isNotEmpty()) clock else 0L
+                            )
+                            catChanged = true
+                        }
+                    }
+                    recurringExpenses.forEachIndexed { i, r ->
+                        if (!r.deleted && r.source.isNotBlank() && r.source_clock == 0L) {
+                            val clock = lamportClock.tick()
+                            recurringExpenses[i] = r.copy(
+                                deviceId = if (r.deviceId.isEmpty()) deviceId else r.deviceId,
+                                source_clock = clock, amount_clock = clock,
+                                repeatType_clock = clock, repeatInterval_clock = clock,
+                                startDate_clock = clock, monthDay1_clock = clock,
+                                monthDay2_clock = clock
+                            )
+                            reChanged = true
+                        }
+                    }
+                    incomeSources.forEachIndexed { i, s ->
+                        if (!s.deleted && s.source.isNotBlank() && s.source_clock == 0L) {
+                            val clock = lamportClock.tick()
+                            incomeSources[i] = s.copy(
+                                deviceId = if (s.deviceId.isEmpty()) deviceId else s.deviceId,
+                                source_clock = clock, amount_clock = clock,
+                                repeatType_clock = clock, repeatInterval_clock = clock,
+                                startDate_clock = clock, monthDay1_clock = clock,
+                                monthDay2_clock = clock
+                            )
+                            isChanged = true
+                        }
+                    }
+                    savingsGoals.forEachIndexed { i, g ->
+                        if (!g.deleted && g.name.isNotBlank() && g.name_clock == 0L) {
+                            val clock = lamportClock.tick()
+                            savingsGoals[i] = g.copy(
+                                deviceId = if (g.deviceId.isEmpty()) deviceId else g.deviceId,
+                                name_clock = clock, targetAmount_clock = clock,
+                                targetDate_clock = clock, totalSavedSoFar_clock = clock,
+                                contributionPerPeriod_clock = clock, isPaused_clock = clock
+                            )
+                            sgChanged = true
+                        }
+                    }
+                    amortizationEntries.forEachIndexed { i, e ->
+                        if (!e.deleted && e.source.isNotBlank() && e.source_clock == 0L) {
+                            val clock = lamportClock.tick()
+                            amortizationEntries[i] = e.copy(
+                                deviceId = if (e.deviceId.isEmpty()) deviceId else e.deviceId,
+                                source_clock = clock, amount_clock = clock,
+                                totalPeriods_clock = clock, startDate_clock = clock,
+                                isPaused_clock = clock
+                            )
+                            aeChanged = true
+                        }
+                    }
+
+                    // 3. Apply period ledger corrections
+                    if (periodLedger.isNotEmpty() && (reChanged || isChanged)) {
+                        val correction = PeriodLedgerCorrector.correctLedger(
+                            periodLedger.toList(),
+                            recurringExpenses.toList(),
+                            incomeSources.toList(),
+                            budgetPeriod
+                        )
+                        if (correction != 0.0) {
+                            availableCash += correction
+                            persistAvailableCash()
+                            // Mark entries as corrected
+                            periodLedger.forEachIndexed { i, e ->
+                                if (!e.corrected) periodLedger[i] = e.copy(corrected = true)
+                            }
+                            savePeriodLedger()
+                        }
+                    }
+
+                    // Save changed lists
+                    if (txnChanged) saveTransactions()
+                    if (catChanged) saveCategories()
+                    if (reChanged) saveRecurringExpenses()
+                    if (isChanged) saveIncomeSources()
+                    if (sgChanged) saveSavingsGoals()
+                    if (aeChanged) saveAmortizationEntries()
+
+                    prefs.edit().putBoolean(migrationKey, true).apply()
+                }
+                true // remember requires a return value
             }
 
             // Foreground flag
@@ -1276,8 +1410,59 @@ class MainActivity : ComponentActivity() {
                             matchDollar = prefs.getInt("matchDollar", 1)
                             matchChars = prefs.getInt("matchChars", 5)
 
-                            // Handle family sync: dissolve old group, create new one
+                            // Handle family sync: dissolve old group, create new one.
+                            // Clear all deviceIds and clocks first so records get
+                            // properly stamped with THIS device's identity when a
+                            // new group is created (the backup may have come from a
+                            // different device).
                             if (isSyncConfigured) {
+                                // Clear sync identity on all records
+                                transactions.forEachIndexed { i, t ->
+                                    transactions[i] = t.copy(deviceId = "", source_clock = 0L,
+                                        amount_clock = 0L, date_clock = 0L, type_clock = 0L,
+                                        categoryAmounts_clock = 0L, isUserCategorized_clock = 0L,
+                                        isBudgetIncome_clock = 0L, deleted_clock = 0L)
+                                }
+                                saveTransactions()
+                                categories.forEachIndexed { i, c ->
+                                    categories[i] = c.copy(deviceId = "", name_clock = 0L,
+                                        iconName_clock = 0L, tag_clock = 0L, deleted_clock = 0L)
+                                }
+                                saveCategories()
+                                recurringExpenses.forEachIndexed { i, r ->
+                                    recurringExpenses[i] = r.copy(deviceId = "", source_clock = 0L,
+                                        amount_clock = 0L, repeatType_clock = 0L,
+                                        repeatInterval_clock = 0L, startDate_clock = 0L,
+                                        monthDay1_clock = 0L, monthDay2_clock = 0L, deleted_clock = 0L)
+                                }
+                                saveRecurringExpenses()
+                                incomeSources.forEachIndexed { i, s ->
+                                    incomeSources[i] = s.copy(deviceId = "", source_clock = 0L,
+                                        amount_clock = 0L, repeatType_clock = 0L,
+                                        repeatInterval_clock = 0L, startDate_clock = 0L,
+                                        monthDay1_clock = 0L, monthDay2_clock = 0L, deleted_clock = 0L)
+                                }
+                                saveIncomeSources()
+                                savingsGoals.forEachIndexed { i, g ->
+                                    savingsGoals[i] = g.copy(deviceId = "", name_clock = 0L,
+                                        targetAmount_clock = 0L, targetDate_clock = 0L,
+                                        totalSavedSoFar_clock = 0L, contributionPerPeriod_clock = 0L,
+                                        isPaused_clock = 0L, deleted_clock = 0L)
+                                }
+                                saveSavingsGoals()
+                                amortizationEntries.forEachIndexed { i, e ->
+                                    amortizationEntries[i] = e.copy(deviceId = "", source_clock = 0L,
+                                        amount_clock = 0L, totalPeriods_clock = 0L,
+                                        startDate_clock = 0L, isPaused_clock = 0L, deleted_clock = 0L)
+                                }
+                                saveAmortizationEntries()
+
+                                // Reset lamport clock and sync engine state
+                                lamportClock.reset()
+                                context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+                                    .edit().putLong("lastPushedClock", 0L)
+                                    .putBoolean("pushClockFixApplied", true).apply()
+
                                 val oldGroupId = syncGroupId
                                 if (oldGroupId != null) {
                                     coroutineScope.launch {
@@ -1651,6 +1836,13 @@ class MainActivity : ComponentActivity() {
                                 try {
                                     GroupManager.setDeviceName(context, nickname)
                                     val info = GroupManager.createGroup(context)
+
+                                    // Update UI state immediately after local group creation
+                                    syncGroupId = info.groupId
+                                    isSyncAdmin = true
+                                    isSyncConfigured = true
+                                    syncStatus = "syncing"
+
                                     // Register this device as admin
                                     FirestoreService.registerDevice(
                                         info.groupId,
@@ -1700,11 +1892,12 @@ class MainActivity : ComponentActivity() {
                                     SharedSettingsRepository.save(context, sharedSettings)
 
                                     // Stamp all existing data with sync clocks so they push on first sync.
-                                    // Also claim records that have a different deviceId (e.g., from backup/restore)
-                                    // so they are recognized as local records for push filtering.
+                                    // Only stamp records that have never been stamped (clock == 0) or
+                                    // have no deviceId (empty). Do NOT re-stamp records from other
+                                    // devices — those are synced records and belong to their creator.
                                     val stampClock = lamportClock.tick()
                                     transactions.forEachIndexed { i, t ->
-                                        if (t.source_clock == 0L || t.deviceId != localDeviceId) {
+                                        if (t.source_clock == 0L || t.deviceId.isEmpty()) {
                                             transactions[i] = t.copy(
                                                 deviceId = localDeviceId,
                                                 source_clock = stampClock, amount_clock = stampClock,
@@ -1717,7 +1910,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     saveTransactions()
                                     categories.forEachIndexed { i, c ->
-                                        if (c.name_clock == 0L || c.deviceId != localDeviceId) {
+                                        if (c.name_clock == 0L || c.deviceId.isEmpty()) {
                                             categories[i] = c.copy(
                                                 deviceId = localDeviceId,
                                                 name_clock = stampClock, iconName_clock = stampClock,
@@ -1727,7 +1920,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     saveCategories()
                                     savingsGoals.forEachIndexed { i, g ->
-                                        if (g.name_clock == 0L || g.deviceId != localDeviceId) {
+                                        if (g.name_clock == 0L || g.deviceId.isEmpty()) {
                                             savingsGoals[i] = g.copy(
                                                 deviceId = localDeviceId,
                                                 name_clock = stampClock, targetAmount_clock = stampClock,
@@ -1738,7 +1931,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     saveSavingsGoals()
                                     amortizationEntries.forEachIndexed { i, e ->
-                                        if (e.source_clock == 0L || e.deviceId != localDeviceId) {
+                                        if (e.source_clock == 0L || e.deviceId.isEmpty()) {
                                             amortizationEntries[i] = e.copy(
                                                 deviceId = localDeviceId,
                                                 source_clock = stampClock, amount_clock = stampClock,
@@ -1749,7 +1942,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     saveAmortizationEntries()
                                     recurringExpenses.forEachIndexed { i, r ->
-                                        if (r.source_clock == 0L || r.deviceId != localDeviceId) {
+                                        if (r.source_clock == 0L || r.deviceId.isEmpty()) {
                                             recurringExpenses[i] = r.copy(
                                                 deviceId = localDeviceId,
                                                 source_clock = stampClock, amount_clock = stampClock,
@@ -1761,7 +1954,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     saveRecurringExpenses()
                                     incomeSources.forEachIndexed { i, s ->
-                                        if (s.source_clock == 0L) {
+                                        if (s.source_clock == 0L || s.deviceId.isEmpty()) {
                                             incomeSources[i] = s.copy(
                                                 deviceId = localDeviceId,
                                                 source_clock = stampClock, amount_clock = stampClock,
@@ -1773,9 +1966,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                     saveIncomeSources()
 
-                                    syncGroupId = info.groupId
-                                    isSyncAdmin = true
-                                    isSyncConfigured = true
                                     syncStatus = "synced"
                                 } catch (_: Exception) {
                                     syncStatus = "error"

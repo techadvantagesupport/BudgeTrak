@@ -13,6 +13,13 @@ import org.json.JSONObject
 
 object DeltaBuilder {
 
+    /** Add a field to the map only if it is not already present and its clock > 0. */
+    private fun ensureField(fields: MutableMap<String, FieldDelta>, key: String, value: Any?, clock: Long) {
+        if (key !in fields && clock > 0L) {
+            fields[key] = FieldDelta(value, clock)
+        }
+    }
+
     fun buildTransactionDelta(txn: Transaction, lastPushedClock: Long): RecordDelta? {
         val fields = mutableMapOf<String, FieldDelta>()
         if (txn.source_clock > lastPushedClock) fields["source"] = FieldDelta(txn.source, txn.source_clock)
@@ -33,6 +40,23 @@ object DeltaBuilder {
         if (txn.isBudgetIncome_clock > lastPushedClock) fields["isBudgetIncome"] = FieldDelta(txn.isBudgetIncome, txn.isBudgetIncome_clock)
         if (txn.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(txn.deleted, txn.deleted_clock)
         if (fields.isEmpty()) return null
+        // Piggyback critical fields so the receiving device never creates a
+        // skeleton record.  CRDT merge ignores fields whose clocks are lower
+        // than the receiver's, so this is safe for existing records.
+        ensureField(fields, "source", txn.source, txn.source_clock)
+        ensureField(fields, "amount", txn.amount, txn.amount_clock)
+        ensureField(fields, "date", txn.date.toString(), txn.date_clock)
+        ensureField(fields, "type", txn.type.name, txn.type_clock)
+        if ("categoryAmounts" !in fields && txn.categoryAmounts_clock > 0L) {
+            val catJson = JSONArray()
+            for (ca in txn.categoryAmounts) {
+                val obj = JSONObject()
+                obj.put("categoryId", ca.categoryId)
+                obj.put("amount", ca.amount)
+                catJson.put(obj)
+            }
+            fields["categoryAmounts"] = FieldDelta(catJson.toString(), txn.categoryAmounts_clock)
+        }
         return RecordDelta("transaction", "upsert", txn.id, txn.deviceId, fields)
     }
 
@@ -47,6 +71,8 @@ object DeltaBuilder {
         if (re.monthDay2_clock > lastPushedClock) fields["monthDay2"] = FieldDelta(re.monthDay2, re.monthDay2_clock)
         if (re.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(re.deleted, re.deleted_clock)
         if (fields.isEmpty()) return null
+        ensureField(fields, "source", re.source, re.source_clock)
+        ensureField(fields, "amount", re.amount, re.amount_clock)
         return RecordDelta("recurring_expense", "upsert", re.id, re.deviceId, fields)
     }
 
@@ -61,6 +87,8 @@ object DeltaBuilder {
         if (src.monthDay2_clock > lastPushedClock) fields["monthDay2"] = FieldDelta(src.monthDay2, src.monthDay2_clock)
         if (src.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(src.deleted, src.deleted_clock)
         if (fields.isEmpty()) return null
+        ensureField(fields, "source", src.source, src.source_clock)
+        ensureField(fields, "amount", src.amount, src.amount_clock)
         return RecordDelta("income_source", "upsert", src.id, src.deviceId, fields)
     }
 
@@ -74,6 +102,7 @@ object DeltaBuilder {
         if (goal.isPaused_clock > lastPushedClock) fields["isPaused"] = FieldDelta(goal.isPaused, goal.isPaused_clock)
         if (goal.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(goal.deleted, goal.deleted_clock)
         if (fields.isEmpty()) return null
+        ensureField(fields, "name", goal.name, goal.name_clock)
         return RecordDelta("savings_goal", "upsert", goal.id, goal.deviceId, fields)
     }
 
@@ -86,6 +115,8 @@ object DeltaBuilder {
         if (entry.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(entry.deleted, entry.deleted_clock)
         if (entry.isPaused_clock > lastPushedClock) fields["isPaused"] = FieldDelta(entry.isPaused, entry.isPaused_clock)
         if (fields.isEmpty()) return null
+        ensureField(fields, "source", entry.source, entry.source_clock)
+        ensureField(fields, "amount", entry.amount, entry.amount_clock)
         return RecordDelta("amortization_entry", "upsert", entry.id, entry.deviceId, fields)
     }
 
@@ -96,6 +127,8 @@ object DeltaBuilder {
         if (cat.tag_clock > lastPushedClock) fields["tag"] = FieldDelta(cat.tag, cat.tag_clock)
         if (cat.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(cat.deleted, cat.deleted_clock)
         if (fields.isEmpty()) return null
+        ensureField(fields, "name", cat.name, cat.name_clock)
+        ensureField(fields, "iconName", cat.iconName, cat.iconName_clock)
         return RecordDelta("category", "upsert", cat.id, cat.deviceId, fields)
     }
 

@@ -470,6 +470,19 @@ class SyncEngine(
         if (existingIndex >= 0) {
             list[existingIndex] = mergeFn(list[existingIndex], remote)
         } else {
+            // Guard: don't add skeleton records from partial deltas.
+            // When the pushing device has a stale LamportClock, some field
+            // clocks may be below lastPushedClock, producing a delta that
+            // is missing critical fields (amount, name, etc.).  Adding such
+            // a record shows the user a broken $0 / empty-name entry.
+            // Skip it — the full record will arrive on a subsequent sync
+            // once the pushing device's clock catches up.
+            if (isSkeletonRecord(remote)) {
+                android.util.Log.w("SyncEngine",
+                    "Skipping skeleton ${change.type} id=${change.id} " +
+                    "(missing critical field clocks)")
+                return list
+            }
             list.add(remote)
         }
         return list
@@ -483,6 +496,20 @@ class SyncEngine(
         is AmortizationEntry -> record.id
         is Category -> record.id
         else -> -1
+    }
+
+    /** A skeleton record is one created from a partial delta that is missing
+     *  critical field clocks (meaning those fields were not included in the
+     *  delta and defaulted to 0).  Such records would appear as $0 amounts
+     *  or empty names in the UI. */
+    private fun isSkeletonRecord(record: Any): Boolean = when (record) {
+        is Transaction -> record.amount_clock == 0L || record.source_clock == 0L
+        is RecurringExpense -> record.amount_clock == 0L || record.source_clock == 0L
+        is IncomeSource -> record.amount_clock == 0L || record.source_clock == 0L
+        is AmortizationEntry -> record.amount_clock == 0L || record.source_clock == 0L
+        is SavingsGoal -> record.name_clock == 0L
+        is Category -> record.name_clock == 0L
+        else -> false
     }
 
     private fun deserializeTransaction(change: RecordDelta): Transaction {
