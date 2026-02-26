@@ -195,8 +195,11 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
             HelpSectionTitle(S.recurringExpensesHelp.expenseListTitle)
             HelpBodyText(S.recurringExpensesHelp.expenseListBody)
             Spacer(modifier = Modifier.height(6.dp))
-            HelpBulletText(S.recurringExpensesHelp.expenseSource)
-            HelpBulletText(S.recurringExpensesHelp.expenseAmount)
+            HelpBodyText(S.recurringExpensesHelp.expenseGroupsBody)
+            Spacer(modifier = Modifier.height(6.dp))
+            HelpBodyText(S.recurringExpensesHelp.expenseNextDateBody)
+            Spacer(modifier = Modifier.height(6.dp))
+            HelpBodyText(S.recurringExpensesHelp.expenseSortBody)
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpSubSectionTitle(S.recurringExpensesHelp.actionsTitle)

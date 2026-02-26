@@ -403,6 +403,17 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.dashboardHelp.featureBullet9)
             HelpBulletText(S.dashboardHelp.featureBullet10)
             HelpBulletText(S.dashboardHelp.featureBullet11)
+            HelpBulletText(S.dashboardHelp.featureBullet12)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── SYNC INDICATOR ───
+            HelpSectionTitle(S.dashboardHelp.syncIndicatorTitle)
+            HelpBodyText(S.dashboardHelp.syncIndicatorBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBulletText(S.dashboardHelp.syncArrowsBullet)
+            HelpBulletText(S.dashboardHelp.syncDotsBullet)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()

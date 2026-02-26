@@ -574,12 +574,17 @@ object EnglishStrings : AppStrings {
         featureBullet9 = "Duplicate transaction detection",
         featureBullet10 = "Fully customizable categories with icon selection",
         featureBullet11 = "Multiple currency and date format support",
+        featureBullet12 = "Family Sync \u2014 share budgets across devices with end-to-end encryption",
+        syncIndicatorTitle = "Sync Indicator",
+        syncIndicatorBody = "When Family Sync is enabled, a sync indicator appears in the bottom-left corner of the Solari display:",
+        syncArrowsBullet = "Sync arrows \u2014 show Firebase connectivity status (green = connected, yellow = syncing, orange = stale, red = error)",
+        syncDotsBullet = "Colored dots \u2014 one per family member device (up to 4), showing how recently each device synced: green (< 5 min), yellow (< 2 hrs), orange (< 24 hrs), red (> 24 hrs), gray (never)",
         privacyTitle = "Privacy & Security",
-        privacyBody = "Your financial data stays on your device. SecureSync Daily Budget does not " +
-            "connect to the internet, does not collect analytics, and does not share your " +
-            "data with anyone. When you export your transactions, you can choose encrypted " +
+        privacyBody = "Your financial data stays on your device by default. SecureSync Daily Budget does not collect analytics " +
+            "and does not share your data with anyone. When you export your transactions, you can choose encrypted " +
             "format (ChaCha20-Poly1305 with PBKDF2 key derivation) for maximum security. " +
-            "Your money, your data, your control."
+            "If you enable Family Sync, data is shared between your devices using end-to-end encryption \u2014 " +
+            "the server cannot read your financial data. Your money, your data, your control."
     )
 
     override val settingsHelp = SettingsHelpStrings(
@@ -759,10 +764,12 @@ object EnglishStrings : AppStrings {
         pieChartDragNote = "Drag the boundary between any two slices to redistribute. " +
             "The category labels and dollar amounts update in real time beneath the chart.",
         autoFillTitle = "Auto-Fill Behavior",
-        autoFillBody = "In both Calculator and Percentage modes, when all fields except one are filled, " +
-            "the remaining field automatically fills with the balance. " +
-            "For example, with a \$100 total and two categories, entering \$60 for Food " +
-            "will automatically set Shopping to \$40.",
+        autoFillBody = "In Calculator mode, auto-fill tracks which fields you've typed in. " +
+            "If you fill categories first, the total auto-fills as their sum. " +
+            "If you type a total first, the last empty category auto-fills with the remainder. " +
+            "Clearing a field releases it for auto-fill again. " +
+            "In Percentage mode, the last empty percentage field auto-fills to reach 100%. " +
+            "When you change a percentage, other fields adjust proportionally.",
         duplicateTitle = "Duplicate Detection",
         duplicateBody = "When you save a new transaction or import from a file, the app checks for possible duplicates. " +
             "A transaction is flagged if it matches an existing one on all three criteria:",
@@ -1202,9 +1209,14 @@ object EnglishStrings : AppStrings {
         dayLimitNote = "Day-of-month values are limited to 28 for most repeat types to ensure the date " +
             "exists in every month. Annual and 12-month intervals allow days 29\u201331.",
         expenseListTitle = "Expense List",
-        expenseListBody = "Each recurring expense in the list shows:",
-        expenseSource = "Description",
-        expenseAmount = "Amount per occurrence",
+        expenseListBody = "Expenses are organized into three sections with colored subheaders:",
+        expenseGroupsBody = "Monthly Expenses \u2014 bills that repeat once per month. " +
+            "Annual Expenses \u2014 charges that occur once per year. " +
+            "Other Expense Periods \u2014 everything else (weekly, bi-weekly, bi-monthly, multi-month, or custom day intervals). " +
+            "If a section is empty, a short message is shown in its place.",
+        expenseNextDateBody = "Each entry shows the expense name, followed by the amount and the date of the next upcoming occurrence (e.g., \"\$15.99 on Mar 1, 2026\"). Expenses in the Other section also show a brief description of their repeat period (e.g., \"Every 2 weeks\").",
+        expenseOtherPeriodBody = "",
+        expenseSortBody = "A sort button appears on the left side of each subheader. Tap it to toggle between alphabetical order (A) and amount descending (currency symbol). All sections sort together. Your preference is saved automatically.",
         actionsTitle = "Actions",
         editNote = "Tap an expense to edit its name and amount.",
         repeatSettingsDesc = "Configure or change the repeat schedule.",

@@ -89,11 +89,13 @@ fun RecurringExpensesScreen(
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
+    val context = LocalContext.current
     val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
     var deletingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
-    var sortByAlpha by remember { mutableStateOf(true) }
+    val appPrefs = remember { context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE) }
+    var sortByAlpha by remember { mutableStateOf(appPrefs.getBoolean("recurringExpenseSortAlpha", false)) }
 
     Scaffold(
         topBar = {
@@ -220,7 +222,7 @@ fun RecurringExpensesScreen(
                                 customColors.headerText.copy(alpha = 0.15f),
                                 RoundedCornerShape(4.dp)
                             )
-                            .clickable { sortByAlpha = !sortByAlpha }
+                            .clickable { sortByAlpha = !sortByAlpha; appPrefs.edit().putBoolean("recurringExpenseSortAlpha", sortByAlpha).apply() }
                             .padding(horizontal = 6.dp, vertical = 4.dp)
                     )
                     Text(
@@ -228,7 +230,8 @@ fun RecurringExpensesScreen(
                         style = MaterialTheme.typography.titleSmall,
                         color = customColors.headerText,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 8.dp)
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
                     )
                 }
             }
@@ -270,7 +273,7 @@ fun RecurringExpensesScreen(
                                 customColors.headerText.copy(alpha = 0.15f),
                                 RoundedCornerShape(4.dp)
                             )
-                            .clickable { sortByAlpha = !sortByAlpha }
+                            .clickable { sortByAlpha = !sortByAlpha; appPrefs.edit().putBoolean("recurringExpenseSortAlpha", sortByAlpha).apply() }
                             .padding(horizontal = 6.dp, vertical = 4.dp)
                     )
                     Text(
@@ -278,7 +281,8 @@ fun RecurringExpensesScreen(
                         style = MaterialTheme.typography.titleSmall,
                         color = customColors.headerText,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 8.dp)
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
                     )
                 }
             }
@@ -320,7 +324,7 @@ fun RecurringExpensesScreen(
                                 customColors.headerText.copy(alpha = 0.15f),
                                 RoundedCornerShape(4.dp)
                             )
-                            .clickable { sortByAlpha = !sortByAlpha }
+                            .clickable { sortByAlpha = !sortByAlpha; appPrefs.edit().putBoolean("recurringExpenseSortAlpha", sortByAlpha).apply() }
                             .padding(horizontal = 6.dp, vertical = 4.dp)
                     )
                     Text(
@@ -328,7 +332,8 @@ fun RecurringExpensesScreen(
                         style = MaterialTheme.typography.titleSmall,
                         color = customColors.headerText,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 8.dp)
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
                     )
                 }
             }

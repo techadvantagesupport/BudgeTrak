@@ -573,12 +573,17 @@ object SpanishStrings : AppStrings {
         featureBullet9 = "Detecci\u00f3n de transacciones duplicadas",
         featureBullet10 = "Categor\u00edas totalmente personalizables con selecci\u00f3n de iconos",
         featureBullet11 = "Soporte para m\u00faltiples monedas y formatos de fecha",
+        featureBullet12 = "Sincronizaci\u00f3n Familiar \u2014 comparte presupuestos entre dispositivos con cifrado de extremo a extremo",
+        syncIndicatorTitle = "Indicador de sincronizaci\u00f3n",
+        syncIndicatorBody = "Cuando la Sincronizaci\u00f3n Familiar est\u00e1 activada, un indicador aparece en la esquina inferior izquierda de la pantalla Solari:",
+        syncArrowsBullet = "Flechas de sincronizaci\u00f3n \u2014 muestran el estado de conexi\u00f3n con Firebase (verde = conectado, amarillo = sincronizando, naranja = obsoleto, rojo = error)",
+        syncDotsBullet = "Puntos de colores \u2014 uno por dispositivo familiar (hasta 4), mostrando cu\u00e1ndo sincroniz\u00f3 cada dispositivo: verde (< 5 min), amarillo (< 2 hrs), naranja (< 24 hrs), rojo (> 24 hrs), gris (nunca)",
         privacyTitle = "Privacidad y seguridad",
-        privacyBody = "Tus datos financieros permanecen en tu dispositivo. SecureSync Presupuesto Diario no " +
-            "se conecta a internet, no recopila an\u00e1lisis y no comparte tus datos " +
-            "con nadie. Al exportar tus transacciones, puedes elegir formato cifrado " +
+        privacyBody = "Tus datos financieros permanecen en tu dispositivo por defecto. SecureSync Presupuesto Diario no " +
+            "recopila an\u00e1lisis y no comparte tus datos con nadie. Al exportar tus transacciones, puedes elegir formato cifrado " +
             "(ChaCha20-Poly1305 con derivaci\u00f3n de clave PBKDF2) para m\u00e1xima seguridad. " +
-            "Tu dinero, tus datos, tu control."
+            "Si activas la Sincronizaci\u00f3n Familiar, los datos se comparten entre tus dispositivos con cifrado de extremo a extremo \u2014 " +
+            "el servidor no puede leer tus datos financieros. Tu dinero, tus datos, tu control."
     )
 
     override val settingsHelp = SettingsHelpStrings(
@@ -758,10 +763,12 @@ object SpanishStrings : AppStrings {
         pieChartDragNote = "Arrastra el l\u00edmite entre dos secciones para redistribuir. " +
             "Las etiquetas de categor\u00eda y los montos se actualizan en tiempo real debajo del gr\u00e1fico.",
         autoFillTitle = "Autocompletar",
-        autoFillBody = "Tanto en el modo Calculadora como en Porcentaje, cuando todos los campos menos uno est\u00e1n llenos, " +
-            "el campo restante se completa autom\u00e1ticamente con el saldo. " +
-            "Por ejemplo, con un total de \$100 y dos categor\u00edas, al ingresar \$60 para Comida " +
-            "se asignar\u00e1 autom\u00e1ticamente \$40 a Compras.",
+        autoFillBody = "En el modo Calculadora, el autocompletado rastrea en qu\u00e9 campos has escrito. " +
+            "Si llenas las categor\u00edas primero, el total se autocompleta como su suma. " +
+            "Si escribes un total primero, la \u00faltima categor\u00eda vac\u00eda se autocompleta con el resto. " +
+            "Borrar un campo lo libera para autocompletarse de nuevo. " +
+            "En el modo Porcentaje, el \u00faltimo campo de porcentaje vac\u00edo se autocompleta para llegar al 100%. " +
+            "Al cambiar un porcentaje, los dem\u00e1s campos se ajustan proporcionalmente.",
         duplicateTitle = "Detecci\u00f3n de duplicados",
         duplicateBody = "Al guardar una nueva transacci\u00f3n o importar desde un archivo, la app verifica posibles duplicados. " +
             "Una transacci\u00f3n se marca si coincide con una existente en los tres criterios:",
@@ -1201,9 +1208,14 @@ object SpanishStrings : AppStrings {
         dayLimitNote = "Los valores de d\u00eda del mes est\u00e1n limitados a 28 para la mayor\u00eda de tipos de repetici\u00f3n " +
             "para asegurar que la fecha exista en todos los meses. Los tipos Anual e intervalos de 12 meses permiten d\u00edas 29\u201331.",
         expenseListTitle = "Lista de gastos",
-        expenseListBody = "Cada gasto recurrente en la lista muestra:",
-        expenseSource = "Descripci\u00f3n",
-        expenseAmount = "Monto por ocurrencia",
+        expenseListBody = "Los gastos est\u00e1n organizados en tres secciones con encabezados de color:",
+        expenseGroupsBody = "Gastos Mensuales \u2014 facturas que se repiten una vez al mes. " +
+            "Gastos Anuales \u2014 cargos que ocurren una vez al a\u00f1o. " +
+            "Otros Per\u00edodos de Gasto \u2014 todo lo dem\u00e1s (semanal, quincenal, bimensual, multimensual o intervalos de d\u00edas personalizados). " +
+            "Si una secci\u00f3n est\u00e1 vac\u00eda, se muestra un mensaje breve en su lugar.",
+        expenseNextDateBody = "Cada entrada muestra el nombre del gasto, seguido del monto y la fecha de la pr\u00f3xima ocurrencia (ej., \"\$15.99 el 1 mar, 2026\"). Los gastos en la secci\u00f3n Otros tambi\u00e9n muestran una breve descripci\u00f3n de su per\u00edodo de repetici\u00f3n (ej., \"Cada 2 semanas\").",
+        expenseOtherPeriodBody = "",
+        expenseSortBody = "Un bot\u00f3n de ordenamiento aparece a la izquierda de cada encabezado. T\u00f3calo para alternar entre orden alfab\u00e9tico (A) y por monto descendente (s\u00edmbolo de moneda). Todas las secciones se ordenan juntas. Tu preferencia se guarda autom\u00e1ticamente.",
         actionsTitle = "Acciones",
         editNote = "Toca un gasto para editar su nombre y monto.",
         repeatSettingsDesc = "Configurar o cambiar el calendario de repetici\u00f3n.",
