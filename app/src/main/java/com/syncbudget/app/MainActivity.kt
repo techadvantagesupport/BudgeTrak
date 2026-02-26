@@ -47,7 +47,6 @@ import com.syncbudget.app.data.sync.FirestoreService
 import com.syncbudget.app.data.sync.GroupManager
 import java.time.ZoneId
 import com.syncbudget.app.data.sync.LamportClock
-import com.syncbudget.app.data.sync.PeriodLedgerCorrector
 import com.syncbudget.app.data.sync.PeriodLedgerEntry
 import com.syncbudget.app.data.sync.PeriodLedgerRepository
 import com.syncbudget.app.data.sync.SyncEngine
@@ -175,16 +174,10 @@ class MainActivity : ComponentActivity() {
             // Budget state
             var isManualBudgetEnabled by remember { mutableStateOf(prefs.getBoolean("isManualBudgetEnabled", false)) }
             var manualBudgetAmount by remember { mutableDoubleStateOf(
-                try {
-                    prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull()
-                } catch (_: ClassCastException) { null }
-                    ?: prefs.getFloat("manualBudgetAmount", 0f).toDouble()
+                prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull() ?: 0.0
             ) }
             var availableCash by remember { mutableDoubleStateOf(
-                try {
-                    prefs.getString("availableCash", null)?.toDoubleOrNull()
-                } catch (_: ClassCastException) { null }
-                    ?: prefs.getFloat("availableCash", 0f).toDouble()
+                prefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
             ) }
             var budgetStartDate by remember {
                 mutableStateOf<LocalDate?>(
@@ -204,47 +197,15 @@ class MainActivity : ComponentActivity() {
                 val loaded = CategoryRepository.load(context).toMutableList()
                 var changed = false
 
-                // Deduplicate: remove untagged copies of categories that already
-                // exist with a proper tag (caused by sync not pushing tag field)
-                val tagsPresent = loaded.filter { it.tag.isNotEmpty() }.map { it.tag }.toSet()
-                val iter = loaded.iterator()
-                while (iter.hasNext()) {
-                    val cat = iter.next()
-                    if (cat.tag.isEmpty()) {
-                        for (def in DEFAULT_CATEGORY_DEFS) {
-                            if (def.tag in tagsPresent) {
-                                val allNames = getAllKnownNamesForTag(def.tag)
-                                if (cat.name in allNames) {
-                                    iter.remove(); changed = true; break
-                                }
-                            }
-                        }
-                    }
-                }
-                // Also deduplicate by ID (first occurrence wins)
-                val seenIds = mutableSetOf<Int>()
-                val idIter = loaded.iterator()
-                while (idIter.hasNext()) {
-                    if (!seenIds.add(idIter.next().id)) { idIter.remove(); changed = true }
-                }
-
                 for (def in DEFAULT_CATEGORY_DEFS) {
                     val byTag = loaded.indexOfFirst { it.tag == def.tag }
                     if (byTag >= 0) continue
-                    // Backward compat: check if a category with a matching name exists but no tag
-                    val allNames = getAllKnownNamesForTag(def.tag)
-                    val byName = loaded.indexOfFirst { it.tag.isEmpty() && it.name in allNames }
-                    if (byName >= 0) {
-                        loaded[byName] = loaded[byName].copy(tag = def.tag)
-                        changed = true
-                    } else {
-                        val usedIds = loaded.map { it.id }.toSet()
-                        var id: Int
-                        do { id = (0..65535).random() } while (id in usedIds)
-                        val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
-                        loaded.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag))
-                        changed = true
-                    }
+                    val usedIds = loaded.map { it.id }.toSet()
+                    var id: Int
+                    do { id = (0..65535).random() } while (id in usedIds)
+                    val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
+                    loaded.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag))
+                    changed = true
                 }
                 if (changed) CategoryRepository.save(context, loaded)
                 mutableStateListOf(*loaded.toTypedArray())
@@ -361,147 +322,6 @@ class MainActivity : ComponentActivity() {
                 val amortCatId = categories.find { it.tag == "amortization" }?.id
                 return txn.categoryAmounts.any {
                     it.categoryId == recurringCatId || it.categoryId == amortCatId
-                }
-            }
-
-            // ── One-time migration: clean up broken records from past sync bugs ──
-            remember {
-                val migrationKey = "recordCleanupV1Applied"
-                if (!prefs.getBoolean(migrationKey, false)) {
-                    var txnChanged = false
-                    var catChanged = false
-                    var reChanged = false
-                    var isChanged = false
-                    var sgChanged = false
-                    var aeChanged = false
-
-                    // 1. Tombstone skeleton transactions (amount=0, empty source)
-                    transactions.forEachIndexed { i, t ->
-                        if (t.amount == 0.0 && t.source.isBlank() && !t.deleted) {
-                            transactions[i] = t.copy(deleted = true,
-                                deleted_clock = if (t.deleted_clock > 0) t.deleted_clock
-                                    else lamportClock.tick())
-                            txnChanged = true
-                        }
-                    }
-
-                    // 2. Re-stamp records with zero field clocks so they can
-                    //    sync properly (these were created before sync was set up,
-                    //    or arrived as partial deltas before the piggyback fix).
-                    val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
-                    transactions.forEachIndexed { i, t ->
-                        if (!t.deleted && t.source.isNotBlank() && t.source_clock == 0L) {
-                            val clock = lamportClock.tick()
-                            transactions[i] = t.copy(
-                                deviceId = if (t.deviceId.isEmpty()) deviceId else t.deviceId,
-                                source_clock = clock, amount_clock = clock,
-                                date_clock = clock, type_clock = clock,
-                                categoryAmounts_clock = if (t.categoryAmounts.isNotEmpty()) clock else 0L,
-                                isUserCategorized_clock = clock,
-                                isBudgetIncome_clock = clock
-                            )
-                            txnChanged = true
-                        }
-                    }
-                    categories.forEachIndexed { i, c ->
-                        if (!c.deleted && c.name.isNotBlank() && c.name_clock == 0L) {
-                            val clock = lamportClock.tick()
-                            categories[i] = c.copy(
-                                deviceId = if (c.deviceId.isEmpty()) deviceId else c.deviceId,
-                                name_clock = clock, iconName_clock = clock,
-                                tag_clock = if (c.tag.isNotEmpty()) clock else 0L
-                            )
-                            catChanged = true
-                        }
-                    }
-                    recurringExpenses.forEachIndexed { i, r ->
-                        if (!r.deleted && r.source.isNotBlank() && r.source_clock == 0L) {
-                            val clock = lamportClock.tick()
-                            recurringExpenses[i] = r.copy(
-                                deviceId = if (r.deviceId.isEmpty()) deviceId else r.deviceId,
-                                source_clock = clock, amount_clock = clock,
-                                repeatType_clock = clock, repeatInterval_clock = clock,
-                                startDate_clock = clock, monthDay1_clock = clock,
-                                monthDay2_clock = clock
-                            )
-                            reChanged = true
-                        }
-                    }
-                    incomeSources.forEachIndexed { i, s ->
-                        if (!s.deleted && s.source.isNotBlank() && s.source_clock == 0L) {
-                            val clock = lamportClock.tick()
-                            incomeSources[i] = s.copy(
-                                deviceId = if (s.deviceId.isEmpty()) deviceId else s.deviceId,
-                                source_clock = clock, amount_clock = clock,
-                                repeatType_clock = clock, repeatInterval_clock = clock,
-                                startDate_clock = clock, monthDay1_clock = clock,
-                                monthDay2_clock = clock
-                            )
-                            isChanged = true
-                        }
-                    }
-                    savingsGoals.forEachIndexed { i, g ->
-                        if (!g.deleted && g.name.isNotBlank() && g.name_clock == 0L) {
-                            val clock = lamportClock.tick()
-                            savingsGoals[i] = g.copy(
-                                deviceId = if (g.deviceId.isEmpty()) deviceId else g.deviceId,
-                                name_clock = clock, targetAmount_clock = clock,
-                                targetDate_clock = clock, totalSavedSoFar_clock = clock,
-                                contributionPerPeriod_clock = clock, isPaused_clock = clock
-                            )
-                            sgChanged = true
-                        }
-                    }
-                    amortizationEntries.forEachIndexed { i, e ->
-                        if (!e.deleted && e.source.isNotBlank() && e.source_clock == 0L) {
-                            val clock = lamportClock.tick()
-                            amortizationEntries[i] = e.copy(
-                                deviceId = if (e.deviceId.isEmpty()) deviceId else e.deviceId,
-                                source_clock = clock, amount_clock = clock,
-                                totalPeriods_clock = clock, startDate_clock = clock,
-                                isPaused_clock = clock
-                            )
-                            aeChanged = true
-                        }
-                    }
-
-                    // 3. Apply period ledger corrections
-                    if (periodLedger.isNotEmpty() && (reChanged || isChanged)) {
-                        val correction = PeriodLedgerCorrector.correctLedger(
-                            periodLedger.toList(),
-                            recurringExpenses.toList(),
-                            incomeSources.toList(),
-                            budgetPeriod
-                        )
-                        if (correction != 0.0) {
-                            availableCash += correction
-                            persistAvailableCash()
-                            // Mark entries as corrected
-                            periodLedger.forEachIndexed { i, e ->
-                                if (!e.corrected) periodLedger[i] = e.copy(corrected = true)
-                            }
-                            savePeriodLedger()
-                        }
-                    }
-
-                    // Save changed lists
-                    if (txnChanged) saveTransactions()
-                    if (catChanged) saveCategories()
-                    if (reChanged) saveRecurringExpenses()
-                    if (isChanged) saveIncomeSources()
-                    if (sgChanged) saveSavingsGoals()
-                    if (aeChanged) saveAmortizationEntries()
-
-                    prefs.edit().putBoolean(migrationKey, true).apply()
-                }
-                true // remember requires a return value
-            }
-
-            // Foreground flag
-            DisposableEffect(Unit) {
-                syncPrefs.edit().putBoolean("isInForeground", true).apply()
-                onDispose {
-                    syncPrefs.edit().putBoolean("isInForeground", false).apply()
                 }
             }
 
@@ -738,7 +558,8 @@ class MainActivity : ComponentActivity() {
                     type_clock = clock,
                     categoryAmounts_clock = clock,
                     isUserCategorized_clock = clock,
-                    isBudgetIncome_clock = clock
+                    isBudgetIncome_clock = clock,
+                    deviceId_clock = clock
                 )
                 transactions.add(stamped)
                 saveTransactions()
@@ -1208,7 +1029,8 @@ class MainActivity : ComponentActivity() {
                                 deviceId = localDeviceId,
                                 name_clock = clock,
                                 iconName_clock = clock,
-                                tag_clock = if (cat.tag.isNotEmpty()) clock else 0L
+                                tag_clock = if (cat.tag.isNotEmpty()) clock else 0L,
+                                deviceId_clock = clock
                             ))
                             saveCategories()
                         },
@@ -1404,10 +1226,8 @@ class MainActivity : ComponentActivity() {
                             resetDayOfWeek = prefs.getInt("resetDayOfWeek", 7)
                             resetDayOfMonth = prefs.getInt("resetDayOfMonth", 1)
                             isManualBudgetEnabled = prefs.getBoolean("isManualBudgetEnabled", false)
-                            manualBudgetAmount = prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull()
-                                ?: prefs.getFloat("manualBudgetAmount", 0f).toDouble()
-                            availableCash = prefs.getString("availableCash", null)?.toDoubleOrNull()
-                                ?: prefs.getFloat("availableCash", 0f).toDouble()
+                            manualBudgetAmount = prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull() ?: 0.0
+                            availableCash = prefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
                             budgetStartDate = prefs.getString("budgetStartDate", null)?.let { LocalDate.parse(it) }
                             lastRefreshDate = prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) }
                             weekStartSunday = prefs.getBoolean("weekStartSunday", true)
@@ -1427,39 +1247,45 @@ class MainActivity : ComponentActivity() {
                                     transactions[i] = t.copy(deviceId = "", source_clock = 0L,
                                         amount_clock = 0L, date_clock = 0L, type_clock = 0L,
                                         categoryAmounts_clock = 0L, isUserCategorized_clock = 0L,
-                                        isBudgetIncome_clock = 0L, deleted_clock = 0L)
+                                        isBudgetIncome_clock = 0L, deleted_clock = 0L,
+                                        deviceId_clock = 0L)
                                 }
                                 saveTransactions()
                                 categories.forEachIndexed { i, c ->
                                     categories[i] = c.copy(deviceId = "", name_clock = 0L,
-                                        iconName_clock = 0L, tag_clock = 0L, deleted_clock = 0L)
+                                        iconName_clock = 0L, tag_clock = 0L, deleted_clock = 0L,
+                                        deviceId_clock = 0L)
                                 }
                                 saveCategories()
                                 recurringExpenses.forEachIndexed { i, r ->
                                     recurringExpenses[i] = r.copy(deviceId = "", source_clock = 0L,
                                         amount_clock = 0L, repeatType_clock = 0L,
                                         repeatInterval_clock = 0L, startDate_clock = 0L,
-                                        monthDay1_clock = 0L, monthDay2_clock = 0L, deleted_clock = 0L)
+                                        monthDay1_clock = 0L, monthDay2_clock = 0L, deleted_clock = 0L,
+                                        deviceId_clock = 0L)
                                 }
                                 saveRecurringExpenses()
                                 incomeSources.forEachIndexed { i, s ->
                                     incomeSources[i] = s.copy(deviceId = "", source_clock = 0L,
                                         amount_clock = 0L, repeatType_clock = 0L,
                                         repeatInterval_clock = 0L, startDate_clock = 0L,
-                                        monthDay1_clock = 0L, monthDay2_clock = 0L, deleted_clock = 0L)
+                                        monthDay1_clock = 0L, monthDay2_clock = 0L, deleted_clock = 0L,
+                                        deviceId_clock = 0L)
                                 }
                                 saveIncomeSources()
                                 savingsGoals.forEachIndexed { i, g ->
                                     savingsGoals[i] = g.copy(deviceId = "", name_clock = 0L,
                                         targetAmount_clock = 0L, targetDate_clock = 0L,
                                         totalSavedSoFar_clock = 0L, contributionPerPeriod_clock = 0L,
-                                        isPaused_clock = 0L, deleted_clock = 0L)
+                                        isPaused_clock = 0L, deleted_clock = 0L,
+                                        deviceId_clock = 0L)
                                 }
                                 saveSavingsGoals()
                                 amortizationEntries.forEachIndexed { i, e ->
                                     amortizationEntries[i] = e.copy(deviceId = "", source_clock = 0L,
                                         amount_clock = 0L, totalPeriods_clock = 0L,
-                                        startDate_clock = 0L, isPaused_clock = 0L, deleted_clock = 0L)
+                                        startDate_clock = 0L, isPaused_clock = 0L, deleted_clock = 0L,
+                                        deviceId_clock = 0L)
                                 }
                                 saveAmortizationEntries()
 
@@ -1516,7 +1342,8 @@ class MainActivity : ComponentActivity() {
                                 targetDate_clock = clock,
                                 totalSavedSoFar_clock = clock,
                                 contributionPerPeriod_clock = clock,
-                                isPaused_clock = clock
+                                isPaused_clock = clock,
+                                deviceId_clock = clock
                             ))
                             saveSavingsGoals()
                         },
@@ -1562,7 +1389,8 @@ class MainActivity : ComponentActivity() {
                                 amount_clock = clock,
                                 totalPeriods_clock = clock,
                                 startDate_clock = clock,
-                                isPaused_clock = clock
+                                isPaused_clock = clock,
+                                deviceId_clock = clock
                             ))
                             saveAmortizationEntries()
                         },
@@ -1608,7 +1436,8 @@ class MainActivity : ComponentActivity() {
                                 repeatInterval_clock = clock,
                                 startDate_clock = clock,
                                 monthDay1_clock = clock,
-                                monthDay2_clock = clock
+                                monthDay2_clock = clock,
+                                deviceId_clock = clock
                             ))
                             saveRecurringExpenses()
                         },
@@ -1656,7 +1485,8 @@ class MainActivity : ComponentActivity() {
                                 repeatInterval_clock = clock,
                                 startDate_clock = clock,
                                 monthDay1_clock = clock,
-                                monthDay2_clock = clock
+                                monthDay2_clock = clock,
+                                deviceId_clock = clock
                             ))
                             saveIncomeSources()
                         },
@@ -1912,7 +1742,8 @@ class MainActivity : ComponentActivity() {
                                                 date_clock = stampClock, type_clock = stampClock,
                                                 categoryAmounts_clock = stampClock,
                                                 isUserCategorized_clock = stampClock,
-                                                isBudgetIncome_clock = stampClock
+                                                isBudgetIncome_clock = stampClock,
+                                                deviceId_clock = stampClock
                                             )
                                         }
                                     }
@@ -1922,7 +1753,8 @@ class MainActivity : ComponentActivity() {
                                             categories[i] = c.copy(
                                                 deviceId = localDeviceId,
                                                 name_clock = stampClock, iconName_clock = stampClock,
-                                                tag_clock = if (c.tag.isNotEmpty()) stampClock else 0L
+                                                tag_clock = if (c.tag.isNotEmpty()) stampClock else 0L,
+                                                deviceId_clock = stampClock
                                             )
                                         }
                                     }
@@ -1933,7 +1765,8 @@ class MainActivity : ComponentActivity() {
                                                 deviceId = localDeviceId,
                                                 name_clock = stampClock, targetAmount_clock = stampClock,
                                                 targetDate_clock = stampClock, totalSavedSoFar_clock = stampClock,
-                                                contributionPerPeriod_clock = stampClock, isPaused_clock = stampClock
+                                                contributionPerPeriod_clock = stampClock, isPaused_clock = stampClock,
+                                                deviceId_clock = stampClock
                                             )
                                         }
                                     }
@@ -1944,7 +1777,8 @@ class MainActivity : ComponentActivity() {
                                                 deviceId = localDeviceId,
                                                 source_clock = stampClock, amount_clock = stampClock,
                                                 totalPeriods_clock = stampClock, startDate_clock = stampClock,
-                                                isPaused_clock = stampClock
+                                                isPaused_clock = stampClock,
+                                                deviceId_clock = stampClock
                                             )
                                         }
                                     }
@@ -1956,7 +1790,8 @@ class MainActivity : ComponentActivity() {
                                                 source_clock = stampClock, amount_clock = stampClock,
                                                 repeatType_clock = stampClock, repeatInterval_clock = stampClock,
                                                 startDate_clock = stampClock, monthDay1_clock = stampClock,
-                                                monthDay2_clock = stampClock
+                                                monthDay2_clock = stampClock,
+                                                deviceId_clock = stampClock
                                             )
                                         }
                                     }
@@ -1968,7 +1803,8 @@ class MainActivity : ComponentActivity() {
                                                 source_clock = stampClock, amount_clock = stampClock,
                                                 repeatType_clock = stampClock, repeatInterval_clock = stampClock,
                                                 startDate_clock = stampClock, monthDay1_clock = stampClock,
-                                                monthDay2_clock = stampClock
+                                                monthDay2_clock = stampClock,
+                                                deviceId_clock = stampClock
                                             )
                                         }
                                     }

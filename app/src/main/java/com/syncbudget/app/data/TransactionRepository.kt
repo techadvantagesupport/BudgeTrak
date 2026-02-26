@@ -41,6 +41,7 @@ object TransactionRepository {
             obj.put("isUserCategorized_clock", t.isUserCategorized_clock)
             obj.put("isBudgetIncome_clock", t.isBudgetIncome_clock)
             obj.put("deleted_clock", t.deleted_clock)
+            obj.put("deviceId_clock", t.deviceId_clock)
             jsonArray.put(obj)
         }
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
@@ -91,7 +92,8 @@ object TransactionRepository {
                     categoryAmounts_clock = obj.optLong("categoryAmounts_clock", 0L),
                     isUserCategorized_clock = obj.optLong("isUserCategorized_clock", 0L),
                     isBudgetIncome_clock = obj.optLong("isBudgetIncome_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L)
+                    deleted_clock = obj.optLong("deleted_clock", 0L),
+                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
             )
         }

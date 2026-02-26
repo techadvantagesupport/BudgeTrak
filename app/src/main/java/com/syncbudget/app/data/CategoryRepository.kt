@@ -23,6 +23,7 @@ object CategoryRepository {
             obj.put("iconName_clock", c.iconName_clock)
             obj.put("tag_clock", c.tag_clock)
             obj.put("deleted_clock", c.deleted_clock)
+            obj.put("deviceId_clock", c.deviceId_clock)
             jsonArray.put(obj)
         }
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
@@ -50,7 +51,8 @@ object CategoryRepository {
                     name_clock = obj.optLong("name_clock", 0L),
                     iconName_clock = obj.optLong("iconName_clock", 0L),
                     tag_clock = obj.optLong("tag_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L)
+                    deleted_clock = obj.optLong("deleted_clock", 0L),
+                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
             )
         }

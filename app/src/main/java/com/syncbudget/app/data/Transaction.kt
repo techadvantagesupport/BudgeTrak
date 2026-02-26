@@ -28,7 +28,8 @@ data class Transaction(
     val categoryAmounts_clock: Long = 0L,
     val isUserCategorized_clock: Long = 0L,
     val isBudgetIncome_clock: Long = 0L,
-    val deleted_clock: Long = 0L
+    val deleted_clock: Long = 0L,
+    val deviceId_clock: Long = 0L
 )
 
 fun generateTransactionId(existingIds: Set<Int>): Int {

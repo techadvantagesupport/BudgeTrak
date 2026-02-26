@@ -91,6 +91,46 @@ class DeltaBuilderTest {
         assertEquals(true, delta!!.fields["deleted"]?.value)
     }
 
+    // ── deviceId field in deltas ─────────────────────────────────────
+
+    @Test
+    fun buildTransactionDelta_deviceIdFieldIncluded() {
+        val txn = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", amount = 42.0, deviceId = "dev1",
+            source_clock = 5, amount_clock = 5, date_clock = 5, type_clock = 5,
+            deviceId_clock = 5)
+
+        val delta = DeltaBuilder.buildTransactionDelta(txn, 0)
+        assertNotNull(delta)
+        assertTrue(delta!!.fields.containsKey("deviceId"))
+        assertEquals("dev1", delta.fields["deviceId"]?.value)
+        assertEquals(5L, delta.fields["deviceId"]?.clock)
+    }
+
+    @Test
+    fun buildTransactionDelta_deviceIdPiggybackedWhenOtherFieldQualifies() {
+        val txn = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", amount = 42.0, deviceId = "dev1",
+            source_clock = 10, amount_clock = 3, deviceId_clock = 2)
+
+        val delta = DeltaBuilder.buildTransactionDelta(txn, 5)
+        assertNotNull(delta)
+        // deviceId_clock (2) < threshold (5), but piggybacked via ensureField
+        assertTrue(delta!!.fields.containsKey("deviceId"))
+        assertEquals(2L, delta.fields["deviceId"]?.clock)
+    }
+
+    @Test
+    fun buildCategoryDelta_deviceIdFieldIncluded() {
+        val cat = Category(id = 1, name = "Food", iconName = "Restaurant",
+            deviceId = "dev1", name_clock = 5, iconName_clock = 5, deviceId_clock = 5)
+
+        val delta = DeltaBuilder.buildCategoryDelta(cat, 0)
+        assertNotNull(delta)
+        assertTrue(delta!!.fields.containsKey("deviceId"))
+        assertEquals("dev1", delta.fields["deviceId"]?.value)
+    }
+
     // ── Category deltas ─────────────────────────────────────────────
 
     @Test

@@ -69,6 +69,7 @@ object SnapshotManager {
             obj.put("isUserCategorized_clock", t.isUserCategorized_clock)
             obj.put("isBudgetIncome_clock", t.isBudgetIncome_clock)
             obj.put("deleted_clock", t.deleted_clock)
+            obj.put("deviceId_clock", t.deviceId_clock)
             txnArray.put(obj)
         }
         json.put("transactions", txnArray)
@@ -95,6 +96,7 @@ object SnapshotManager {
             obj.put("monthDay1_clock", r.monthDay1_clock)
             obj.put("monthDay2_clock", r.monthDay2_clock)
             obj.put("deleted_clock", r.deleted_clock)
+            obj.put("deviceId_clock", r.deviceId_clock)
             reArray.put(obj)
         }
         json.put("recurringExpenses", reArray)
@@ -121,6 +123,7 @@ object SnapshotManager {
             obj.put("monthDay1_clock", s.monthDay1_clock)
             obj.put("monthDay2_clock", s.monthDay2_clock)
             obj.put("deleted_clock", s.deleted_clock)
+            obj.put("deviceId_clock", s.deviceId_clock)
             isArray.put(obj)
         }
         json.put("incomeSources", isArray)
@@ -145,6 +148,7 @@ object SnapshotManager {
             obj.put("contributionPerPeriod_clock", g.contributionPerPeriod_clock)
             obj.put("isPaused_clock", g.isPaused_clock)
             obj.put("deleted_clock", g.deleted_clock)
+            obj.put("deviceId_clock", g.deviceId_clock)
             sgArray.put(obj)
         }
         json.put("savingsGoals", sgArray)
@@ -167,6 +171,7 @@ object SnapshotManager {
             obj.put("deleted_clock", e.deleted_clock)
             obj.put("isPaused", e.isPaused)
             obj.put("isPaused_clock", e.isPaused_clock)
+            obj.put("deviceId_clock", e.deviceId_clock)
             amArray.put(obj)
         }
         json.put("amortizationEntries", amArray)
@@ -185,6 +190,7 @@ object SnapshotManager {
             obj.put("iconName_clock", c.iconName_clock)
             obj.put("tag_clock", c.tag_clock)
             obj.put("deleted_clock", c.deleted_clock)
+            obj.put("deviceId_clock", c.deviceId_clock)
             catArray.put(obj)
         }
         json.put("categories", catArray)
@@ -224,7 +230,8 @@ object SnapshotManager {
                     categoryAmounts_clock = obj.optLong("categoryAmounts_clock", 0L),
                     isUserCategorized_clock = obj.optLong("isUserCategorized_clock", 0L),
                     isBudgetIncome_clock = obj.optLong("isBudgetIncome_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L)
+                    deleted_clock = obj.optLong("deleted_clock", 0L),
+                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
             }
         } else emptyList()
@@ -251,7 +258,8 @@ object SnapshotManager {
                     startDate_clock = obj.optLong("startDate_clock", 0L),
                     monthDay1_clock = obj.optLong("monthDay1_clock", 0L),
                     monthDay2_clock = obj.optLong("monthDay2_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L)
+                    deleted_clock = obj.optLong("deleted_clock", 0L),
+                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
             }
         } else emptyList()
@@ -278,7 +286,8 @@ object SnapshotManager {
                     startDate_clock = obj.optLong("startDate_clock", 0L),
                     monthDay1_clock = obj.optLong("monthDay1_clock", 0L),
                     monthDay2_clock = obj.optLong("monthDay2_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L)
+                    deleted_clock = obj.optLong("deleted_clock", 0L),
+                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
             }
         } else emptyList()
@@ -287,12 +296,8 @@ object SnapshotManager {
             val arr = json.getJSONArray("savingsGoals")
             (0 until arr.length()).map { i ->
                 val obj = arr.getJSONObject(i)
-                val name = if (obj.has("name")) obj.getString("name")
-                           else if (obj.has("description")) obj.getString("description")
-                           else ""
-                val targetAmount = if (obj.has("targetAmount")) obj.getDouble("targetAmount")
-                                   else if (obj.has("amount")) obj.getDouble("amount")
-                                   else 0.0
+                val name = if (obj.has("name")) obj.getString("name") else ""
+                val targetAmount = if (obj.has("targetAmount")) obj.getDouble("targetAmount") else 0.0
                 val targetDate = if (obj.has("targetDate") && !obj.isNull("targetDate")) {
                     try { LocalDate.parse(obj.getString("targetDate")) } catch (_: Exception) { null }
                 } else null
@@ -312,7 +317,8 @@ object SnapshotManager {
                     totalSavedSoFar_clock = obj.optLong("totalSavedSoFar_clock", 0L),
                     contributionPerPeriod_clock = obj.optLong("contributionPerPeriod_clock", 0L),
                     isPaused_clock = obj.optLong("isPaused_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L)
+                    deleted_clock = obj.optLong("deleted_clock", 0L),
+                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
             }
         } else emptyList()
@@ -335,7 +341,8 @@ object SnapshotManager {
                     totalPeriods_clock = obj.optLong("totalPeriods_clock", 0L),
                     startDate_clock = obj.optLong("startDate_clock", 0L),
                     deleted_clock = obj.optLong("deleted_clock", 0L),
-                    isPaused_clock = obj.optLong("isPaused_clock", 0L)
+                    isPaused_clock = obj.optLong("isPaused_clock", 0L),
+                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
             }
         } else emptyList()
@@ -354,7 +361,8 @@ object SnapshotManager {
                     name_clock = obj.optLong("name_clock", 0L),
                     iconName_clock = obj.optLong("iconName_clock", 0L),
                     tag_clock = obj.optLong("tag_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L)
+                    deleted_clock = obj.optLong("deleted_clock", 0L),
+                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
             }
         } else emptyList()

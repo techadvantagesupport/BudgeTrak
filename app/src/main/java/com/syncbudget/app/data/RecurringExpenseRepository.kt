@@ -32,6 +32,7 @@ object RecurringExpenseRepository {
             obj.put("monthDay1_clock", r.monthDay1_clock)
             obj.put("monthDay2_clock", r.monthDay2_clock)
             obj.put("deleted_clock", r.deleted_clock)
+            obj.put("deviceId_clock", r.deviceId_clock)
             jsonArray.put(obj)
         }
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
@@ -67,7 +68,8 @@ object RecurringExpenseRepository {
                     startDate_clock = obj.optLong("startDate_clock", 0L),
                     monthDay1_clock = obj.optLong("monthDay1_clock", 0L),
                     monthDay2_clock = obj.optLong("monthDay2_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L)
+                    deleted_clock = obj.optLong("deleted_clock", 0L),
+                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
             )
         }

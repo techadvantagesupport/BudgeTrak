@@ -41,7 +41,7 @@ object CrdtMerge {
             amount = if (shouldAcceptRemote(local.amount_clock, remote.amount_clock, localDeviceId, remoteDeviceId)) remote.amount else local.amount,
             isUserCategorized = if (shouldAcceptRemote(local.isUserCategorized_clock, remote.isUserCategorized_clock, localDeviceId, remoteDeviceId)) remote.isUserCategorized else local.isUserCategorized,
             isBudgetIncome = if (shouldAcceptRemote(local.isBudgetIncome_clock, remote.isBudgetIncome_clock, localDeviceId, remoteDeviceId)) remote.isBudgetIncome else local.isBudgetIncome,
-            deviceId = local.deviceId,
+            deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             source_clock = maxOf(local.source_clock, remote.source_clock),
             amount_clock = maxOf(local.amount_clock, remote.amount_clock),
@@ -50,7 +50,8 @@ object CrdtMerge {
             categoryAmounts_clock = maxOf(local.categoryAmounts_clock, remote.categoryAmounts_clock),
             isUserCategorized_clock = maxOf(local.isUserCategorized_clock, remote.isUserCategorized_clock),
             isBudgetIncome_clock = maxOf(local.isBudgetIncome_clock, remote.isBudgetIncome_clock),
-            deleted_clock = mergedDeletedClock
+            deleted_clock = mergedDeletedClock,
+            deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )
     }
 
@@ -73,7 +74,7 @@ object CrdtMerge {
             startDate = if (shouldAcceptRemote(local.startDate_clock, remote.startDate_clock, localDeviceId, remoteDeviceId)) remote.startDate else local.startDate,
             monthDay1 = if (shouldAcceptRemote(local.monthDay1_clock, remote.monthDay1_clock, localDeviceId, remoteDeviceId)) remote.monthDay1 else local.monthDay1,
             monthDay2 = if (shouldAcceptRemote(local.monthDay2_clock, remote.monthDay2_clock, localDeviceId, remoteDeviceId)) remote.monthDay2 else local.monthDay2,
-            deviceId = local.deviceId,
+            deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             source_clock = maxOf(local.source_clock, remote.source_clock),
             amount_clock = maxOf(local.amount_clock, remote.amount_clock),
@@ -82,7 +83,8 @@ object CrdtMerge {
             startDate_clock = maxOf(local.startDate_clock, remote.startDate_clock),
             monthDay1_clock = maxOf(local.monthDay1_clock, remote.monthDay1_clock),
             monthDay2_clock = maxOf(local.monthDay2_clock, remote.monthDay2_clock),
-            deleted_clock = mergedDeletedClock
+            deleted_clock = mergedDeletedClock,
+            deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )
     }
 
@@ -105,7 +107,7 @@ object CrdtMerge {
             startDate = if (shouldAcceptRemote(local.startDate_clock, remote.startDate_clock, localDeviceId, remoteDeviceId)) remote.startDate else local.startDate,
             monthDay1 = if (shouldAcceptRemote(local.monthDay1_clock, remote.monthDay1_clock, localDeviceId, remoteDeviceId)) remote.monthDay1 else local.monthDay1,
             monthDay2 = if (shouldAcceptRemote(local.monthDay2_clock, remote.monthDay2_clock, localDeviceId, remoteDeviceId)) remote.monthDay2 else local.monthDay2,
-            deviceId = local.deviceId,
+            deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             source_clock = maxOf(local.source_clock, remote.source_clock),
             amount_clock = maxOf(local.amount_clock, remote.amount_clock),
@@ -114,7 +116,8 @@ object CrdtMerge {
             startDate_clock = maxOf(local.startDate_clock, remote.startDate_clock),
             monthDay1_clock = maxOf(local.monthDay1_clock, remote.monthDay1_clock),
             monthDay2_clock = maxOf(local.monthDay2_clock, remote.monthDay2_clock),
-            deleted_clock = mergedDeletedClock
+            deleted_clock = mergedDeletedClock,
+            deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )
     }
 
@@ -136,7 +139,7 @@ object CrdtMerge {
             totalSavedSoFar = if (shouldAcceptRemote(local.totalSavedSoFar_clock, remote.totalSavedSoFar_clock, localDeviceId, remoteDeviceId)) remote.totalSavedSoFar else local.totalSavedSoFar,
             contributionPerPeriod = if (shouldAcceptRemote(local.contributionPerPeriod_clock, remote.contributionPerPeriod_clock, localDeviceId, remoteDeviceId)) remote.contributionPerPeriod else local.contributionPerPeriod,
             isPaused = if (shouldAcceptRemote(local.isPaused_clock, remote.isPaused_clock, localDeviceId, remoteDeviceId)) remote.isPaused else local.isPaused,
-            deviceId = local.deviceId,
+            deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             name_clock = maxOf(local.name_clock, remote.name_clock),
             targetAmount_clock = maxOf(local.targetAmount_clock, remote.targetAmount_clock),
@@ -144,7 +147,8 @@ object CrdtMerge {
             totalSavedSoFar_clock = maxOf(local.totalSavedSoFar_clock, remote.totalSavedSoFar_clock),
             contributionPerPeriod_clock = maxOf(local.contributionPerPeriod_clock, remote.contributionPerPeriod_clock),
             isPaused_clock = maxOf(local.isPaused_clock, remote.isPaused_clock),
-            deleted_clock = mergedDeletedClock
+            deleted_clock = mergedDeletedClock,
+            deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )
     }
 
@@ -165,14 +169,15 @@ object CrdtMerge {
             totalPeriods = if (shouldAcceptRemote(local.totalPeriods_clock, remote.totalPeriods_clock, localDeviceId, remoteDeviceId)) remote.totalPeriods else local.totalPeriods,
             startDate = if (shouldAcceptRemote(local.startDate_clock, remote.startDate_clock, localDeviceId, remoteDeviceId)) remote.startDate else local.startDate,
             isPaused = if (shouldAcceptRemote(local.isPaused_clock, remote.isPaused_clock, localDeviceId, remoteDeviceId)) remote.isPaused else local.isPaused,
-            deviceId = local.deviceId,
+            deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             source_clock = maxOf(local.source_clock, remote.source_clock),
             amount_clock = maxOf(local.amount_clock, remote.amount_clock),
             totalPeriods_clock = maxOf(local.totalPeriods_clock, remote.totalPeriods_clock),
             startDate_clock = maxOf(local.startDate_clock, remote.startDate_clock),
             deleted_clock = mergedDeletedClock,
-            isPaused_clock = maxOf(local.isPaused_clock, remote.isPaused_clock)
+            isPaused_clock = maxOf(local.isPaused_clock, remote.isPaused_clock),
+            deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )
     }
 
@@ -191,12 +196,13 @@ object CrdtMerge {
             name = if (shouldAcceptRemote(local.name_clock, remote.name_clock, localDeviceId, remoteDeviceId)) remote.name else local.name,
             iconName = if (shouldAcceptRemote(local.iconName_clock, remote.iconName_clock, localDeviceId, remoteDeviceId)) remote.iconName else local.iconName,
             tag = if (shouldAcceptRemote(local.tag_clock, remote.tag_clock, localDeviceId, remoteDeviceId)) remote.tag else local.tag,
-            deviceId = local.deviceId,
+            deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
             name_clock = maxOf(local.name_clock, remote.name_clock),
             iconName_clock = maxOf(local.iconName_clock, remote.iconName_clock),
             tag_clock = maxOf(local.tag_clock, remote.tag_clock),
-            deleted_clock = mergedDeletedClock
+            deleted_clock = mergedDeletedClock,
+            deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )
     }
 

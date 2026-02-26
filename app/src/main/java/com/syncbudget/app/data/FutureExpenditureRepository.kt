@@ -32,6 +32,7 @@ object SavingsGoalRepository {
             obj.put("contributionPerPeriod_clock", g.contributionPerPeriod_clock)
             obj.put("isPaused_clock", g.isPaused_clock)
             obj.put("deleted_clock", g.deleted_clock)
+            obj.put("deviceId_clock", g.deviceId_clock)
             jsonArray.put(obj)
         }
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
@@ -48,13 +49,8 @@ object SavingsGoalRepository {
         val list = mutableListOf<SavingsGoal>()
         for (i in 0 until jsonArray.length()) {
             val obj = jsonArray.getJSONObject(i)
-            // Support legacy field names: "description" → "name", "amount" → "targetAmount"
-            val name = if (obj.has("name")) obj.getString("name")
-                       else if (obj.has("description")) obj.getString("description")
-                       else ""
-            val targetAmount = if (obj.has("targetAmount")) obj.getDouble("targetAmount")
-                               else if (obj.has("amount")) obj.getDouble("amount")
-                               else 0.0
+            val name = if (obj.has("name")) obj.getString("name") else ""
+            val targetAmount = if (obj.has("targetAmount")) obj.getDouble("targetAmount") else 0.0
             val targetDate = if (obj.has("targetDate") && !obj.isNull("targetDate")) {
                 try { LocalDate.parse(obj.getString("targetDate")) } catch (_: Exception) { null }
             } else null
@@ -75,7 +71,8 @@ object SavingsGoalRepository {
                     totalSavedSoFar_clock = obj.optLong("totalSavedSoFar_clock", 0L),
                     contributionPerPeriod_clock = obj.optLong("contributionPerPeriod_clock", 0L),
                     isPaused_clock = obj.optLong("isPaused_clock", 0L),
-                    deleted_clock = obj.optLong("deleted_clock", 0L)
+                    deleted_clock = obj.optLong("deleted_clock", 0L),
+                    deviceId_clock = obj.optLong("deviceId_clock", 0L)
                 )
             )
         }

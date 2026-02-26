@@ -3,7 +3,6 @@ package com.syncbudget.app.data.sync
 import android.content.Context
 import android.util.Base64
 import com.syncbudget.app.data.AmortizationEntry
-import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CryptoHelper
 import com.syncbudget.app.data.IncomeSource
@@ -46,18 +45,6 @@ class SyncEngine(
 ) {
 
     private val prefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-
-    init {
-        // One-time migration: reset lastPushedClock that was inflated by the old
-        // code (which set it to lamportClock.value after merge with remote epoch
-        // clocks).  Re-pushing all local data is safe — CRDT merge is idempotent.
-        if (!prefs.getBoolean("pushClockFixApplied", false)) {
-            prefs.edit()
-                .putLong("lastPushedClock", 0L)
-                .putBoolean("pushClockFixApplied", true)
-                .apply()
-        }
-    }
 
     private var lastSyncVersion: Long
         get() = prefs.getLong("lastSyncVersion", 0L)
@@ -403,31 +390,6 @@ class SyncEngine(
         }
     }
 
-    private suspend fun applySnapshot(snapshot: SnapshotRecord): SyncResult {
-        return try {
-            val encrypted = Base64.decode(snapshot.encryptedData, Base64.NO_WRAP)
-            val decrypted = CryptoHelper.decryptWithKey(encrypted, encryptionKey)
-            val json = JSONObject(String(decrypted))
-            val state = SnapshotManager.deserializeFullState(json)
-            lastSyncVersion = snapshot.snapshotVersion
-            FirestoreService.updateDeviceMetadata(groupId, deviceId, snapshot.snapshotVersion)
-            SyncResult(
-                success = true,
-                deltasReceived = 0,
-                budgetRecalcNeeded = true,
-                mergedTransactions = state.transactions,
-                mergedRecurringExpenses = state.recurringExpenses,
-                mergedIncomeSources = state.incomeSources,
-                mergedSavingsGoals = state.savingsGoals,
-                mergedAmortizationEntries = state.amortizationEntries,
-                mergedCategories = state.categories,
-                mergedSharedSettings = state.sharedSettings
-            )
-        } catch (e: Exception) {
-            SyncResult(success = false, error = "Failed to apply snapshot: ${e.message}")
-        }
-    }
-
     private suspend fun decryptSnapshot(snapshot: SnapshotRecord): FullState? {
         return try {
             val encrypted = Base64.decode(snapshot.encryptedData, Base64.NO_WRAP)
@@ -556,7 +518,7 @@ class SyncEngine(
             amount = (f["amount"]?.value as? Number)?.toDouble() ?: 0.0,
             isUserCategorized = f["isUserCategorized"]?.value as? Boolean ?: true,
             isBudgetIncome = f["isBudgetIncome"]?.value as? Boolean ?: false,
-            deviceId = change.deviceId,
+            deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             source_clock = f["source"]?.clock ?: 0L,
             amount_clock = f["amount"]?.clock ?: 0L,
@@ -565,7 +527,8 @@ class SyncEngine(
             categoryAmounts_clock = f["categoryAmounts"]?.clock ?: 0L,
             isUserCategorized_clock = f["isUserCategorized"]?.clock ?: 0L,
             isBudgetIncome_clock = f["isBudgetIncome"]?.clock ?: 0L,
-            deleted_clock = f["deleted"]?.clock ?: 0L
+            deleted_clock = f["deleted"]?.clock ?: 0L,
+            deviceId_clock = f["deviceId"]?.clock ?: 0L
         )
     }
 
@@ -580,7 +543,7 @@ class SyncEngine(
             startDate = try { LocalDate.parse(f["startDate"]?.value as? String) } catch (_: Exception) { null },
             monthDay1 = (f["monthDay1"]?.value as? Number)?.toInt(),
             monthDay2 = (f["monthDay2"]?.value as? Number)?.toInt(),
-            deviceId = change.deviceId,
+            deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             source_clock = f["source"]?.clock ?: 0L,
             amount_clock = f["amount"]?.clock ?: 0L,
@@ -589,7 +552,8 @@ class SyncEngine(
             startDate_clock = f["startDate"]?.clock ?: 0L,
             monthDay1_clock = f["monthDay1"]?.clock ?: 0L,
             monthDay2_clock = f["monthDay2"]?.clock ?: 0L,
-            deleted_clock = f["deleted"]?.clock ?: 0L
+            deleted_clock = f["deleted"]?.clock ?: 0L,
+            deviceId_clock = f["deviceId"]?.clock ?: 0L
         )
     }
 
@@ -604,7 +568,7 @@ class SyncEngine(
             startDate = try { LocalDate.parse(f["startDate"]?.value as? String) } catch (_: Exception) { null },
             monthDay1 = (f["monthDay1"]?.value as? Number)?.toInt(),
             monthDay2 = (f["monthDay2"]?.value as? Number)?.toInt(),
-            deviceId = change.deviceId,
+            deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             source_clock = f["source"]?.clock ?: 0L,
             amount_clock = f["amount"]?.clock ?: 0L,
@@ -613,7 +577,8 @@ class SyncEngine(
             startDate_clock = f["startDate"]?.clock ?: 0L,
             monthDay1_clock = f["monthDay1"]?.clock ?: 0L,
             monthDay2_clock = f["monthDay2"]?.clock ?: 0L,
-            deleted_clock = f["deleted"]?.clock ?: 0L
+            deleted_clock = f["deleted"]?.clock ?: 0L,
+            deviceId_clock = f["deviceId"]?.clock ?: 0L
         )
     }
 
@@ -627,7 +592,7 @@ class SyncEngine(
             totalSavedSoFar = (f["totalSavedSoFar"]?.value as? Number)?.toDouble() ?: 0.0,
             contributionPerPeriod = (f["contributionPerPeriod"]?.value as? Number)?.toDouble() ?: 0.0,
             isPaused = f["isPaused"]?.value as? Boolean ?: false,
-            deviceId = change.deviceId,
+            deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             name_clock = f["name"]?.clock ?: 0L,
             targetAmount_clock = f["targetAmount"]?.clock ?: 0L,
@@ -635,7 +600,8 @@ class SyncEngine(
             totalSavedSoFar_clock = f["totalSavedSoFar"]?.clock ?: 0L,
             contributionPerPeriod_clock = f["contributionPerPeriod"]?.clock ?: 0L,
             isPaused_clock = f["isPaused"]?.clock ?: 0L,
-            deleted_clock = f["deleted"]?.clock ?: 0L
+            deleted_clock = f["deleted"]?.clock ?: 0L,
+            deviceId_clock = f["deviceId"]?.clock ?: 0L
         )
     }
 
@@ -647,7 +613,7 @@ class SyncEngine(
             amount = (f["amount"]?.value as? Number)?.toDouble() ?: 0.0,
             totalPeriods = (f["totalPeriods"]?.value as? Number)?.toInt() ?: 1,
             startDate = try { LocalDate.parse(f["startDate"]?.value as? String) } catch (_: Exception) { LocalDate.now() },
-            deviceId = change.deviceId,
+            deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             isPaused = f["isPaused"]?.value as? Boolean ?: false,
             source_clock = f["source"]?.clock ?: 0L,
@@ -655,7 +621,8 @@ class SyncEngine(
             totalPeriods_clock = f["totalPeriods"]?.clock ?: 0L,
             startDate_clock = f["startDate"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L,
-            isPaused_clock = f["isPaused"]?.clock ?: 0L
+            isPaused_clock = f["isPaused"]?.clock ?: 0L,
+            deviceId_clock = f["deviceId"]?.clock ?: 0L
         )
     }
 
@@ -666,12 +633,13 @@ class SyncEngine(
             name = f["name"]?.value as? String ?: "",
             iconName = f["iconName"]?.value as? String ?: "label",
             tag = f["tag"]?.value as? String ?: "",
-            deviceId = change.deviceId,
+            deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             name_clock = f["name"]?.clock ?: 0L,
             iconName_clock = f["iconName"]?.clock ?: 0L,
             tag_clock = f["tag"]?.clock ?: 0L,
-            deleted_clock = f["deleted"]?.clock ?: 0L
+            deleted_clock = f["deleted"]?.clock ?: 0L,
+            deviceId_clock = f["deviceId"]?.clock ?: 0L
         )
     }
 }

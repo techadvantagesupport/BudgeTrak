@@ -20,7 +20,8 @@ data class SavingsGoal(
     val totalSavedSoFar_clock: Long = 0L,
     val contributionPerPeriod_clock: Long = 0L,
     val isPaused_clock: Long = 0L,
-    val deleted_clock: Long = 0L
+    val deleted_clock: Long = 0L,
+    val deviceId_clock: Long = 0L
 )
 
 enum class SuperchargeMode { REDUCE_CONTRIBUTIONS, ACHIEVE_SOONER }

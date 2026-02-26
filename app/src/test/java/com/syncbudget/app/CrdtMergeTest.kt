@@ -152,14 +152,51 @@ class CrdtMergeTest {
     }
 
     @Test
-    fun mergeTransaction_preservesLocalDeviceId() {
+    fun mergeTransaction_deviceIdLWW_higherClockWins() {
         val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
-            source = "S", amount = 10.0, deviceId = deviceA)
+            source = "S", amount = 10.0, deviceId = deviceA, deviceId_clock = 3)
         val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
-            source = "S", amount = 10.0, deviceId = deviceB, source_clock = 5)
+            source = "S", amount = 10.0, deviceId = deviceB, source_clock = 5, deviceId_clock = 7)
 
         val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
-        assertEquals(deviceA, merged.deviceId)
+        assertEquals(deviceB, merged.deviceId) // remote deviceId_clock 7 > 3
+        assertEquals(7L, merged.deviceId_clock)
+    }
+
+    @Test
+    fun mergeTransaction_deviceIdLWW_localHigherClockKeepsLocal() {
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "S", amount = 10.0, deviceId = deviceA, deviceId_clock = 10)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "S", amount = 10.0, deviceId = deviceB, deviceId_clock = 3)
+
+        val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        assertEquals(deviceA, merged.deviceId) // local deviceId_clock 10 > 3
+        assertEquals(10L, merged.deviceId_clock)
+    }
+
+    @Test
+    fun mergeTransaction_deviceIdLWW_zeroClockRemoteWinsWithPositive() {
+        // Backward compat: local has no deviceId_clock (0), remote has it stamped
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "S", amount = 10.0, deviceId = deviceA, deviceId_clock = 0)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "S", amount = 10.0, deviceId = deviceB, deviceId_clock = 5)
+
+        val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        assertEquals(deviceB, merged.deviceId) // remote clock 5 > 0
+    }
+
+    @Test
+    fun mergeTransaction_deviceIdLWW_bothZero_tiebreakByDeviceId() {
+        val local = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "S", amount = 10.0, deviceId = deviceA, deviceId_clock = 0)
+        val remote = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "S", amount = 10.0, deviceId = deviceB, deviceId_clock = 0)
+
+        val merged = CrdtMerge.mergeTransaction(local, remote, deviceA)
+        // deviceB > deviceA lexicographically, so remote wins tiebreak
+        assertEquals(deviceB, merged.deviceId)
     }
 
     @Test
@@ -237,6 +274,18 @@ class CrdtMergeTest {
 
         val merged = CrdtMerge.mergeCategory(local, remote, deviceA)
         assertEquals("groceries", merged.tag)
+    }
+
+    @Test
+    fun mergeCategory_deviceIdLWW() {
+        val local = Category(id = 1, name = "Food", iconName = "Icon",
+            deviceId = deviceA, deviceId_clock = 3)
+        val remote = Category(id = 1, name = "Food", iconName = "Icon",
+            deviceId = deviceB, deviceId_clock = 7)
+
+        val merged = CrdtMerge.mergeCategory(local, remote, deviceA)
+        assertEquals(deviceB, merged.deviceId) // remote clock 7 > 3
+        assertEquals(7L, merged.deviceId_clock)
     }
 
     @Test

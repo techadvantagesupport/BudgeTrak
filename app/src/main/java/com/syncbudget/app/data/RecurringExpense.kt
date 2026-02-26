@@ -21,7 +21,8 @@ data class RecurringExpense(
     val startDate_clock: Long = 0L,
     val monthDay1_clock: Long = 0L,
     val monthDay2_clock: Long = 0L,
-    val deleted_clock: Long = 0L
+    val deleted_clock: Long = 0L,
+    val deviceId_clock: Long = 0L
 )
 
 fun generateRecurringExpenseId(existingIds: Set<Int>): Int {

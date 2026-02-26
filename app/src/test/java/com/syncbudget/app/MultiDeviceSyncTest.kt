@@ -80,15 +80,14 @@ class MultiDeviceSyncTest {
     fun scenario2_concurrentEdits_higherClockWins() {
         val localTxn = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
             source = "Local Edit", amount = 50.0, deviceId = deviceA,
-            source_clock = 3, amount_clock = 5)
+            source_clock = 3, amount_clock = 5, deviceId_clock = 1)
         val remoteTxn = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
             source = "Remote Edit", amount = 99.0, deviceId = deviceB,
-            source_clock = 7, amount_clock = 2)
+            source_clock = 7, amount_clock = 2, deviceId_clock = 1)
 
         val merged = CrdtMerge.mergeTransaction(localTxn, remoteTxn, deviceA)
         assertEquals("Remote Edit", merged.source)   // remote clock 7 > 3
         assertEquals(50.0, merged.amount, 0.001)      // local clock 5 > 2
-        assertEquals(deviceA, merged.deviceId)         // preserves local deviceId
     }
 
     @Test
@@ -502,6 +501,62 @@ class MultiDeviceSyncTest {
     }
 
     // ── Extra: Amortization entry sync ──────────────────────────────
+
+    // ── Scenario 13: deviceId converges to original creator ─────────
+
+    @Test
+    fun scenario13_deviceIdConvergesToOriginalCreator() {
+        // Admin creates a transaction with deviceId_clock stamped
+        val adminTxn = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Admin Purchase", amount = 50.0, deviceId = deviceA,
+            source_clock = 5, amount_clock = 5, date_clock = 5, type_clock = 5,
+            deviceId_clock = 5)
+
+        // Non-admin receives it. With LWW, remote's deviceId_clock (5) > local's (0),
+        // so deviceId converges to admin's identity
+        val nonAdminLocal = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Admin Purchase", amount = 50.0, deviceId = deviceB,
+            source_clock = 5, amount_clock = 5, date_clock = 5, type_clock = 5,
+            deviceId_clock = 0)
+
+        val merged = CrdtMerge.mergeTransaction(nonAdminLocal, adminTxn, deviceB)
+        assertEquals(deviceA, merged.deviceId) // converges to admin's deviceId
+        assertEquals(5L, merged.deviceId_clock)
+    }
+
+    @Test
+    fun scenario13_deviceIdStableOnEdits() {
+        // Original creator is deviceA with deviceId_clock=5
+        val original = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Store", amount = 50.0, deviceId = deviceA,
+            source_clock = 5, amount_clock = 5, deviceId_clock = 5)
+
+        // deviceB edits the source (higher source_clock), but does NOT re-stamp deviceId_clock
+        val editedByB = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Updated Store", amount = 50.0, deviceId = deviceA,
+            source_clock = 10, amount_clock = 5, deviceId_clock = 5)
+
+        val merged = CrdtMerge.mergeTransaction(original, editedByB, deviceA)
+        assertEquals("Updated Store", merged.source) // edit wins
+        assertEquals(deviceA, merged.deviceId) // deviceId unchanged
+    }
+
+    @Test
+    fun scenario13_deviceIdLWW_commutativity() {
+        val a = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "S", amount = 10.0, deviceId = deviceA, deviceId_clock = 5,
+            source_clock = 3, amount_clock = 3)
+        val b = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "S", amount = 10.0, deviceId = deviceB, deviceId_clock = 3,
+            source_clock = 5, amount_clock = 5)
+
+        val mergeAB = CrdtMerge.mergeTransaction(a, b, deviceA)
+        val mergeBA = CrdtMerge.mergeTransaction(b, a, deviceB)
+
+        // Both orderings must produce the same deviceId
+        assertEquals(mergeAB.deviceId, mergeBA.deviceId)
+        assertEquals(mergeAB.deviceId_clock, mergeBA.deviceId_clock)
+    }
 
     @Test
     fun amortizationEntrySync_pauseToggle() {

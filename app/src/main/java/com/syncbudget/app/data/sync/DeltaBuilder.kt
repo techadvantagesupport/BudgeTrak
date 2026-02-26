@@ -39,6 +39,7 @@ object DeltaBuilder {
         if (txn.isUserCategorized_clock > lastPushedClock) fields["isUserCategorized"] = FieldDelta(txn.isUserCategorized, txn.isUserCategorized_clock)
         if (txn.isBudgetIncome_clock > lastPushedClock) fields["isBudgetIncome"] = FieldDelta(txn.isBudgetIncome, txn.isBudgetIncome_clock)
         if (txn.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(txn.deleted, txn.deleted_clock)
+        if (txn.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(txn.deviceId, txn.deviceId_clock)
         if (fields.isEmpty()) return null
         // Piggyback critical fields so the receiving device never creates a
         // skeleton record.  CRDT merge ignores fields whose clocks are lower
@@ -47,6 +48,7 @@ object DeltaBuilder {
         ensureField(fields, "amount", txn.amount, txn.amount_clock)
         ensureField(fields, "date", txn.date.toString(), txn.date_clock)
         ensureField(fields, "type", txn.type.name, txn.type_clock)
+        ensureField(fields, "deviceId", txn.deviceId, txn.deviceId_clock)
         if ("categoryAmounts" !in fields && txn.categoryAmounts_clock > 0L) {
             val catJson = JSONArray()
             for (ca in txn.categoryAmounts) {
@@ -70,9 +72,11 @@ object DeltaBuilder {
         if (re.monthDay1_clock > lastPushedClock) fields["monthDay1"] = FieldDelta(re.monthDay1, re.monthDay1_clock)
         if (re.monthDay2_clock > lastPushedClock) fields["monthDay2"] = FieldDelta(re.monthDay2, re.monthDay2_clock)
         if (re.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(re.deleted, re.deleted_clock)
+        if (re.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(re.deviceId, re.deviceId_clock)
         if (fields.isEmpty()) return null
         ensureField(fields, "source", re.source, re.source_clock)
         ensureField(fields, "amount", re.amount, re.amount_clock)
+        ensureField(fields, "deviceId", re.deviceId, re.deviceId_clock)
         return RecordDelta("recurring_expense", "upsert", re.id, re.deviceId, fields)
     }
 
@@ -86,9 +90,11 @@ object DeltaBuilder {
         if (src.monthDay1_clock > lastPushedClock) fields["monthDay1"] = FieldDelta(src.monthDay1, src.monthDay1_clock)
         if (src.monthDay2_clock > lastPushedClock) fields["monthDay2"] = FieldDelta(src.monthDay2, src.monthDay2_clock)
         if (src.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(src.deleted, src.deleted_clock)
+        if (src.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(src.deviceId, src.deviceId_clock)
         if (fields.isEmpty()) return null
         ensureField(fields, "source", src.source, src.source_clock)
         ensureField(fields, "amount", src.amount, src.amount_clock)
+        ensureField(fields, "deviceId", src.deviceId, src.deviceId_clock)
         return RecordDelta("income_source", "upsert", src.id, src.deviceId, fields)
     }
 
@@ -101,8 +107,10 @@ object DeltaBuilder {
         if (goal.contributionPerPeriod_clock > lastPushedClock) fields["contributionPerPeriod"] = FieldDelta(goal.contributionPerPeriod, goal.contributionPerPeriod_clock)
         if (goal.isPaused_clock > lastPushedClock) fields["isPaused"] = FieldDelta(goal.isPaused, goal.isPaused_clock)
         if (goal.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(goal.deleted, goal.deleted_clock)
+        if (goal.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(goal.deviceId, goal.deviceId_clock)
         if (fields.isEmpty()) return null
         ensureField(fields, "name", goal.name, goal.name_clock)
+        ensureField(fields, "deviceId", goal.deviceId, goal.deviceId_clock)
         return RecordDelta("savings_goal", "upsert", goal.id, goal.deviceId, fields)
     }
 
@@ -114,9 +122,11 @@ object DeltaBuilder {
         if (entry.startDate_clock > lastPushedClock) fields["startDate"] = FieldDelta(entry.startDate.toString(), entry.startDate_clock)
         if (entry.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(entry.deleted, entry.deleted_clock)
         if (entry.isPaused_clock > lastPushedClock) fields["isPaused"] = FieldDelta(entry.isPaused, entry.isPaused_clock)
+        if (entry.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(entry.deviceId, entry.deviceId_clock)
         if (fields.isEmpty()) return null
         ensureField(fields, "source", entry.source, entry.source_clock)
         ensureField(fields, "amount", entry.amount, entry.amount_clock)
+        ensureField(fields, "deviceId", entry.deviceId, entry.deviceId_clock)
         return RecordDelta("amortization_entry", "upsert", entry.id, entry.deviceId, fields)
     }
 
@@ -126,9 +136,11 @@ object DeltaBuilder {
         if (cat.iconName_clock > lastPushedClock) fields["iconName"] = FieldDelta(cat.iconName, cat.iconName_clock)
         if (cat.tag_clock > lastPushedClock) fields["tag"] = FieldDelta(cat.tag, cat.tag_clock)
         if (cat.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(cat.deleted, cat.deleted_clock)
+        if (cat.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(cat.deviceId, cat.deviceId_clock)
         if (fields.isEmpty()) return null
         ensureField(fields, "name", cat.name, cat.name_clock)
         ensureField(fields, "iconName", cat.iconName, cat.iconName_clock)
+        ensureField(fields, "deviceId", cat.deviceId, cat.deviceId_clock)
         return RecordDelta("category", "upsert", cat.id, cat.deviceId, fields)
     }
 
