@@ -49,11 +49,11 @@ class SyncWorker(
         val engine = SyncEngine(applicationContext, groupId, deviceId, encryptionKey, lamportClock)
 
         // Load current data from JSON files
-        val transactions = TransactionRepository.load(applicationContext)
-        val recurringExpenses = RecurringExpenseRepository.load(applicationContext)
-        val incomeSources = IncomeSourceRepository.load(applicationContext)
+        var transactions = TransactionRepository.load(applicationContext)
+        var recurringExpenses = RecurringExpenseRepository.load(applicationContext)
+        var incomeSources = IncomeSourceRepository.load(applicationContext)
         val savingsGoals = SavingsGoalRepository.load(applicationContext)
-        val amortizationEntries = AmortizationRepository.load(applicationContext)
+        var amortizationEntries = AmortizationRepository.load(applicationContext)
         var categories = CategoryRepository.load(applicationContext)
         val sharedSettings = SharedSettingsRepository.load(applicationContext)
 
@@ -69,6 +69,49 @@ class SyncWorker(
             }
             if (stamped) CategoryRepository.save(applicationContext, categories)
             syncPrefs.edit().putBoolean("migration_tag_clock_done", true).apply()
+        }
+
+        // One-time migration: stamp description_clock on records with non-blank descriptions.
+        // Only stamps non-blank so non-admin devices don't create competing clocks for empty values.
+        if (!syncPrefs.getBoolean("migration_description_clock_done_v2", false)) {
+            val migClock = lamportClock.tick()
+            var changed = false
+            transactions = transactions.map { t ->
+                if (t.description.isNotBlank() && t.description_clock == 0L) {
+                    changed = true; t.copy(description_clock = migClock)
+                } else t
+            }
+            if (changed) TransactionRepository.save(applicationContext, transactions)
+            changed = false
+            recurringExpenses = recurringExpenses.map { r ->
+                if (r.description.isNotBlank() && r.description_clock == 0L) {
+                    changed = true; r.copy(description_clock = migClock)
+                } else r
+            }
+            if (changed) RecurringExpenseRepository.save(applicationContext, recurringExpenses)
+            changed = false
+            incomeSources = incomeSources.map { s ->
+                if (s.description.isNotBlank() && s.description_clock == 0L) {
+                    changed = true; s.copy(description_clock = migClock)
+                } else s
+            }
+            if (changed) IncomeSourceRepository.save(applicationContext, incomeSources)
+            changed = false
+            amortizationEntries = amortizationEntries.map { e ->
+                if (e.description.isNotBlank() && e.description_clock == 0L) {
+                    changed = true; e.copy(description_clock = migClock)
+                } else e
+            }
+            if (changed) AmortizationRepository.save(applicationContext, amortizationEntries)
+            syncPrefs.edit().putBoolean("migration_description_clock_done_v2", true).apply()
+        }
+
+        // One-time cleanup: remove skeleton categories (name_clock=0, empty name)
+        if (!syncPrefs.getBoolean("migration_remove_skeleton_categories", false)) {
+            val before = categories.size
+            categories = categories.filter { it.name.isNotEmpty() || it.name_clock > 0L }
+            if (categories.size < before) CategoryRepository.save(applicationContext, categories)
+            syncPrefs.edit().putBoolean("migration_remove_skeleton_categories", true).apply()
         }
 
         // Load persisted category ID remap

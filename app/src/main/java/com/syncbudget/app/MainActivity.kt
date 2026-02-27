@@ -356,6 +356,56 @@ class MainActivity : ComponentActivity() {
                     syncPrefs.edit().putBoolean("migration_tag_clock_done", true).apply()
                 }
 
+                // One-time migration: stamp description_clock on records with non-blank descriptions.
+                // Only stamps non-blank descriptions so non-admin devices (with empty descriptions)
+                // don't create competing clock values that would overwrite real descriptions.
+                if (!syncPrefs.getBoolean("migration_description_clock_done_v2", false)) {
+                    val migClock = lamportClock.tick()
+                    var changed = false
+                    transactions.forEachIndexed { i, t ->
+                        if (t.description.isNotBlank() && t.description_clock == 0L) {
+                            transactions[i] = t.copy(description_clock = migClock)
+                            changed = true
+                        }
+                    }
+                    if (changed) saveTransactions()
+                    changed = false
+                    recurringExpenses.forEachIndexed { i, r ->
+                        if (r.description.isNotBlank() && r.description_clock == 0L) {
+                            recurringExpenses[i] = r.copy(description_clock = migClock)
+                            changed = true
+                        }
+                    }
+                    if (changed) saveRecurringExpenses()
+                    changed = false
+                    incomeSources.forEachIndexed { i, s ->
+                        if (s.description.isNotBlank() && s.description_clock == 0L) {
+                            incomeSources[i] = s.copy(description_clock = migClock)
+                            changed = true
+                        }
+                    }
+                    if (changed) saveIncomeSources()
+                    changed = false
+                    amortizationEntries.forEachIndexed { i, e ->
+                        if (e.description.isNotBlank() && e.description_clock == 0L) {
+                            amortizationEntries[i] = e.copy(description_clock = migClock)
+                            changed = true
+                        }
+                    }
+                    if (changed) saveAmortizationEntries()
+                    syncPrefs.edit().putBoolean("migration_description_clock_done_v2", true).apply()
+                }
+
+                // One-time cleanup: remove skeleton categories (name_clock=0, empty name)
+                // that were created as local defaults but superseded by real synced categories.
+                // The catIdRemap already redirects any transaction references.
+                if (!syncPrefs.getBoolean("migration_remove_skeleton_categories", false)) {
+                    val before = categories.size
+                    categories.removeAll { it.name.isEmpty() && it.name_clock == 0L }
+                    if (categories.size < before) saveCategories()
+                    syncPrefs.edit().putBoolean("migration_remove_skeleton_categories", true).apply()
+                }
+
                 while (true) {
                     // File-based lock works across processes (unlike ReentrantLock)
                     val syncFileLock = SyncWorker.createSyncLock(context)
@@ -570,6 +620,7 @@ class MainActivity : ComponentActivity() {
                 val stamped = txn.copy(
                     deviceId = localDeviceId,
                     source_clock = clock,
+                    description_clock = clock,
                     amount_clock = clock,
                     date_clock = clock,
                     type_clock = clock,
@@ -1162,6 +1213,7 @@ class MainActivity : ComponentActivity() {
                                     deleted = prev.deleted,
                                     deleted_clock = prev.deleted_clock,
                                     source_clock = if (updated.source != prev.source) clock else prev.source_clock,
+                                    description_clock = if (updated.description != prev.description) clock else prev.description_clock,
                                     amount_clock = if (updated.amount != prev.amount) clock else prev.amount_clock,
                                     date_clock = if (updated.date != prev.date) clock else prev.date_clock,
                                     type_clock = if (updated.type != prev.type) clock else prev.type_clock,
@@ -1290,6 +1342,7 @@ class MainActivity : ComponentActivity() {
                                 // Clear sync identity on all records
                                 transactions.forEachIndexed { i, t ->
                                     transactions[i] = t.copy(deviceId = "", source_clock = 0L,
+                                        description_clock = 0L,
                                         amount_clock = 0L, date_clock = 0L, type_clock = 0L,
                                         categoryAmounts_clock = 0L, isUserCategorized_clock = 0L,
                                         isBudgetIncome_clock = 0L, deleted_clock = 0L,
@@ -1304,6 +1357,7 @@ class MainActivity : ComponentActivity() {
                                 saveCategories()
                                 recurringExpenses.forEachIndexed { i, r ->
                                     recurringExpenses[i] = r.copy(deviceId = "", source_clock = 0L,
+                                        description_clock = 0L,
                                         amount_clock = 0L, repeatType_clock = 0L,
                                         repeatInterval_clock = 0L, startDate_clock = 0L,
                                         monthDay1_clock = 0L, monthDay2_clock = 0L, deleted_clock = 0L,
@@ -1312,6 +1366,7 @@ class MainActivity : ComponentActivity() {
                                 saveRecurringExpenses()
                                 incomeSources.forEachIndexed { i, s ->
                                     incomeSources[i] = s.copy(deviceId = "", source_clock = 0L,
+                                        description_clock = 0L,
                                         amount_clock = 0L, repeatType_clock = 0L,
                                         repeatInterval_clock = 0L, startDate_clock = 0L,
                                         monthDay1_clock = 0L, monthDay2_clock = 0L, deleted_clock = 0L,
@@ -1328,6 +1383,7 @@ class MainActivity : ComponentActivity() {
                                 saveSavingsGoals()
                                 amortizationEntries.forEachIndexed { i, e ->
                                     amortizationEntries[i] = e.copy(deviceId = "", source_clock = 0L,
+                                        description_clock = 0L,
                                         amount_clock = 0L, totalPeriods_clock = 0L,
                                         startDate_clock = 0L, isPaused_clock = 0L, deleted_clock = 0L,
                                         deviceId_clock = 0L)
@@ -1432,6 +1488,7 @@ class MainActivity : ComponentActivity() {
                             amortizationEntries.add(entry.copy(
                                 deviceId = localDeviceId,
                                 source_clock = clock,
+                                description_clock = clock,
                                 amount_clock = clock,
                                 totalPeriods_clock = clock,
                                 startDate_clock = clock,
@@ -1451,6 +1508,7 @@ class MainActivity : ComponentActivity() {
                                     deleted = old.deleted,
                                     deleted_clock = old.deleted_clock,
                                     source_clock = if (updated.source != old.source) clock else old.source_clock,
+                                    description_clock = if (updated.description != old.description) clock else old.description_clock,
                                     amount_clock = if (updated.amount != old.amount) clock else old.amount_clock,
                                     totalPeriods_clock = if (updated.totalPeriods != old.totalPeriods) clock else old.totalPeriods_clock,
                                     startDate_clock = if (updated.startDate != old.startDate) clock else old.startDate_clock,
@@ -1478,6 +1536,7 @@ class MainActivity : ComponentActivity() {
                             recurringExpenses.add(expense.copy(
                                 deviceId = localDeviceId,
                                 source_clock = clock,
+                                description_clock = clock,
                                 amount_clock = clock,
                                 repeatType_clock = clock,
                                 repeatInterval_clock = clock,
@@ -1499,6 +1558,7 @@ class MainActivity : ComponentActivity() {
                                     deleted = old.deleted,
                                     deleted_clock = old.deleted_clock,
                                     source_clock = if (updated.source != old.source) clock else old.source_clock,
+                                    description_clock = if (updated.description != old.description) clock else old.description_clock,
                                     amount_clock = if (updated.amount != old.amount) clock else old.amount_clock,
                                     repeatType_clock = if (updated.repeatType != old.repeatType) clock else old.repeatType_clock,
                                     repeatInterval_clock = if (updated.repeatInterval != old.repeatInterval) clock else old.repeatInterval_clock,
@@ -1528,6 +1588,7 @@ class MainActivity : ComponentActivity() {
                             incomeSources.add(src.copy(
                                 deviceId = localDeviceId,
                                 source_clock = clock,
+                                description_clock = clock,
                                 amount_clock = clock,
                                 repeatType_clock = clock,
                                 repeatInterval_clock = clock,
@@ -1549,6 +1610,7 @@ class MainActivity : ComponentActivity() {
                                     deleted = old.deleted,
                                     deleted_clock = old.deleted_clock,
                                     source_clock = if (updated.source != old.source) clock else old.source_clock,
+                                    description_clock = if (updated.description != old.description) clock else old.description_clock,
                                     amount_clock = if (updated.amount != old.amount) clock else old.amount_clock,
                                     repeatType_clock = if (updated.repeatType != old.repeatType) clock else old.repeatType_clock,
                                     repeatInterval_clock = if (updated.repeatInterval != old.repeatInterval) clock else old.repeatInterval_clock,
@@ -1787,7 +1849,8 @@ class MainActivity : ComponentActivity() {
                                         if (t.source_clock == 0L || t.deviceId.isEmpty()) {
                                             transactions[i] = t.copy(
                                                 deviceId = localDeviceId,
-                                                source_clock = stampClock, amount_clock = stampClock,
+                                                source_clock = stampClock, description_clock = stampClock,
+                                                amount_clock = stampClock,
                                                 date_clock = stampClock, type_clock = stampClock,
                                                 categoryAmounts_clock = stampClock,
                                                 isUserCategorized_clock = stampClock,
@@ -1824,7 +1887,8 @@ class MainActivity : ComponentActivity() {
                                         if (e.source_clock == 0L || e.deviceId.isEmpty()) {
                                             amortizationEntries[i] = e.copy(
                                                 deviceId = localDeviceId,
-                                                source_clock = stampClock, amount_clock = stampClock,
+                                                source_clock = stampClock, description_clock = stampClock,
+                                                amount_clock = stampClock,
                                                 totalPeriods_clock = stampClock, startDate_clock = stampClock,
                                                 isPaused_clock = stampClock,
                                                 deviceId_clock = stampClock
@@ -1836,7 +1900,8 @@ class MainActivity : ComponentActivity() {
                                         if (r.source_clock == 0L || r.deviceId.isEmpty()) {
                                             recurringExpenses[i] = r.copy(
                                                 deviceId = localDeviceId,
-                                                source_clock = stampClock, amount_clock = stampClock,
+                                                source_clock = stampClock, description_clock = stampClock,
+                                                amount_clock = stampClock,
                                                 repeatType_clock = stampClock, repeatInterval_clock = stampClock,
                                                 startDate_clock = stampClock, monthDay1_clock = stampClock,
                                                 monthDay2_clock = stampClock,
@@ -1849,7 +1914,8 @@ class MainActivity : ComponentActivity() {
                                         if (s.source_clock == 0L || s.deviceId.isEmpty()) {
                                             incomeSources[i] = s.copy(
                                                 deviceId = localDeviceId,
-                                                source_clock = stampClock, amount_clock = stampClock,
+                                                source_clock = stampClock, description_clock = stampClock,
+                                                amount_clock = stampClock,
                                                 repeatType_clock = stampClock, repeatInterval_clock = stampClock,
                                                 startDate_clock = stampClock, monthDay1_clock = stampClock,
                                                 monthDay2_clock = stampClock,
@@ -1895,7 +1961,8 @@ class MainActivity : ComponentActivity() {
                                             if (t.source_clock == 0L || t.deviceId.isEmpty()) {
                                                 transactions[i] = t.copy(
                                                     deviceId = localDeviceId,
-                                                    source_clock = stampClock, amount_clock = stampClock,
+                                                    source_clock = stampClock, description_clock = stampClock,
+                                                    amount_clock = stampClock,
                                                     date_clock = stampClock, type_clock = stampClock,
                                                     categoryAmounts_clock = stampClock,
                                                     isUserCategorized_clock = stampClock,
@@ -1909,7 +1976,8 @@ class MainActivity : ComponentActivity() {
                                             if (r.source_clock == 0L || r.deviceId.isEmpty()) {
                                                 recurringExpenses[i] = r.copy(
                                                     deviceId = localDeviceId,
-                                                    source_clock = stampClock, amount_clock = stampClock,
+                                                    source_clock = stampClock, description_clock = stampClock,
+                                                    amount_clock = stampClock,
                                                     repeatType_clock = stampClock, repeatInterval_clock = stampClock,
                                                     startDate_clock = stampClock, monthDay1_clock = stampClock,
                                                     monthDay2_clock = stampClock,
@@ -1922,7 +1990,8 @@ class MainActivity : ComponentActivity() {
                                             if (s.source_clock == 0L || s.deviceId.isEmpty()) {
                                                 incomeSources[i] = s.copy(
                                                     deviceId = localDeviceId,
-                                                    source_clock = stampClock, amount_clock = stampClock,
+                                                    source_clock = stampClock, description_clock = stampClock,
+                                                    amount_clock = stampClock,
                                                     repeatType_clock = stampClock, repeatInterval_clock = stampClock,
                                                     startDate_clock = stampClock, monthDay1_clock = stampClock,
                                                     monthDay2_clock = stampClock,
@@ -1947,7 +2016,8 @@ class MainActivity : ComponentActivity() {
                                             if (e.source_clock == 0L || e.deviceId.isEmpty()) {
                                                 amortizationEntries[i] = e.copy(
                                                     deviceId = localDeviceId,
-                                                    source_clock = stampClock, amount_clock = stampClock,
+                                                    source_clock = stampClock, description_clock = stampClock,
+                                                    amount_clock = stampClock,
                                                     totalPeriods_clock = stampClock, startDate_clock = stampClock,
                                                     isPaused_clock = stampClock,
                                                     deviceId_clock = stampClock
