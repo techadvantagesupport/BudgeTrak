@@ -7,6 +7,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.syncbudget.app.data.AmortizationRepository
+import com.syncbudget.app.data.BudgetCalculator
 import com.syncbudget.app.data.CategoryRepository
 import com.syncbudget.app.data.IncomeSourceRepository
 import com.syncbudget.app.data.RecurringExpenseRepository
@@ -53,8 +54,22 @@ class SyncWorker(
         val incomeSources = IncomeSourceRepository.load(applicationContext)
         val savingsGoals = SavingsGoalRepository.load(applicationContext)
         val amortizationEntries = AmortizationRepository.load(applicationContext)
-        val categories = CategoryRepository.load(applicationContext)
+        var categories = CategoryRepository.load(applicationContext)
         val sharedSettings = SharedSettingsRepository.load(applicationContext)
+
+        // One-time migration: stamp tag_clock on categories with tags but tag_clock=0
+        if (!syncPrefs.getBoolean("migration_tag_clock_done", false)) {
+            var stamped = false
+            val migClock = lamportClock.tick()
+            categories = categories.mapIndexed { _, c ->
+                if (c.tag.isNotEmpty() && c.tag_clock == 0L) {
+                    stamped = true
+                    c.copy(tag_clock = migClock)
+                } else c
+            }
+            if (stamped) CategoryRepository.save(applicationContext, categories)
+            syncPrefs.edit().putBoolean("migration_tag_clock_done", true).apply()
+        }
 
         // Load persisted category ID remap
         val remapJson = syncPrefs.getString("catIdRemap", null)
@@ -120,6 +135,7 @@ class SyncWorker(
                     }
                     if (cashChanged) {
                         if (cash.isNaN() || cash.isInfinite()) cash = 0.0
+                        cash = BudgetCalculator.roundCents(cash)
                         appPrefs.edit().putString("availableCash", cash.toString()).apply()
                     }
                 }

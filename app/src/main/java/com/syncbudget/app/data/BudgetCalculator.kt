@@ -6,8 +6,12 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
+import kotlin.math.roundToLong
 
 object BudgetCalculator {
+
+    /** Round a Double to 2 decimal places (cents). */
+    fun roundCents(value: Double): Double = (value * 100.0).roundToLong() / 100.0
 
     fun generateOccurrences(
         repeatType: RepeatType,
@@ -151,7 +155,7 @@ object BudgetCalculator {
         }
 
         // Discretionary budget per period = surplus spread evenly
-        return maxOf(0.0, (totalIncome - totalExpenses) / periodsPerYear)
+        return roundCents(maxOf(0.0, (totalIncome - totalExpenses) / periodsPerYear))
     }
 
     fun countPeriodsCompleted(from: LocalDate, to: LocalDate, budgetPeriod: BudgetPeriod): Int {
@@ -207,7 +211,7 @@ object BudgetCalculator {
             }.coerceAtLeast(0)
             // Active when elapsed periods < totalPeriods (elapsed == totalPeriods means fully amortized)
             if (elapsed < entry.totalPeriods) {
-                total += entry.amount / entry.totalPeriods.toDouble()
+                total += roundCents(entry.amount / entry.totalPeriods.toDouble())
             }
         }
         return total
@@ -233,7 +237,7 @@ object BudgetCalculator {
                     BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(today, goal.targetDate)
                 }
                 if (periods <= 0) continue
-                total += remaining / periods.toDouble()
+                total += roundCents(remaining / periods.toDouble())
             } else {
                 // Fixed contribution type: use contributionPerPeriod capped at remaining
                 total += minOf(goal.contributionPerPeriod, remaining)

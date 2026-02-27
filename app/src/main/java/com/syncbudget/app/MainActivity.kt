@@ -311,6 +311,7 @@ class MainActivity : ComponentActivity() {
             // that independently compute cash from the same synced transactions.
             fun persistAvailableCash() {
                 if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
+                availableCash = BudgetCalculator.roundCents(availableCash)
                 prefs.edit().putString("availableCash", availableCash.toString()).apply()
             }
 
@@ -337,6 +338,22 @@ class MainActivity : ComponentActivity() {
                     syncDevices = GroupManager.getDevices(groupId)
                 } catch (e: Exception) {
                     android.util.Log.w("SyncLoop", "Failed to fetch initial device list", e)
+                }
+
+                // One-time migration: stamp tag_clock on categories that have
+                // non-empty tags but tag_clock=0 (created before tag_clock was added).
+                // Without this, tags are never included in sync deltas.
+                if (!syncPrefs.getBoolean("migration_tag_clock_done", false)) {
+                    var stamped = false
+                    val migClock = lamportClock.tick()
+                    categories.forEachIndexed { i, c ->
+                        if (c.tag.isNotEmpty() && c.tag_clock == 0L) {
+                            categories[i] = c.copy(tag_clock = migClock)
+                            stamped = true
+                        }
+                    }
+                    if (stamped) saveCategories()
+                    syncPrefs.edit().putBoolean("migration_tag_clock_done", true).apply()
                 }
 
                 while (true) {
