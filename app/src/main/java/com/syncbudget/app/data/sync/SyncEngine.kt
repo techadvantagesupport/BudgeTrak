@@ -216,18 +216,99 @@ class SyncEngine(
             // Only Transaction has categoryAmounts with categoryId references.
             // RecurringExpense, IncomeSource, SavingsGoal, AmortizationEntry do not reference categories.
 
-            // 5a: Rebuild missing remap entries from received category deltas.
-            //     If the old pruning bug cleared the remap, incoming category
-            //     deltas let us reconstruct it by matching tag/name.
-            val localCatIds = mergedCat.map { it.id }.toSet()
-            val localCatByTag = mergedCat.filter { it.tag.isNotEmpty() }.associateBy { it.tag }
-            val localCatByName = mergedCat.associateBy { it.name }
+            val mergedCatById = mergedCat.associateBy { it.id }
+
+            // 5a: Validate existing catIdRemap — fix stale entries where the
+            //     target category ID no longer exists (e.g., local defaults were
+            //     regenerated after a snapshot or data clear).  For each stale
+            //     entry (source → extinctTarget), if source still exists in the
+            //     merged list, add a REVERSE remap (extinctTarget → source) so
+            //     transactions already remapped to the extinct ID get fixed.
+            val staleKeys = mutableListOf<Int>()
+            val reverseRemaps = mutableMapOf<Int, Int>()
+            for ((sourceId, targetId) in catIdRemap) {
+                if (targetId !in mergedCatById) {
+                    staleKeys.add(sourceId)
+                    if (sourceId in mergedCatById) {
+                        reverseRemaps[targetId] = sourceId
+                    }
+                }
+            }
+            for (key in staleKeys) {
+                catIdRemap.remove(key)
+            }
+            catIdRemap.putAll(reverseRemaps)
+
+            // 5b: Post-merge tag dedup — consolidate categories that share the
+            //     same tag.  Keep the most authoritative one (highest name_clock,
+            //     meaning admin-stamped names win over empty defaults).
+            val catIndicesByTag = mutableMapOf<String, MutableList<Int>>()
+            for (i in mergedCat.indices) {
+                val cat = mergedCat[i]
+                if (cat.tag.isNotEmpty() && !cat.deleted) {
+                    catIndicesByTag.getOrPut(cat.tag) { mutableListOf() }.add(i)
+                }
+            }
+            for ((_, indices) in catIndicesByTag) {
+                if (indices.size <= 1) continue
+                val sorted = indices.sortedByDescending { mergedCat[it].name_clock }
+                val keepCat = mergedCat[sorted[0]]
+                for (j in 1 until sorted.size) {
+                    val dupCat = mergedCat[sorted[j]]
+                    if (dupCat.id != keepCat.id) {
+                        catIdRemap[dupCat.id] = keepCat.id
+                    }
+                }
+            }
+
+            // Rebuild lookups excluding categories that are remapped away
+            val mergedCatByTag = mergedCat.filter {
+                it.tag.isNotEmpty() && !it.deleted && it.id !in catIdRemap
+            }.associateBy { it.tag }
+            val mergedCatByName = mergedCat.filter {
+                it.name.isNotEmpty() && it.id !in catIdRemap
+            }.associateBy { it.name }
+
+            // 5c: Orphan scan — find transaction categoryIds that don't exist in
+            //     the merged category list and aren't in catIdRemap yet.
+            val allReferencedCatIds = mutableSetOf<Int>()
+            for (txn in mergedTxns) {
+                for (ca in txn.categoryAmounts) {
+                    if (ca.categoryId !in mergedCatById && ca.categoryId !in catIdRemap) {
+                        allReferencedCatIds.add(ca.categoryId)
+                    }
+                }
+            }
+            if (allReferencedCatIds.isNotEmpty()) {
+                val deltaCatById = mutableMapOf<Int, Category>()
+                for (packet in packets) {
+                    for (change in packet.changes) {
+                        if (change.type == "category") {
+                            deltaCatById[change.id] = deserializeCategory(change)
+                        }
+                    }
+                }
+                for (orphanId in allReferencedCatIds) {
+                    val orphanCat = deltaCatById[orphanId]
+                    if (orphanCat != null) {
+                        val localMatch = if (orphanCat.tag.isNotEmpty()) mergedCatByTag[orphanCat.tag]
+                            else mergedCatByName[orphanCat.name]
+                        if (localMatch != null && localMatch.id != orphanId) {
+                            catIdRemap[orphanId] = localMatch.id
+                        }
+                    }
+                }
+            }
+
+            // Also rebuild remap entries from received category deltas that
+            // matched by tag/name during merge (handles deltas not yet in
+            // any transaction's categoryAmounts)
             for (packet in packets) {
                 for (change in packet.changes) {
-                    if (change.type == "category" && change.id !in localCatIds && change.id !in catIdRemap) {
+                    if (change.type == "category" && change.id !in mergedCatById && change.id !in catIdRemap) {
                         val remoteCat = deserializeCategory(change)
-                        val localMatch = if (remoteCat.tag.isNotEmpty()) localCatByTag[remoteCat.tag]
-                            else localCatByName[remoteCat.name]
+                        val localMatch = if (remoteCat.tag.isNotEmpty()) mergedCatByTag[remoteCat.tag]
+                            else mergedCatByName[remoteCat.name]
                         if (localMatch != null) {
                             catIdRemap[change.id] = localMatch.id
                         }
@@ -235,7 +316,8 @@ class SyncEngine(
                 }
             }
 
-            // 5b: Apply remap to all transactions
+            // 5d: Apply remap to all transactions
+            var remapChangedTxns = false
             if (catIdRemap.isNotEmpty()) {
                 for (i in mergedTxns.indices) {
                     val txn = mergedTxns[i]
@@ -245,40 +327,40 @@ class SyncEngine(
                     }
                     if (remapped != txn.categoryAmounts) {
                         mergedTxns[i] = txn.copy(categoryAmounts = remapped)
+                        remapChangedTxns = true
                     }
                 }
             }
 
-            // Step 6: Push local changes — only push records owned by this device
-            // to prevent echoed remote data from inflating lastPushedClock beyond
-            // the local lamport clock (which would silently suppress future pushes).
+            // Step 6: Push ALL local records regardless of deviceId ownership.
+            // After the deviceId_clock CRDT fix, deviceId converges to the
+            // original creator's value on all devices. Using deviceId as a push
+            // filter would block non-admin devices from pushing their own
+            // records once convergence occurs.  DeltaBuilder's threshold
+            // (field_clock > lastPushedClock) already prevents re-pushing
+            // unchanged data, so the filter is unnecessary.  CRDT merge on
+            // the receiving side is idempotent, making redundant pushes safe.
             val localDeltas = mutableListOf<RecordDelta>()
             val pushClock = lastPushedClock
             for (txn in transactions) {
-                if (txn.deviceId != deviceId && txn.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildTransactionDelta(txn, pushClock)?.let { localDeltas.add(it) }
             }
             for (re in recurringExpenses) {
-                if (re.deviceId != deviceId && re.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildRecurringExpenseDelta(re, pushClock)?.let { localDeltas.add(it) }
             }
             for (src in incomeSources) {
-                if (src.deviceId != deviceId && src.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildIncomeSourceDelta(src, pushClock)?.let { localDeltas.add(it) }
             }
             for (goal in savingsGoals) {
-                if (goal.deviceId != deviceId && goal.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildSavingsGoalDelta(goal, pushClock)?.let { localDeltas.add(it) }
             }
             for (entry in amortizationEntries) {
-                if (entry.deviceId != deviceId && entry.deviceId.isNotEmpty()) continue
                 DeltaBuilder.buildAmortizationEntryDelta(entry, pushClock)?.let { localDeltas.add(it) }
             }
+            // Categories always pushed with pushClock=0 so all fields are
+            // included — receiving devices need every device's category IDs
+            // to build catIdRemap for transaction categoryAmounts.
             for (cat in categories) {
-                if (cat.deviceId != deviceId && cat.deviceId.isNotEmpty()) continue
-                // Always push categories (pushClock=0) so receiving devices
-                // can rebuild catIdRemap even if it was lost.  Categories are
-                // small and CRDT merge is idempotent, so re-sending is safe.
                 DeltaBuilder.buildCategoryDelta(cat, 0)?.let { localDeltas.add(it) }
             }
             // SharedSettings is always pushed (shared, not per-device)
@@ -286,9 +368,16 @@ class SyncEngine(
 
             var deltasPushed = 0
             if (localDeltas.isNotEmpty()) {
-                val maxDeltaClock = localDeltas.maxOf { delta ->
-                    delta.fields.values.maxOfOrNull { it.clock } ?: 0L
-                }
+                // Exclude category and shared_settings deltas from maxDeltaClock.
+                // Categories use pushClock=0, so their high merged clocks must
+                // not inflate lastPushedClock.  SharedSettings can have very high
+                // clocks (from availableCash updates every period) that would
+                // strand lower-clock per-device records.
+                val maxDeltaClock = localDeltas
+                    .filter { it.type != "category" && it.type != "shared_settings" }
+                    .maxOfOrNull { delta ->
+                        delta.fields.values.maxOfOrNull { it.clock } ?: 0L
+                    } ?: lastPushedClock
                 lastPushedClock = maxDeltaClock
                 // Ensure lamport clock stays ahead of lastPushedClock so that
                 // future tick() calls produce values > lastPushedClock
@@ -364,12 +453,15 @@ class SyncEngine(
             }
 
             val hasChanges = packets.isNotEmpty() || snapshotApplied
+            // If remap fixed orphaned category IDs, include transactions even
+            // when no new deltas arrived — otherwise the fix is never persisted.
+            val txnsChanged = hasChanges || remapChangedTxns
             return SyncResult(
                 success = true,
                 deltasReceived = packets.sumOf { it.changes.size },
                 deltasPushed = deltasPushed,
                 budgetRecalcNeeded = budgetRecalcNeeded || snapshotApplied,
-                mergedTransactions = if (hasChanges) mergedTxns else null,
+                mergedTransactions = if (txnsChanged) mergedTxns else null,
                 mergedRecurringExpenses = if (hasChanges) mergedRe else null,
                 mergedIncomeSources = if (hasChanges) mergedIs else null,
                 mergedSavingsGoals = if (hasChanges) mergedSg else null,

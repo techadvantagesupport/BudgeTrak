@@ -246,8 +246,9 @@ class MultiDeviceSyncTest {
     }
 
     @Test
-    fun scenario7_onlyLocalRecordsShouldBePushed() {
-        // Simulate the sync engine's filter: only push local device records
+    fun scenario7_allRecordsPushedRegardlessOfOwnership() {
+        // After removing the push filter, ALL records are pushed — DeltaBuilder
+        // threshold (field_clock > lastPushedClock) is the only gate.
         val allTxns = listOf(
             Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
                 source = "Local", amount = 10.0, deviceId = deviceA, source_clock = 5),
@@ -255,10 +256,10 @@ class MultiDeviceSyncTest {
                 source = "Remote", amount = 20.0, deviceId = deviceB, source_clock = 5)
         )
 
-        val localOnly = allTxns.filter { it.deviceId == deviceA }
-        val deltas = localOnly.mapNotNull { DeltaBuilder.buildTransactionDelta(it, 0) }
-        assertEquals(1, deltas.size)
+        val deltas = allTxns.mapNotNull { DeltaBuilder.buildTransactionDelta(it, 0) }
+        assertEquals(2, deltas.size)  // Both pushed, regardless of deviceId
         assertEquals(deviceA, deltas[0].deviceId)
+        assertEquals(deviceB, deltas[1].deviceId)
     }
 
     // ── Scenario 8: LamportClock inflation protection ───────────────
@@ -556,6 +557,378 @@ class MultiDeviceSyncTest {
         // Both orderings must produce the same deviceId
         assertEquals(mergeAB.deviceId, mergeBA.deviceId)
         assertEquals(mergeAB.deviceId_clock, mergeBA.deviceId_clock)
+    }
+
+    // ── Scenario 14: Three-device category remap ───────────────────
+
+    @Test
+    fun scenario14_threeDevice_categoryRemap_allIdsReachAllDevices() {
+        // Three devices each have "Groceries" with different random IDs
+        val deviceC = "cccc3333"
+        val catA = Category(id = 100, name = "Groceries", iconName = "ShoppingCart",
+            tag = "groceries", deviceId = deviceA,
+            name_clock = 5, iconName_clock = 5, tag_clock = 5, deviceId_clock = 5)
+        val catB = Category(id = 200, name = "Groceries", iconName = "ShoppingCart",
+            tag = "groceries", deviceId = deviceB,
+            name_clock = 3, iconName_clock = 3, tag_clock = 3, deviceId_clock = 3)
+        val catC = Category(id = 300, name = "Groceries", iconName = "ShoppingCart",
+            tag = "groceries", deviceId = deviceC,
+            name_clock = 3, iconName_clock = 3, tag_clock = 3, deviceId_clock = 3)
+
+        // Device C creates a transaction with its own category ID (300)
+        val txnFromC = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Sams Club", amount = 426.65, deviceId = deviceC,
+            categoryAmounts = listOf(CategoryAmount(300, 426.65)),
+            source_clock = 10, amount_clock = 10, date_clock = 10, type_clock = 10,
+            categoryAmounts_clock = 10, deviceId_clock = 10)
+
+        // ---- Simulate device B receiving all three category deltas ----
+        // (This is the key: ALL devices push ALL categories, so B gets C's IDs)
+        val localCats = mutableListOf(catB) // B's local category
+        val catIdRemap = mutableMapOf<Int, Int>()
+
+        // Process catA delta (admin's)
+        val byTagA = localCats.indexOfFirst { it.tag == catA.tag }
+        assertTrue(byTagA >= 0)
+        catIdRemap[catA.id] = localCats[byTagA].id  // 100 → 200
+        localCats[byTagA] = CrdtMerge.mergeCategory(localCats[byTagA], catA, deviceB)
+
+        // Process catC delta (device3's)
+        val byTagC = localCats.indexOfFirst { it.tag == catC.tag }
+        assertTrue(byTagC >= 0)
+        catIdRemap[catC.id] = localCats[byTagC].id  // 300 → 200
+        localCats[byTagC] = CrdtMerge.mergeCategory(localCats[byTagC], catC, deviceB)
+
+        // Verify remaps
+        assertEquals(200, catIdRemap[100])  // admin's → B's
+        assertEquals(200, catIdRemap[300])  // device3's → B's
+
+        // ---- Remap transaction from device C ----
+        val remapped = txnFromC.categoryAmounts.map { ca ->
+            val newId = catIdRemap[ca.categoryId]
+            if (newId != null) ca.copy(categoryId = newId) else ca
+        }
+        assertEquals(1, remapped.size)
+        assertEquals(200, remapped[0].categoryId)  // 300 → 200 ✓
+    }
+
+    @Test
+    fun scenario14_missingCategoryDelta_orphansTransaction() {
+        // Demonstrates the bug: if device C's category delta never arrives,
+        // B can't remap C's category IDs and the transaction is orphaned
+        val catA = Category(id = 100, name = "Groceries", iconName = "ShoppingCart",
+            tag = "groceries", deviceId = deviceA,
+            name_clock = 5, iconName_clock = 5, tag_clock = 5)
+        val catB = Category(id = 200, name = "Groceries", iconName = "ShoppingCart",
+            tag = "groceries", deviceId = deviceB,
+            name_clock = 3, iconName_clock = 3, tag_clock = 3)
+
+        val localCats = mutableListOf(catB)
+        val catIdRemap = mutableMapOf<Int, Int>()
+
+        // Only admin's category delta arrives (device C's never pushed)
+        val byTag = localCats.indexOfFirst { it.tag == catA.tag }
+        catIdRemap[catA.id] = localCats[byTag].id  // 100 → 200
+
+        // Transaction from device C with category 300 — no remap exists!
+        val txnFromC = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Sams Club", amount = 426.65, deviceId = "cccc3333",
+            categoryAmounts = listOf(CategoryAmount(300, 426.65)),
+            source_clock = 10, amount_clock = 10, date_clock = 10, type_clock = 10,
+            categoryAmounts_clock = 10)
+
+        val remapped = txnFromC.categoryAmounts.map { ca ->
+            val newId = catIdRemap[ca.categoryId]
+            if (newId != null) ca.copy(categoryId = newId) else ca
+        }
+        // Orphaned! categoryId stays as 300, which doesn't exist locally
+        assertEquals(300, remapped[0].categoryId)
+        assertFalse(localCats.any { it.id == 300 }) // Not in local list → UI shows no category
+    }
+
+    @Test
+    fun scenario15_proactiveRemapRebuildsFromMergedCategories() {
+        // Tests the proactive remap rebuild: when a transaction references
+        // a foreign category ID, the remap is built by matching the foreign
+        // category (from incoming deltas) by tag to local categories.
+        val deviceC = "cccc3333"
+        val localCats = listOf(
+            Category(id = 100, name = "Groceries", iconName = "ShoppingCart",
+                tag = "groceries", deviceId = deviceA,
+                name_clock = 5, iconName_clock = 5, tag_clock = 5, deviceId_clock = 5)
+        )
+
+        // Device C has category 300 with same tag "groceries"
+        val catFromC = Category(id = 300, name = "Groceries", iconName = "ShoppingCart",
+            tag = "groceries", deviceId = deviceC,
+            name_clock = 3, iconName_clock = 3, tag_clock = 3, deviceId_clock = 3)
+
+        // Transaction from C references category 300
+        val txnFromC = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Sams Club", amount = 426.65, deviceId = deviceC,
+            categoryAmounts = listOf(CategoryAmount(300, 426.65)),
+            source_clock = 10, amount_clock = 10, date_clock = 10, type_clock = 10,
+            categoryAmounts_clock = 10, deviceId_clock = 10)
+
+        // Simulate: C's category delta arrives in a packet
+        val packet = buildAndTransmit(
+            categories = listOf(catFromC),
+            transactions = listOf(txnFromC),
+            sourceDeviceId = deviceC
+        )
+
+        // Merge on device A
+        val mergedCat = localCats.toMutableList()
+        val mergedTxns = mutableListOf<Transaction>()
+        val catIdRemap = mutableMapOf<Int, Int>()
+
+        for (change in packet.changes) {
+            when (change.type) {
+                "category" -> {
+                    val remoteCat = Category(
+                        id = change.id,
+                        name = change.fields["name"]?.value as? String ?: "",
+                        iconName = change.fields["iconName"]?.value as? String ?: "label",
+                        tag = change.fields["tag"]?.value as? String ?: "",
+                        deviceId = change.fields["deviceId"]?.value as? String ?: change.deviceId,
+                        name_clock = change.fields["name"]?.clock ?: 0L,
+                        iconName_clock = change.fields["iconName"]?.clock ?: 0L,
+                        tag_clock = change.fields["tag"]?.clock ?: 0L,
+                        deviceId_clock = change.fields["deviceId"]?.clock ?: 0L
+                    )
+                    val byTag = mergedCat.indexOfFirst { it.tag == remoteCat.tag }
+                    if (byTag >= 0) {
+                        catIdRemap[change.id] = mergedCat[byTag].id
+                        mergedCat[byTag] = CrdtMerge.mergeCategory(mergedCat[byTag], remoteCat, deviceA)
+                    } else {
+                        mergedCat.add(remoteCat)
+                    }
+                }
+                "transaction" -> {
+                    val f = change.fields
+                    val catAmountsStr = f["categoryAmounts"]?.value as? String
+                    val categoryAmounts = if (catAmountsStr != null) {
+                        val arr = org.json.JSONArray(catAmountsStr)
+                        (0 until arr.length()).map { i ->
+                            val obj = arr.getJSONObject(i)
+                            CategoryAmount(obj.getInt("categoryId"), obj.getDouble("amount"))
+                        }
+                    } else emptyList()
+                    mergedTxns.add(Transaction(
+                        id = change.id,
+                        type = TransactionType.EXPENSE,
+                        date = today,
+                        source = f["source"]?.value as? String ?: "",
+                        categoryAmounts = categoryAmounts,
+                        amount = (f["amount"]?.value as? Number)?.toDouble() ?: 0.0,
+                        deviceId = change.deviceId,
+                        source_clock = f["source"]?.clock ?: 0L,
+                        amount_clock = f["amount"]?.clock ?: 0L,
+                        categoryAmounts_clock = f["categoryAmounts"]?.clock ?: 0L
+                    ))
+                }
+            }
+        }
+
+        // Remap is built during category merge: 300 → 100
+        assertEquals(100, catIdRemap[300])
+
+        // Apply remap to transaction
+        for (i in mergedTxns.indices) {
+            val txn = mergedTxns[i]
+            val remapped = txn.categoryAmounts.map { ca ->
+                val newId = catIdRemap[ca.categoryId]
+                if (newId != null) ca.copy(categoryId = newId) else ca
+            }
+            if (remapped != txn.categoryAmounts) {
+                mergedTxns[i] = txn.copy(categoryAmounts = remapped)
+            }
+        }
+
+        // Transaction now uses local category ID 100
+        assertEquals(100, mergedTxns[0].categoryAmounts[0].categoryId)
+        assertTrue(mergedCat.any { it.id == 100 }) // Exists in local list
+    }
+
+    @Test
+    fun scenario15_remapRebuiltFromExistingWhenNoDeltasArrive() {
+        // When no new category deltas arrive but existingCatIdRemap has
+        // the mapping and transactions have orphaned IDs, the remap is
+        // still applied and the remapChangedTxns flag is set.
+        val existingRemap = mapOf(300 to 100)
+        val txn = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Sams Club", amount = 426.65, deviceId = "cccc3333",
+            categoryAmounts = listOf(CategoryAmount(300, 426.65)),
+            source_clock = 10, amount_clock = 10, categoryAmounts_clock = 10)
+
+        val mergedTxns = mutableListOf(txn)
+        var remapChangedTxns = false
+        val catIdRemap = existingRemap.toMutableMap()
+
+        if (catIdRemap.isNotEmpty()) {
+            for (i in mergedTxns.indices) {
+                val t = mergedTxns[i]
+                val remapped = t.categoryAmounts.map { ca ->
+                    val newId = catIdRemap[ca.categoryId]
+                    if (newId != null) ca.copy(categoryId = newId) else ca
+                }
+                if (remapped != t.categoryAmounts) {
+                    mergedTxns[i] = t.copy(categoryAmounts = remapped)
+                    remapChangedTxns = true
+                }
+            }
+        }
+
+        assertTrue(remapChangedTxns)
+        assertEquals(100, mergedTxns[0].categoryAmounts[0].categoryId)
+
+        // With remapChangedTxns = true, hasChanges check passes
+        val hasChanges = false // no new packets
+        val txnsChanged = hasChanges || remapChangedTxns
+        assertTrue(txnsChanged) // transactions WILL be saved
+    }
+
+    @Test
+    fun scenario15_onUpdateCategory_preservesDeviceIdClock() {
+        // Editing a category should NOT overwrite deviceId or deviceId_clock
+        val original = Category(id = 100, name = "Groceries", iconName = "ShoppingCart",
+            tag = "groceries", deviceId = deviceA, deviceId_clock = 50,
+            name_clock = 10, iconName_clock = 10, tag_clock = 10)
+
+        // Simulate onUpdateCategory: user changes the name
+        val updated = original.copy(name = "Food & Groceries")
+        val clock = 60L
+        val result = updated.copy(
+            deviceId = original.deviceId,         // preserve
+            deviceId_clock = original.deviceId_clock,  // preserve
+            deleted = original.deleted,
+            deleted_clock = original.deleted_clock,
+            tag_clock = original.tag_clock,
+            name_clock = if (updated.name != original.name) clock else original.name_clock,
+            iconName_clock = if (updated.iconName != original.iconName) clock else original.iconName_clock
+        )
+
+        assertEquals(deviceA, result.deviceId)  // Not overwritten
+        assertEquals(50L, result.deviceId_clock) // Not overwritten
+        assertEquals(60L, result.name_clock)    // Updated
+        assertEquals(10L, result.iconName_clock) // Unchanged
+    }
+
+    @Test
+    fun scenario16_staleRemapReversedToFixOrphanedTransactions() {
+        // When catIdRemap has stale entries (target doesn't exist in merged
+        // categories but source does), the stale entry should be reversed
+        // so that transactions already remapped to extinct IDs get fixed.
+        val adminCatGroceries = Category(id = 22695, name = "Groceries", iconName = "Cart",
+            tag = "groceries", deviceId = deviceA, name_clock = 5, tag_clock = 5,
+            deviceId_clock = 5)
+        val adminCatHome = Category(id = 30186, name = "Home Supplies", iconName = "Home",
+            tag = "home_supplies", deviceId = deviceA, name_clock = 5, tag_clock = 5,
+            deviceId_clock = 5)
+        // Local defaults that got regenerated (different IDs from the old ones)
+        val localDefaultGroceries = Category(id = 13888, name = "", iconName = "label",
+            tag = "groceries", deviceId = deviceB, name_clock = 0, tag_clock = 0)
+        val localDefaultHome = Category(id = 62725, name = "", iconName = "label",
+            tag = "home_supplies", deviceId = deviceB, name_clock = 0, tag_clock = 0)
+
+        val mergedCat = mutableListOf(
+            adminCatGroceries, adminCatHome,
+            localDefaultGroceries, localDefaultHome
+        )
+
+        // Stale remap: admin IDs → OLD local IDs (45542, 51526) that no longer exist
+        val catIdRemap = mutableMapOf(22695 to 45542, 30186 to 51526)
+
+        // Transactions were already remapped to stale targets
+        val txn1 = Transaction(id = 1, type = TransactionType.EXPENSE, date = today,
+            source = "Amazon", amount = 9.65, deviceId = deviceA,
+            categoryAmounts = listOf(CategoryAmount(51526, 9.65)), // stale!
+            source_clock = 10, amount_clock = 10, categoryAmounts_clock = 10)
+        val txn2 = Transaction(id = 2, type = TransactionType.EXPENSE, date = today,
+            source = "Sams Club", amount = 226.65, deviceId = deviceA,
+            categoryAmounts = listOf(CategoryAmount(45542, 226.65)), // stale!
+            source_clock = 10, amount_clock = 10, categoryAmounts_clock = 10)
+
+        val mergedTxns = mutableListOf(txn1, txn2)
+        val mergedCatById = mergedCat.associateBy { it.id }
+
+        // Step 5a: Validate stale remap entries
+        val staleKeys = mutableListOf<Int>()
+        val reverseRemaps = mutableMapOf<Int, Int>()
+        for ((sourceId, targetId) in catIdRemap) {
+            if (targetId !in mergedCatById) {
+                staleKeys.add(sourceId)
+                if (sourceId in mergedCatById) {
+                    reverseRemaps[targetId] = sourceId
+                }
+            }
+        }
+        for (key in staleKeys) { catIdRemap.remove(key) }
+        catIdRemap.putAll(reverseRemaps)
+
+        // Verify: stale forwards removed, reverse remaps added
+        assertFalse(22695 in catIdRemap) // stale forward removed
+        assertFalse(30186 in catIdRemap) // stale forward removed
+        assertEquals(22695, catIdRemap[45542]) // reverse: extinct → admin
+        assertEquals(30186, catIdRemap[51526]) // reverse: extinct → admin
+
+        // Step 5d: Apply remap to transactions
+        for (i in mergedTxns.indices) {
+            val txn = mergedTxns[i]
+            val remapped = txn.categoryAmounts.map { ca ->
+                val newId = catIdRemap[ca.categoryId]
+                if (newId != null) ca.copy(categoryId = newId) else ca
+            }
+            if (remapped != txn.categoryAmounts) {
+                mergedTxns[i] = txn.copy(categoryAmounts = remapped)
+            }
+        }
+
+        // Transactions now point to valid admin category IDs
+        assertEquals(30186, mergedTxns[0].categoryAmounts[0].categoryId) // Home Supplies
+        assertEquals(22695, mergedTxns[1].categoryAmounts[0].categoryId) // Groceries
+        // Both exist in merged categories
+        assertTrue(mergedCatById.containsKey(30186))
+        assertTrue(mergedCatById.containsKey(22695))
+    }
+
+    @Test
+    fun scenario16_tagDedupConsolidatesDuplicateCategories() {
+        // After tag propagation, two categories may share the same tag.
+        // The dedup should keep the most authoritative one (highest name_clock)
+        // and remap the other.
+        val adminCat = Category(id = 22695, name = "Groceries", iconName = "Cart",
+            tag = "groceries", deviceId = deviceA, name_clock = 5, tag_clock = 5,
+            deviceId_clock = 5)
+        val localDefault = Category(id = 13888, name = "", iconName = "label",
+            tag = "groceries", deviceId = deviceB, name_clock = 0, tag_clock = 0)
+
+        val mergedCat = mutableListOf(adminCat, localDefault)
+        val catIdRemap = mutableMapOf<Int, Int>()
+
+        // Step 5b: Tag dedup
+        val catIndicesByTag = mutableMapOf<String, MutableList<Int>>()
+        for (i in mergedCat.indices) {
+            val cat = mergedCat[i]
+            if (cat.tag.isNotEmpty() && !cat.deleted) {
+                catIndicesByTag.getOrPut(cat.tag) { mutableListOf() }.add(i)
+            }
+        }
+        for ((_, indices) in catIndicesByTag) {
+            if (indices.size <= 1) continue
+            val sorted = indices.sortedByDescending { mergedCat[it].name_clock }
+            val keepCat = mergedCat[sorted[0]]
+            for (j in 1 until sorted.size) {
+                val dupCat = mergedCat[sorted[j]]
+                if (dupCat.id != keepCat.id) {
+                    catIdRemap[dupCat.id] = keepCat.id
+                }
+            }
+        }
+
+        // Admin category kept (higher name_clock), local default remapped
+        assertEquals(22695, catIdRemap[13888]) // local default → admin
+        assertFalse(22695 in catIdRemap) // admin not remapped
     }
 
     @Test

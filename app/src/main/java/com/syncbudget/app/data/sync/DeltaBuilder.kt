@@ -140,6 +140,7 @@ object DeltaBuilder {
         if (fields.isEmpty()) return null
         ensureField(fields, "name", cat.name, cat.name_clock)
         ensureField(fields, "iconName", cat.iconName, cat.iconName_clock)
+        ensureField(fields, "tag", cat.tag, cat.tag_clock)
         ensureField(fields, "deviceId", cat.deviceId, cat.deviceId_clock)
         return RecordDelta("category", "upsert", cat.id, cat.deviceId, fields)
     }
