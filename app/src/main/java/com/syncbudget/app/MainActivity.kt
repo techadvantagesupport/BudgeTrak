@@ -153,7 +153,10 @@ class MainActivity : ComponentActivity() {
 
             // Matching configuration
             var matchDays by remember { mutableIntStateOf(prefs.getInt("matchDays", 7)) }
-            var matchPercent by remember { mutableDoubleStateOf(prefs.getString("matchPercent", null)?.toDoubleOrNull() ?: prefs.getFloat("matchPercent", 1.0f).toDouble()) }
+            var matchPercent by remember { mutableDoubleStateOf(
+                try { prefs.getString("matchPercent", null)?.toDoubleOrNull() } catch (_: ClassCastException) { null }
+                    ?: try { prefs.getFloat("matchPercent", 1.0f).toDouble() } catch (_: ClassCastException) { 1.0 }
+            ) }
             var matchDollar by remember { mutableIntStateOf(prefs.getInt("matchDollar", 1)) }
             var matchChars by remember { mutableIntStateOf(prefs.getInt("matchChars", 5)) }
             var weekStartSunday by remember { mutableStateOf(prefs.getBoolean("weekStartSunday", true)) }
@@ -1373,7 +1376,8 @@ class MainActivity : ComponentActivity() {
                             lastRefreshDate = prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) }
                             weekStartSunday = prefs.getBoolean("weekStartSunday", true)
                             matchDays = prefs.getInt("matchDays", 7)
-                            matchPercent = prefs.getString("matchPercent", null)?.toDoubleOrNull() ?: prefs.getFloat("matchPercent", 1.0f).toDouble()
+                            matchPercent = (try { prefs.getString("matchPercent", null)?.toDoubleOrNull() } catch (_: ClassCastException) { null })
+                                ?: try { prefs.getFloat("matchPercent", 1.0f).toDouble() } catch (_: ClassCastException) { 1.0 }
                             matchDollar = prefs.getInt("matchDollar", 1)
                             matchChars = prefs.getInt("matchChars", 5)
 
