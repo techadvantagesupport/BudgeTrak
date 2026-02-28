@@ -49,7 +49,9 @@ val CURRENCY_SUFFIX_SYMBOLS = setOf("€", "Fr")
 
 fun formatCurrency(amount: Double, currencySymbol: String): String {
     val decimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
-    return "$currencySymbol${"%.${decimals}f".format(amount)}"
+    val formatted = "%.${decimals}f".format(amount)
+    return if (currencySymbol in CURRENCY_SUFFIX_SYMBOLS) "$formatted $currencySymbol"
+    else "$currencySymbol$formatted"
 }
 
 private const val CARD_ASPECT = 1.5f

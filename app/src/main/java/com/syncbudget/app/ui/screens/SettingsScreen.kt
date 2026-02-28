@@ -101,8 +101,8 @@ fun SettingsScreen(
     onPaidUserChange: (Boolean) -> Unit = {},
     matchDays: Int = 7,
     onMatchDaysChange: (Int) -> Unit = {},
-    matchPercent: Float = 1.0f,
-    onMatchPercentChange: (Float) -> Unit = {},
+    matchPercent: Double = 1.0,
+    onMatchPercentChange: (Double) -> Unit = {},
     matchDollar: Int = 1,
     onMatchDollarChange: (Int) -> Unit = {},
     matchChars: Int = 5,
@@ -467,7 +467,7 @@ fun SettingsScreen(
                     onValueChange = { text ->
                         if (text.isEmpty() || text.matches(Regex("^\\d*\\.?\\d*$"))) {
                             matchPercentText = text
-                            text.toFloatOrNull()?.let { onMatchPercentChange(it) }
+                            text.toDoubleOrNull()?.let { onMatchPercentChange(it) }
                         }
                     },
                     label = { Text(S.settings.matchPercent) },

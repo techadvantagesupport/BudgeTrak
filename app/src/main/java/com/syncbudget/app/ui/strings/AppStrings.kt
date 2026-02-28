@@ -340,7 +340,7 @@ data class AmortizationStrings(
     val startDateLabel: (String) -> String,
     val completed: String,
     val xOfYComplete: (Int, Int, String) -> String,
-    val totalPerPeriod: (String, String, String, String) -> String,
+    val totalPerPeriod: (String, String, String) -> String,
     val deleteEntryTitle: String,
     val deleteEntryConfirm: (String) -> String,
     val requiredLaptopExample: String,

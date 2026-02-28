@@ -119,7 +119,7 @@ fun isRecurringDateCloseEnough(transactionDate: LocalDate, re: RecurringExpense)
 fun findRecurringExpenseMatch(
     incoming: Transaction,
     recurringExpenses: List<RecurringExpense>,
-    percentTolerance: Float = 0.01f,
+    percentTolerance: Double = 0.01,
     dollarTolerance: Int = 1,
     minChars: Int = 5,
     dayWindow: Int = 7
@@ -137,7 +137,7 @@ fun findRecurringExpenseMatch(
 fun findAmortizationMatch(
     incoming: Transaction,
     entries: List<AmortizationEntry>,
-    percentTolerance: Float = 0.01f,
+    percentTolerance: Double = 0.01,
     dollarTolerance: Int = 1,
     minChars: Int = 5
 ): AmortizationEntry? {
@@ -166,7 +166,7 @@ fun findBudgetIncomeMatch(
 fun findDuplicate(
     incoming: Transaction,
     existing: List<Transaction>,
-    percentTolerance: Float = 0.01f,
+    percentTolerance: Double = 0.01,
     dollarTolerance: Int = 1,
     dayWindow: Int = 7,
     minChars: Int = 5
@@ -181,7 +181,7 @@ fun findDuplicate(
 internal fun amountMatches(
     a1: Double,
     a2: Double,
-    percentTolerance: Float = 0.01f,
+    percentTolerance: Double = 0.01,
     dollarTolerance: Int = 1
 ): Boolean {
     val maxVal = maxOf(abs(a1), abs(a2))

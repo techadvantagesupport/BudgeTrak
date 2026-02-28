@@ -321,7 +321,7 @@ object EnglishStrings : AppStrings {
         startDateLabel = { date -> "Start Date: $date" },
         completed = "Completed",
         xOfYComplete = { x, y, period -> "$x of $y $period complete" },
-        totalPerPeriod = { symbol, total, symbol2, perPeriod -> "$symbol$total ($symbol2$perPeriod/period)" },
+        totalPerPeriod = { total, perPeriod, periodLabel -> "$total ($perPeriod/$periodLabel)" },
         deleteEntryTitle = "Delete Amortization Entry?",
         deleteEntryConfirm = { name -> "Permanently delete \"$name\"?" },
         requiredLaptopExample = "Required, e.g. Laptop",
@@ -672,7 +672,7 @@ object EnglishStrings : AppStrings {
         defaultCategoriesTitle = "Default Categories",
         defaultCategoriesBody = "Two categories are protected and cannot be deleted or renamed:",
         catOther = "Other \u2014 the default fallback category for uncategorized transactions",
-        catRecurring = "",
+        catRecurring = "Recurring Income \u2014 auto-assigned to transactions matched as budget income",
         catAmortization = "",
         addCategoryTitle = "Adding a Category",
         addCategoryBody = "Tap \"Add Category\" to create a new category. Enter a name and choose an icon " +
@@ -1008,7 +1008,7 @@ object EnglishStrings : AppStrings {
         budgetIncomeTitle = "Budget Income Detection",
         budgetIncomeBody = "When you add an income transaction in the Transactions screen, the app " +
             "checks whether it matches one of your configured income sources (by name " +
-            "and amount). If a match is found, you're asked whether this is:",
+            "and expected date). If a match is found, you're asked whether this is:",
         budgetIncomeBullet = "Budget income \u2014 already accounted for in your budget (does NOT increase available cash)",
         extraIncomeBullet = "Extra income \u2014 unexpected or additional income (DOES increase available cash)",
         budgetIncomeNote = "This prevents your paycheck from being double-counted \u2014 once in the budget " +

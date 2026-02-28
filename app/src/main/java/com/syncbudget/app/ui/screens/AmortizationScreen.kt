@@ -244,9 +244,8 @@ fun AmortizationScreen(
                         }
                         Text(
                             text = S.amortization.totalPerPeriod(
-                                currencySymbol,
-                                "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(entry.amount),
-                                "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(perPeriod),
+                                formatCurrency(entry.amount, currencySymbol),
+                                formatCurrency(perPeriod, currencySymbol),
                                 periodLabelSingular
                             ),
                             style = MaterialTheme.typography.bodyMedium,

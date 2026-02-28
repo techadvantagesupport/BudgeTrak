@@ -100,6 +100,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.data.BankFormat
+import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CryptoHelper
 import com.syncbudget.app.data.AmortizationEntry
@@ -136,6 +137,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -190,7 +192,7 @@ fun TransactionsScreen(
     amortizationEntries: List<AmortizationEntry> = emptyList(),
     incomeSources: List<IncomeSource> = emptyList(),
     matchDays: Int = 7,
-    matchPercent: Float = 1.0f,
+    matchPercent: Double = 1.0,
     matchDollar: Int = 1,
     matchChars: Int = 5,
     onAddTransaction: (Transaction) -> Unit,
@@ -206,7 +208,8 @@ fun TransactionsScreen(
     onSerializeFullBackup: () -> String = { "" },
     onLoadFullBackup: (String) -> Unit = {},
     isSyncConfigured: Boolean = false,
-    isSyncAdmin: Boolean = false
+    isSyncAdmin: Boolean = false,
+    budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -215,7 +218,7 @@ fun TransactionsScreen(
     }
 
     // Convert user-facing percent (e.g. 1.0 = 1%) to fraction (0.01)
-    val percentTolerance = matchPercent / 100f
+    val percentTolerance = matchPercent / 100.0
 
     var viewFilter by remember { mutableStateOf(ViewFilter.ALL) }
     var showAddIncome by remember { mutableStateOf(false) }
@@ -287,6 +290,7 @@ fun TransactionsScreen(
     var pendingBudgetIncomeMatch by remember { mutableStateOf<IncomeSource?>(null) }
     var pendingBudgetIncomeIsEdit by remember { mutableStateOf(false) }
     var showBudgetIncomeDialog by remember { mutableStateOf(false) }
+    var currentImportBudgetIncome by remember { mutableStateOf<IncomeSource?>(null) }
 
     // CSV Import state
     val context = LocalContext.current
@@ -508,7 +512,7 @@ fun TransactionsScreen(
     // Duplicate check loop
     LaunchedEffect(importStage, importIndex, ignoreAllDuplicates) {
         if (importStage != ImportStage.DUPLICATE_CHECK) return@LaunchedEffect
-        if (currentImportDup != null || currentImportRecurring != null || currentImportAmortization != null) return@LaunchedEffect
+        if (currentImportDup != null || currentImportRecurring != null || currentImportAmortization != null || currentImportBudgetIncome != null) return@LaunchedEffect
         if (importIndex >= parsedTransactions.size) {
             // All done — add approved transactions
             importApproved.forEach { txn -> onAddTransaction(txn) }
@@ -538,8 +542,13 @@ fun TransactionsScreen(
                 if (amortizationMatch != null) {
                     currentImportAmortization = amortizationMatch
                 } else {
-                    importApproved.add(txn)
-                    importIndex++
+                    val budgetIncomeMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
+                    if (budgetIncomeMatch != null) {
+                        currentImportBudgetIncome = budgetIncomeMatch
+                    } else {
+                        importApproved.add(txn)
+                        importIndex++
+                    }
                 }
             }
             return@LaunchedEffect
@@ -555,8 +564,13 @@ fun TransactionsScreen(
                 if (amortizationMatch != null) {
                     currentImportAmortization = amortizationMatch
                 } else {
-                    importApproved.add(txn)
-                    importIndex++
+                    val budgetIncomeMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
+                    if (budgetIncomeMatch != null) {
+                        currentImportBudgetIncome = budgetIncomeMatch
+                    } else {
+                        importApproved.add(txn)
+                        importIndex++
+                    }
                 }
             }
         } else {
@@ -875,12 +889,20 @@ fun TransactionsScreen(
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 items(filteredTransactions, key = { it.id }) { transaction ->
                     val isLinkedRecurring = transaction.linkedRecurringExpenseId != null
+                    val linkedRecurringAmount = if (isLinkedRecurring)
+                        recurringExpenses.find { it.id == transaction.linkedRecurringExpenseId }?.amount
+                    else null
                     val isLinkedAmortization = transaction.linkedAmortizationEntryId != null
                     val isAmortComplete = if (isLinkedAmortization) {
                         val entry = amortizationEntries.find { it.id == transaction.linkedAmortizationEntryId }
                         if (entry != null) {
-                            val endDate = entry.startDate.plusMonths(entry.totalPeriods.toLong())
-                            !java.time.LocalDate.now().isBefore(endDate)
+                            val today = LocalDate.now()
+                            val elapsed = when (budgetPeriod) {
+                                BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(entry.startDate, today).toInt()
+                                BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(entry.startDate, today).toInt()
+                                BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(entry.startDate, today).toInt()
+                            }
+                            elapsed >= entry.totalPeriods
                         } else false
                     } else false
                     TransactionRow(
@@ -925,7 +947,8 @@ fun TransactionsScreen(
                         } else null,
                         isLinkedRecurring = isLinkedRecurring,
                         isLinkedAmortization = isLinkedAmortization,
-                        isAmortComplete = isAmortComplete
+                        isAmortComplete = isAmortComplete,
+                        linkedRecurringAmount = linkedRecurringAmount
                     )
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
@@ -1880,6 +1903,36 @@ fun TransactionsScreen(
         )
     }
 
+    // Import budget income match dialog
+    if (importStage == ImportStage.DUPLICATE_CHECK && currentImportBudgetIncome != null && importIndex < parsedTransactions.size) {
+        val importTxn = parsedTransactions[importIndex]
+        val incomeMatch = currentImportBudgetIncome!!
+        BudgetIncomeConfirmDialog(
+            transaction = importTxn,
+            incomeSource = incomeMatch,
+            currencySymbol = currencySymbol,
+            dateFormatter = dateFormatter,
+            onConfirmBudgetIncome = {
+                val recurringIncomeCatId = categories.find { it.tag == "recurring_income" }?.id
+                val updatedTxn = importTxn.copy(
+                    isBudgetIncome = true,
+                    categoryAmounts = if (recurringIncomeCatId != null)
+                        listOf(CategoryAmount(recurringIncomeCatId, importTxn.amount))
+                    else importTxn.categoryAmounts,
+                    isUserCategorized = true
+                )
+                importApproved.add(updatedTxn)
+                currentImportBudgetIncome = null
+                importIndex++
+            },
+            onNotBudgetIncome = {
+                importApproved.add(importTxn)
+                currentImportBudgetIncome = null
+                importIndex++
+            }
+        )
+    }
+
     // Manual amortization match dialog
     if (showAmortizationDialog && pendingAmortizationTxn != null && pendingAmortizationMatch != null) {
         AmortizationConfirmDialog(
@@ -1957,10 +2010,10 @@ fun BudgetIncomeConfirmDialog(
         title = { Text(S.transactions.budgetIncomeMatchTitle(transaction.source)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${transaction.source} \u2014 $currencySymbol${formatAmount(transaction.amount, 2)}", fontWeight = FontWeight.SemiBold)
+                Text("${transaction.source} \u2014 ${formatCurrency(transaction.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
                 Text(transaction.date.format(dateFormatter))
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("${incomeSource.source} \u2014 $currencySymbol${formatAmount(incomeSource.amount, 2)}", fontWeight = FontWeight.SemiBold)
+                Text("${incomeSource.source} \u2014 ${formatCurrency(incomeSource.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     S.transactions.budgetIncomeMatchBody(transaction.source, incomeSource.source),
@@ -1996,10 +2049,10 @@ fun AmortizationConfirmDialog(
         title = { Text(S.transactions.amortizationMatchTitle(transaction.source)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${transaction.source} \u2014 $currencySymbol${formatAmount(transaction.amount, 2)}", fontWeight = FontWeight.SemiBold)
+                Text("${transaction.source} \u2014 ${formatCurrency(transaction.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
                 Text(transaction.date.format(dateFormatter))
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("${amortizationEntry.source} \u2014 $currencySymbol${formatAmount(amortizationEntry.amount, 2)}", fontWeight = FontWeight.SemiBold)
+                Text("${amortizationEntry.source} \u2014 ${formatCurrency(amortizationEntry.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     S.transactions.amortizationMatchBody(transaction.source, amortizationEntry.source),
@@ -2036,10 +2089,10 @@ fun RecurringExpenseConfirmDialog(
         title = { Text(S.transactions.recurringMatchTitle(transaction.source)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${transaction.source} \u2014 $currencySymbol${formatAmount(transaction.amount, 2)}", fontWeight = FontWeight.SemiBold)
+                Text("${transaction.source} \u2014 ${formatCurrency(transaction.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
                 Text(transaction.date.format(dateFormatter))
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("${recurringExpense.source} \u2014 $currencySymbol${formatAmount(recurringExpense.amount, 2)}", fontWeight = FontWeight.SemiBold)
+                Text("${recurringExpense.source} \u2014 ${formatCurrency(recurringExpense.amount, currencySymbol)}", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     S.transactions.recurringMatchBody(transaction.source, recurringExpense.source),
@@ -2154,13 +2207,25 @@ private fun TransactionRow(
     attributionLabel: String? = null,
     isLinkedRecurring: Boolean = false,
     isLinkedAmortization: Boolean = false,
-    isAmortComplete: Boolean = false
+    isAmortComplete: Boolean = false,
+    linkedRecurringAmount: Double? = null
 ) {
     val S = LocalStrings.current
     val isExpense = transaction.type == TransactionType.EXPENSE
-    val amountColor = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
-    val amountPrefix = if (isExpense) "-" else ""
-    val formattedAmount = "$amountPrefix${formatCurrency(transaction.amount, currencySymbol)}"
+    val displayAmount: Double
+    val amountColor: Color
+    val amountPrefix: String
+    if (isLinkedRecurring && linkedRecurringAmount != null) {
+        val diff = linkedRecurringAmount - transaction.amount
+        displayAmount = kotlin.math.abs(diff)
+        amountColor = if (diff >= 0) Color(0xFF4CAF50) else Color(0xFFF44336)
+        amountPrefix = if (diff >= 0) "+" else "-"
+    } else {
+        displayAmount = transaction.amount
+        amountColor = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
+        amountPrefix = if (isExpense) "-" else ""
+    }
+    val formattedAmount = "$amountPrefix${formatCurrency(displayAmount, currencySymbol)}"
 
     val hasMultipleCategories = transaction.categoryAmounts.size > 1
     val singleCategory = if (transaction.categoryAmounts.size == 1)
@@ -3158,7 +3223,19 @@ fun TransactionDialog(
 
                             val id = editTransaction?.id
                                 ?: generateTransactionId(existingIds)
-                            onSave(
+                            val txn = if (editTransaction != null) {
+                                // Preserve fields not editable in this dialog
+                                editTransaction.copy(
+                                    type = type,
+                                    date = selectedDate,
+                                    source = source.trim(),
+                                    description = description.trim(),
+                                    categoryAmounts = catAmounts,
+                                    amount = totalAmount,
+                                    linkedRecurringExpenseId = linkedRecurringId,
+                                    linkedAmortizationEntryId = linkedAmortizationId
+                                )
+                            } else {
                                 Transaction(
                                     id = id,
                                     type = type,
@@ -3170,7 +3247,8 @@ fun TransactionDialog(
                                     linkedRecurringExpenseId = linkedRecurringId,
                                     linkedAmortizationEntryId = linkedAmortizationId
                                 )
-                            )
+                            }
+                            onSave(txn)
                         }
                     ) {
                         Text(S.common.save)
@@ -3315,6 +3393,7 @@ fun TransactionDialog(
     if (showMoveValueDialog && pendingDeselect != null) {
         val deselectedCat = pendingDeselect!!
         val valueLabel = if (usePercentage) "$pendingDeselectValue%"
+            else if (currencySymbol in CURRENCY_SUFFIX_SYMBOLS) "$pendingDeselectValue $currencySymbol"
             else "$currencySymbol$pendingDeselectValue"
 
         AdAwareAlertDialog(
@@ -3531,7 +3610,7 @@ fun TransactionDialog(
             title = { Text(S.transactions.linkToRecurring) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    recurringExpenses.forEach { re ->
+                    recurringExpenses.sortedByDescending { it.amount }.forEach { re ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -3577,7 +3656,7 @@ fun TransactionDialog(
             title = { Text(S.transactions.linkToAmortization) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    amortizationEntries.forEach { ae ->
+                    amortizationEntries.sortedByDescending { it.amount }.forEach { ae ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

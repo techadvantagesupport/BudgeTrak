@@ -321,7 +321,7 @@ object SpanishStrings : AppStrings {
         startDateLabel = { date -> "Fecha de inicio: $date" },
         completed = "Completada",
         xOfYComplete = { x, y, period -> "$x de $y $period completados" },
-        totalPerPeriod = { symbol, total, symbol2, perPeriod -> "$symbol$total ($symbol2$perPeriod/per\u00edodo)" },
+        totalPerPeriod = { total, perPeriod, periodLabel -> "$total ($perPeriod/$periodLabel)" },
         deleteEntryTitle = "\u00bfEliminar entrada de amortizaci\u00f3n?",
         deleteEntryConfirm = { name -> "\u00bfEliminar permanentemente \"$name\"?" },
         requiredLaptopExample = "Obligatorio, ej. Laptop",
@@ -671,7 +671,7 @@ object SpanishStrings : AppStrings {
         defaultCategoriesTitle = "Categor\u00edas predeterminadas",
         defaultCategoriesBody = "Dos categor\u00edas est\u00e1n protegidas y no se pueden eliminar ni renombrar:",
         catOther = "Otros \u2014 la categor\u00eda predeterminada para transacciones sin clasificar",
-        catRecurring = "",
+        catRecurring = "Ingreso recurrente \u2014 asignada autom\u00e1ticamente a transacciones reconocidas como ingreso presupuestado",
         catAmortization = "",
         addCategoryTitle = "Agregar una categor\u00eda",
         addCategoryBody = "Toca \"Agregar categor\u00eda\" para crear una nueva. Escribe un nombre y elige un icono " +
@@ -1007,7 +1007,7 @@ object SpanishStrings : AppStrings {
         budgetIncomeTitle = "Detecci\u00f3n de ingresos presupuestados",
         budgetIncomeBody = "Cuando agregas una transacci\u00f3n de ingreso en la pantalla de Transacciones, la app " +
             "verifica si coincide con alguna de tus fuentes de ingreso configuradas (por nombre " +
-            "y monto). Si encuentra coincidencia, se te pregunta si es:",
+            "y fecha esperada). Si encuentra coincidencia, se te pregunta si es:",
         budgetIncomeBullet = "Ingreso presupuestado \u2014 ya contabilizado en tu presupuesto (NO aumenta el efectivo disponible)",
         extraIncomeBullet = "Ingreso extra \u2014 ingreso inesperado o adicional (S\u00cd aumenta el efectivo disponible)",
         budgetIncomeNote = "Esto evita que tu n\u00f3mina se cuente dos veces \u2014 una en el c\u00e1lculo del presupuesto " +

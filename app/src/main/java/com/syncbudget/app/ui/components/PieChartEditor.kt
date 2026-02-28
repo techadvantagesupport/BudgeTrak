@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.syncbudget.app.data.Category
+import com.syncbudget.app.ui.components.CURRENCY_SUFFIX_SYMBOLS
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -443,7 +444,8 @@ fun PieChartEditor(
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = "$currencySymbol${formatPieAmount(amount, maxDecimals)}",
+                        text = if (currencySymbol in CURRENCY_SUFFIX_SYMBOLS) "${formatPieAmount(amount, maxDecimals)} $currencySymbol"
+                            else "$currencySymbol${formatPieAmount(amount, maxDecimals)}",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onBackground

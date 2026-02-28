@@ -508,7 +508,7 @@ class SyncEngine(
                 "resetHour" -> s = s.copy(resetHour = (fd.value as? Number)?.toInt() ?: s.resetHour, resetHour_clock = fd.clock)
                 "familyTimezone" -> s = s.copy(familyTimezone = fd.value as? String ?: s.familyTimezone, familyTimezone_clock = fd.clock)
                 "matchDays" -> s = s.copy(matchDays = (fd.value as? Number)?.toInt() ?: s.matchDays, matchDays_clock = fd.clock)
-                "matchPercent" -> s = s.copy(matchPercent = (fd.value as? Number)?.toFloat() ?: s.matchPercent, matchPercent_clock = fd.clock)
+                "matchPercent" -> s = s.copy(matchPercent = (fd.value as? Number)?.toDouble() ?: s.matchPercent, matchPercent_clock = fd.clock)
                 "matchDollar" -> s = s.copy(matchDollar = (fd.value as? Number)?.toInt() ?: s.matchDollar, matchDollar_clock = fd.clock)
                 "matchChars" -> s = s.copy(matchChars = (fd.value as? Number)?.toInt() ?: s.matchChars, matchChars_clock = fd.clock)
                 "showAttribution" -> s = s.copy(showAttribution = fd.value as? Boolean ?: s.showAttribution, showAttribution_clock = fd.clock)

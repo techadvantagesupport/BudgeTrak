@@ -12,7 +12,7 @@ data class SharedSettings(
     val resetHour: Int = 0,
     val familyTimezone: String = "",
     val matchDays: Int = 7,
-    val matchPercent: Float = 1.0f,
+    val matchPercent: Double = 1.0,
     val matchDollar: Int = 1,
     val matchChars: Int = 5,
     val showAttribution: Boolean = false,

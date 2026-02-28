@@ -68,7 +68,7 @@ object FullBackupSerializer {
         )
         localPrefs.put("weekStartSunday", prefs.getBoolean("weekStartSunday", true))
         localPrefs.put("matchDays", prefs.getInt("matchDays", 7))
-        localPrefs.put("matchPercent", prefs.getFloat("matchPercent", 1.0f).toDouble())
+        localPrefs.put("matchPercent", prefs.getString("matchPercent", null)?.toDoubleOrNull() ?: prefs.getFloat("matchPercent", 1.0f).toDouble())
         localPrefs.put("matchDollar", prefs.getInt("matchDollar", 1))
         localPrefs.put("matchChars", prefs.getInt("matchChars", 5))
         json.put("localPrefs", localPrefs)
@@ -174,7 +174,10 @@ object FullBackupSerializer {
             val lp = json.getJSONObject("localPrefs")
             val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             prefs.edit().apply {
-                putString("availableCash", lp.optDouble("availableCash", 0.0).toString())
+                val restoredCash = lp.optDouble("availableCash", 0.0).let {
+                    if (it.isNaN() || it.isInfinite()) 0.0 else BudgetCalculator.roundCents(it)
+                }
+                putString("availableCash", restoredCash.toString())
                 if (!lp.isNull("lastRefreshDate")) {
                     putString("lastRefreshDate", lp.getString("lastRefreshDate"))
                 } else {
@@ -199,7 +202,7 @@ object FullBackupSerializer {
                 putString("manualBudgetAmount", lp.optDouble("manualBudgetAmount", 0.0).toString())
                 putBoolean("weekStartSunday", lp.optBoolean("weekStartSunday", true))
                 putInt("matchDays", lp.optInt("matchDays", 7))
-                putFloat("matchPercent", lp.optDouble("matchPercent", 1.0).toFloat())
+                putString("matchPercent", lp.optDouble("matchPercent", 1.0).toString())
                 putInt("matchDollar", lp.optInt("matchDollar", 1))
                 putInt("matchChars", lp.optInt("matchChars", 5))
                 apply()

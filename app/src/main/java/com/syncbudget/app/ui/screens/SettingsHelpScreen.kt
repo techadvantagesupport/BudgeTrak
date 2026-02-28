@@ -241,6 +241,9 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpBodyText(S.settingsHelp.defaultCategoriesBody)
             Spacer(modifier = Modifier.height(4.dp))
             HelpBulletText(S.settingsHelp.catOther)
+            if (S.settingsHelp.catRecurring.isNotEmpty()) {
+                HelpBulletText(S.settingsHelp.catRecurring)
+            }
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpSubSectionTitle(S.settingsHelp.addCategoryTitle)

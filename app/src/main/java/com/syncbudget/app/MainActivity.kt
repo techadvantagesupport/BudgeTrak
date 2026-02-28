@@ -11,7 +11,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -154,7 +153,7 @@ class MainActivity : ComponentActivity() {
 
             // Matching configuration
             var matchDays by remember { mutableIntStateOf(prefs.getInt("matchDays", 7)) }
-            var matchPercent by remember { mutableFloatStateOf(prefs.getFloat("matchPercent", 1.0f)) }
+            var matchPercent by remember { mutableDoubleStateOf(prefs.getString("matchPercent", null)?.toDoubleOrNull() ?: prefs.getFloat("matchPercent", 1.0f).toDouble()) }
             var matchDollar by remember { mutableIntStateOf(prefs.getInt("matchDollar", 1)) }
             var matchChars by remember { mutableIntStateOf(prefs.getInt("matchChars", 5)) }
             var weekStartSunday by remember { mutableStateOf(prefs.getBoolean("weekStartSunday", true)) }
@@ -274,7 +273,7 @@ class MainActivity : ComponentActivity() {
                     val savingsDeductions = BudgetCalculator.activeSavingsGoalDeductions(
                         savingsGoals.toList().active, budgetPeriod
                     )
-                    maxOf(0.0, base - amortDeductions - savingsDeductions)
+                    BudgetCalculator.roundCents(maxOf(0.0, base - amortDeductions - savingsDeductions))
                 }
             }
 
@@ -315,11 +314,19 @@ class MainActivity : ComponentActivity() {
                 prefs.edit().putString("availableCash", availableCash.toString()).apply()
             }
 
-            // Check if an expense transaction is already accounted for in the budget
-            // (recurring expenses and amortization are built into the safe budget amount)
+            // Check if an expense transaction is fully accounted for in the budget
+            // (amortization entries are built into the safe budget amount)
             fun isBudgetAccountedExpense(txn: Transaction): Boolean {
                 if (txn.type != TransactionType.EXPENSE) return false
-                return txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null
+                return txn.linkedAmortizationEntryId != null
+            }
+
+            // For recurring-linked expenses, returns the cash effect (recurringAmount - txnAmount).
+            // Positive = saved money, negative = overspent. Null = not a recurring-linked expense.
+            fun recurringLinkCashEffect(txn: Transaction): Double? {
+                if (txn.type != TransactionType.EXPENSE || txn.linkedRecurringExpenseId == null) return null
+                val re = recurringExpenses.find { it.id == txn.linkedRecurringExpenseId } ?: return null
+                return re.amount - txn.amount
             }
 
             // Foreground sync loop
@@ -474,7 +481,11 @@ class MainActivity : ComponentActivity() {
                                 var cashChanged = false
                                 for (txn in newRemoteTxns) {
                                     if (!txn.deleted && !txn.date.isBefore(budgetStartDate)) {
-                                        if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
+                                        val recurringDiff = recurringLinkCashEffect(txn)
+                                        if (recurringDiff != null) {
+                                            availableCash += recurringDiff
+                                            cashChanged = true
+                                        } else if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
                                             availableCash -= txn.amount
                                             cashChanged = true
                                         } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
@@ -533,7 +544,7 @@ class MainActivity : ComponentActivity() {
                                     .putString("manualBudgetAmount", merged.manualBudgetAmount.toString())
                                     .putBoolean("weekStartSunday", merged.weekStartSunday)
                                     .putInt("matchDays", merged.matchDays)
-                                    .putFloat("matchPercent", merged.matchPercent)
+                                    .putString("matchPercent", merged.matchPercent.toString())
                                     .putInt("matchDollar", merged.matchDollar)
                                     .putInt("matchChars", merged.matchChars)
                                 if (budgetStartChanged) {
@@ -543,6 +554,8 @@ class MainActivity : ComponentActivity() {
                                 }
                                 // Always persist availableCash after sync to keep
                                 // prefs in sync with Compose state
+                                if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
+                                availableCash = BudgetCalculator.roundCents(availableCash)
                                 prefsEditor.putString("availableCash", availableCash.toString())
                                 prefsEditor.apply()
                             }
@@ -608,7 +621,7 @@ class MainActivity : ComponentActivity() {
             }
 
             // Percent tolerance for matching
-            val percentTolerance = matchPercent / 100f
+            val percentTolerance = matchPercent / 100.0
 
             // Helper to add a transaction with budget effects
             fun addTransactionWithBudgetEffect(txn: Transaction) {
@@ -630,7 +643,10 @@ class MainActivity : ComponentActivity() {
                 transactions.add(stamped)
                 saveTransactions()
                 if (budgetStartDate != null && !txn.date.isBefore(budgetStartDate)) {
-                    if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
+                    val recurringDiff = recurringLinkCashEffect(txn)
+                    if (recurringDiff != null) {
+                        availableCash += recurringDiff
+                    } else if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
                         availableCash -= txn.amount
                     } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
                         availableCash += txn.amount
@@ -691,7 +707,14 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 while (true) {
                     if (budgetStartDate != null && lastRefreshDate != null) {
-                        val today = LocalDate.now()
+                        // For DAILY periods, respect resetHour: the budget "day" starts
+                        // at resetHour, not midnight. Before resetHour we're still in
+                        // yesterday's period.
+                        val now = java.time.LocalDateTime.now()
+                        val today = if (budgetPeriod == BudgetPeriod.DAILY && resetHour > 0 && now.hour < resetHour)
+                            now.toLocalDate().minusDays(1)
+                        else
+                            now.toLocalDate()
                         val missedPeriods = BudgetCalculator.countPeriodsCompleted(lastRefreshDate!!, today, budgetPeriod)
                         if (missedPeriods > 0) {
                             availableCash += budgetAmount * missedPeriods
@@ -713,31 +736,39 @@ class MainActivity : ComponentActivity() {
                                 savePeriodLedger()
                             }
 
-                            // Update savings goals totalSavedSoFar for non-paused, non-complete items
+                            // Update savings goals totalSavedSoFar for non-paused, non-complete items.
+                            // Use the correct date for each catch-up period so periodsLeft
+                            // decreases properly (instead of using today for all iterations).
                             for (period in 0 until missedPeriods) {
+                                val periodsBack = (missedPeriods - 1 - period).toLong()
+                                val periodDate = when (budgetPeriod) {
+                                    BudgetPeriod.DAILY -> today.minusDays(periodsBack)
+                                    BudgetPeriod.WEEKLY -> today.minusWeeks(periodsBack)
+                                    BudgetPeriod.MONTHLY -> today.minusMonths(periodsBack)
+                                }
                                 savingsGoals.forEachIndexed { idx, goal ->
                                     if (!goal.isPaused && !goal.deleted) {
                                         val remaining = goal.targetAmount - goal.totalSavedSoFar
                                         if (remaining > 0) {
                                             if (goal.targetDate != null) {
-                                                if (LocalDate.now().isBefore(goal.targetDate)) {
+                                                if (periodDate.isBefore(goal.targetDate)) {
                                                     val periods = when (budgetPeriod) {
-                                                        BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(LocalDate.now(), goal.targetDate)
-                                                        BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(LocalDate.now(), goal.targetDate)
-                                                        BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(LocalDate.now(), goal.targetDate)
+                                                        BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(periodDate, goal.targetDate)
+                                                        BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(periodDate, goal.targetDate)
+                                                        BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(periodDate, goal.targetDate)
                                                     }
                                                     if (periods > 0) {
-                                                        val deduction = minOf(remaining / periods.toDouble(), remaining)
+                                                        val deduction = BudgetCalculator.roundCents(minOf(remaining / periods.toDouble(), remaining))
                                                         savingsGoals[idx] = goal.copy(
                                                             totalSavedSoFar = goal.totalSavedSoFar + deduction
                                                         )
                                                     }
                                                 }
                                             } else {
-                                                val contribution = minOf(
+                                                val contribution = BudgetCalculator.roundCents(minOf(
                                                     goal.contributionPerPeriod,
                                                     remaining
-                                                )
+                                                ))
                                                 if (contribution > 0) {
                                                     savingsGoals[idx] = goal.copy(
                                                         totalSavedSoFar = goal.totalSavedSoFar + contribution
@@ -750,8 +781,8 @@ class MainActivity : ComponentActivity() {
                             }
                             saveSavingsGoals()
 
+                            persistAvailableCash()
                             prefs.edit()
-                                .putString("availableCash", availableCash.toString())
                                 .putString("lastRefreshDate", lastRefreshDate.toString())
                                 .apply()
 
@@ -1047,7 +1078,7 @@ class MainActivity : ComponentActivity() {
                         },
                         matchPercent = matchPercent,
                         onMatchPercentChange = {
-                            matchPercent = it; prefs.edit().putFloat("matchPercent", it).apply()
+                            matchPercent = it; prefs.edit().putString("matchPercent", it.toString()).apply()
                             if (isSyncConfigured) {
                                 val clock = lamportClock.tick()
                                 sharedSettings = sharedSettings.copy(matchPercent = it, matchPercent_clock = clock, lastChangedBy = localDeviceId)
@@ -1229,12 +1260,16 @@ class MainActivity : ComponentActivity() {
                             if (budgetStartDate != null && old != null) {
                                 // Reverse old effect
                                 if (!old.date.isBefore(budgetStartDate)) {
-                                    if (old.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(old)) availableCash += old.amount
+                                    val oldRecurringDiff = recurringLinkCashEffect(old)
+                                    if (oldRecurringDiff != null) availableCash -= oldRecurringDiff
+                                    else if (old.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(old)) availableCash += old.amount
                                     else if (old.type == TransactionType.INCOME && !old.isBudgetIncome) availableCash -= old.amount
                                 }
                                 // Apply new effect
                                 if (!updated.date.isBefore(budgetStartDate)) {
-                                    if (updated.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(updated)) availableCash -= updated.amount
+                                    val newRecurringDiff = recurringLinkCashEffect(updated)
+                                    if (newRecurringDiff != null) availableCash += newRecurringDiff
+                                    else if (updated.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(updated)) availableCash -= updated.amount
                                     else if (updated.type == TransactionType.INCOME && !updated.isBudgetIncome) availableCash += updated.amount
                                 }
                                 persistAvailableCash()
@@ -1250,7 +1285,10 @@ class MainActivity : ComponentActivity() {
                                 saveTransactions()
                             }
                             if (budgetStartDate != null && !txn.date.isBefore(budgetStartDate)) {
-                                if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
+                                val recurringDiff = recurringLinkCashEffect(txn)
+                                if (recurringDiff != null) {
+                                    availableCash -= recurringDiff
+                                } else if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
                                     availableCash += txn.amount
                                 } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
                                     availableCash -= txn.amount
@@ -1273,7 +1311,10 @@ class MainActivity : ComponentActivity() {
                             if (budgetStartDate != null) {
                                 for (txn in deletedTxns) {
                                     if (!txn.date.isBefore(budgetStartDate)) {
-                                        if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
+                                        val recurringDiff = recurringLinkCashEffect(txn)
+                                        if (recurringDiff != null) {
+                                            availableCash -= recurringDiff
+                                        } else if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
                                             availableCash += txn.amount
                                         } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
                                             availableCash -= txn.amount
@@ -1332,7 +1373,7 @@ class MainActivity : ComponentActivity() {
                             lastRefreshDate = prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) }
                             weekStartSunday = prefs.getBoolean("weekStartSunday", true)
                             matchDays = prefs.getInt("matchDays", 7)
-                            matchPercent = prefs.getFloat("matchPercent", 1.0f)
+                            matchPercent = prefs.getString("matchPercent", null)?.toDoubleOrNull() ?: prefs.getFloat("matchPercent", 1.0f).toDouble()
                             matchDollar = prefs.getInt("matchDollar", 1)
                             matchChars = prefs.getInt("matchChars", 5)
 
@@ -1432,6 +1473,7 @@ class MainActivity : ComponentActivity() {
                         },
                         isSyncConfigured = isSyncConfigured,
                         isSyncAdmin = isSyncAdmin,
+                        budgetPeriod = budgetPeriod,
                         onBack = { currentScreen = "main" },
                         onHelpClick = { currentScreen = "transactions_help" }
                     )
@@ -1655,9 +1697,19 @@ class MainActivity : ComponentActivity() {
                         resetDayOfWeek = resetDayOfWeek,
                         onResetDayOfWeekChange = {
                             resetDayOfWeek = it; prefs.edit().putInt("resetDayOfWeek", it).apply()
+                            // Keep weekStartSunday in sync: Sunday(7)→true, Monday(1)→false
+                            val newWeekStart = (it == 7)
+                            if (weekStartSunday != newWeekStart) {
+                                weekStartSunday = newWeekStart
+                                prefs.edit().putBoolean("weekStartSunday", newWeekStart).apply()
+                            }
                             if (isSyncConfigured) {
                                 val clock = lamportClock.tick()
-                                sharedSettings = sharedSettings.copy(resetDayOfWeek = it, resetDayOfWeek_clock = clock, lastChangedBy = localDeviceId)
+                                sharedSettings = sharedSettings.copy(
+                                    resetDayOfWeek = it, resetDayOfWeek_clock = clock,
+                                    weekStartSunday = newWeekStart, weekStartSunday_clock = clock,
+                                    lastChangedBy = localDeviceId
+                                )
                                 SharedSettingsRepository.save(context, sharedSettings)
                             }
                         },
@@ -1696,7 +1748,7 @@ class MainActivity : ComponentActivity() {
                             val tz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
                                 ZoneId.of(sharedSettings.familyTimezone) else null
                             budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth, tz)
-                            lastRefreshDate = LocalDate.now()
+                            lastRefreshDate = budgetStartDate
                             availableCash = budgetAmount
                             // Record period ledger entry
                             periodLedger.add(
@@ -1718,10 +1770,10 @@ class MainActivity : ComponentActivity() {
                                 )
                                 SharedSettingsRepository.save(context, sharedSettings)
                             }
+                            persistAvailableCash()
                             prefs.edit()
                                 .putString("budgetStartDate", budgetStartDate.toString())
                                 .putString("lastRefreshDate", lastRefreshDate.toString())
-                                .putString("availableCash", availableCash.toString())
                                 .apply()
                         },
                         isSyncConfigured = isSyncConfigured,
@@ -2160,7 +2212,7 @@ class MainActivity : ComponentActivity() {
                                                 .putString("manualBudgetAmount", merged.manualBudgetAmount.toString())
                                                 .putBoolean("weekStartSunday", merged.weekStartSunday)
                                                 .putInt("matchDays", merged.matchDays)
-                                                .putFloat("matchPercent", merged.matchPercent)
+                                                .putString("matchPercent", merged.matchPercent.toString())
                                                 .putInt("matchDollar", merged.matchDollar)
                                                 .putInt("matchChars", merged.matchChars)
                                             if (budgetStartChanged) {
@@ -2168,6 +2220,8 @@ class MainActivity : ComponentActivity() {
                                                     .putString("budgetStartDate", budgetStartDate.toString())
                                                     .putString("lastRefreshDate", lastRefreshDate.toString())
                                             }
+                                            if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
+                                            availableCash = BudgetCalculator.roundCents(availableCash)
                                             prefsEditor.putString("availableCash", availableCash.toString())
                                             prefsEditor.apply()
                                         }
@@ -2342,7 +2396,9 @@ class MainActivity : ComponentActivity() {
                             }
                             saveTransactions()
                             if (budgetStartDate != null && !dup.date.isBefore(budgetStartDate)) {
-                                if (dup.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(dup)) availableCash += dup.amount
+                                val recurringDiff = recurringLinkCashEffect(dup)
+                                if (recurringDiff != null) availableCash -= recurringDiff
+                                else if (dup.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(dup)) availableCash += dup.amount
                                 else if (dup.type == TransactionType.INCOME && !dup.isBudgetIncome) availableCash -= dup.amount
                                 persistAvailableCash()
                             }

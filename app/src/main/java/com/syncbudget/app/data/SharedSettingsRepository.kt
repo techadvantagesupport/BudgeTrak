@@ -20,7 +20,7 @@ object SharedSettingsRepository {
         json.put("resetHour", settings.resetHour)
         json.put("familyTimezone", settings.familyTimezone)
         json.put("matchDays", settings.matchDays)
-        json.put("matchPercent", settings.matchPercent.toDouble())
+        json.put("matchPercent", settings.matchPercent)
         json.put("matchDollar", settings.matchDollar)
         json.put("matchChars", settings.matchChars)
         json.put("showAttribution", settings.showAttribution)
@@ -67,7 +67,7 @@ object SharedSettingsRepository {
                 resetHour = json.optInt("resetHour", 0),
                 familyTimezone = json.optString("familyTimezone", ""),
                 matchDays = json.optInt("matchDays", 7),
-                matchPercent = json.optDouble("matchPercent", 1.0).toFloat(),
+                matchPercent = json.optDouble("matchPercent", 1.0),
                 matchDollar = json.optInt("matchDollar", 1),
                 matchChars = json.optInt("matchChars", 5),
                 showAttribution = json.optBoolean("showAttribution", false),
@@ -108,7 +108,7 @@ object SharedSettingsRepository {
         json.put("resetHour", settings.resetHour)
         json.put("familyTimezone", settings.familyTimezone)
         json.put("matchDays", settings.matchDays)
-        json.put("matchPercent", settings.matchPercent.toDouble())
+        json.put("matchPercent", settings.matchPercent)
         json.put("matchDollar", settings.matchDollar)
         json.put("matchChars", settings.matchChars)
         json.put("showAttribution", settings.showAttribution)
@@ -146,7 +146,7 @@ object SharedSettingsRepository {
             resetHour = json.optInt("resetHour", 0),
             familyTimezone = json.optString("familyTimezone", ""),
             matchDays = json.optInt("matchDays", 7),
-            matchPercent = json.optDouble("matchPercent", 1.0).toFloat(),
+            matchPercent = json.optDouble("matchPercent", 1.0),
             matchDollar = json.optInt("matchDollar", 1),
             matchChars = json.optInt("matchChars", 5),
             showAttribution = json.optBoolean("showAttribution", false),

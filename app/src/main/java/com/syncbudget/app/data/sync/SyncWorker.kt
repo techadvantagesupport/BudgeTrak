@@ -141,7 +141,24 @@ class SyncWorker(
             result.mergedSavingsGoals?.let { SavingsGoalRepository.save(applicationContext, it) }
             result.mergedAmortizationEntries?.let { AmortizationRepository.save(applicationContext, it) }
             result.mergedCategories?.let { CategoryRepository.save(applicationContext, it) }
-            result.mergedSharedSettings?.let { SharedSettingsRepository.save(applicationContext, it) }
+            result.mergedSharedSettings?.let { merged ->
+                SharedSettingsRepository.save(applicationContext, merged)
+                // Write merged settings to app_prefs so the UI picks them up on next launch
+                applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit()
+                    .putString("currencySymbol", merged.currency)
+                    .putString("budgetPeriod", merged.budgetPeriod)
+                    .putInt("resetHour", merged.resetHour)
+                    .putInt("resetDayOfWeek", merged.resetDayOfWeek)
+                    .putInt("resetDayOfMonth", merged.resetDayOfMonth)
+                    .putBoolean("isManualBudgetEnabled", merged.isManualBudgetEnabled)
+                    .putString("manualBudgetAmount", merged.manualBudgetAmount.toString())
+                    .putBoolean("weekStartSunday", merged.weekStartSunday)
+                    .putInt("matchDays", merged.matchDays)
+                    .putString("matchPercent", merged.matchPercent.toString())
+                    .putInt("matchDollar", merged.matchDollar)
+                    .putInt("matchChars", merged.matchChars)
+                    .apply()
+            }
             // Persist updated category ID remap
             result.catIdRemap?.let { remap ->
                 val json = JSONObject(remap.mapKeys { it.key.toString() })
@@ -160,12 +177,17 @@ class SyncWorker(
                     }
                     var cash = appPrefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
                     var cashChanged = false
+                    val mergedRecurring = result.mergedRecurringExpenses ?: recurringExpenses
                     for (txn in newRemoteTxns) {
-                        val isBudgetAccounted = txn.type == TransactionType.EXPENSE && (
-                            txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null
-                        )
+                        val isBudgetAccounted = txn.type == TransactionType.EXPENSE && txn.linkedAmortizationEntryId != null
+                        val recurringDiff = if (txn.type == TransactionType.EXPENSE && txn.linkedRecurringExpenseId != null)
+                            mergedRecurring.find { it.id == txn.linkedRecurringExpenseId }?.let { it.amount - txn.amount }
+                        else null
                         if (!txn.deleted && !txn.date.isBefore(budgetStartDate)) {
-                            if (txn.type == TransactionType.EXPENSE && !isBudgetAccounted) {
+                            if (recurringDiff != null) {
+                                cash += recurringDiff
+                                cashChanged = true
+                            } else if (txn.type == TransactionType.EXPENSE && !isBudgetAccounted) {
                                 cash -= txn.amount
                                 cashChanged = true
                             } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
