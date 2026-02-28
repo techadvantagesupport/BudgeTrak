@@ -8,6 +8,7 @@ import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.SharedSettings
 import com.syncbudget.app.data.Transaction
+import com.syncbudget.app.data.sync.PeriodLedgerEntry
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -152,6 +153,17 @@ object DeltaBuilder {
         ensureField(fields, "tag", cat.tag, cat.tag_clock)
         ensureField(fields, "deviceId", cat.deviceId, cat.deviceId_clock)
         return RecordDelta("category", "upsert", cat.id, cat.deviceId, fields)
+    }
+
+    fun buildPeriodLedgerDelta(entry: PeriodLedgerEntry, lastPushedClock: Long): RecordDelta? {
+        if (entry.clock <= lastPushedClock) return null
+        val fields = mutableMapOf<String, FieldDelta>()
+        fields["periodStartDate"] = FieldDelta(entry.periodStartDate.toString(), entry.clock)
+        fields["appliedAmount"] = FieldDelta(entry.appliedAmount, entry.clock)
+        fields["clockAtReset"] = FieldDelta(entry.clockAtReset, entry.clock)
+        fields["corrected"] = FieldDelta(entry.corrected, entry.clock)
+        fields["deviceId"] = FieldDelta(entry.deviceId, entry.clock)
+        return RecordDelta("period_ledger", "upsert", entry.id, entry.deviceId, fields)
     }
 
     fun buildSharedSettingsDelta(settings: SharedSettings, lastPushedClock: Long): RecordDelta? {

@@ -14,7 +14,6 @@ import com.syncbudget.app.data.RecurringExpenseRepository
 import com.syncbudget.app.data.SavingsGoalRepository
 import com.syncbudget.app.data.SharedSettingsRepository
 import com.syncbudget.app.data.TransactionRepository
-import com.syncbudget.app.data.TransactionType
 import android.util.Base64
 import java.time.LocalDate
 import org.json.JSONObject
@@ -144,17 +143,17 @@ class SyncWorker(
             } catch (_: Exception) { emptyMap() }
         } else emptyMap<Int, Int>()
 
+        val periodLedger = PeriodLedgerRepository.load(applicationContext)
+
         val result = engine.sync(
             transactions, recurringExpenses, incomeSources,
             savingsGoals, amortizationEntries, categories,
             sharedSettings,
-            existingCatIdRemap = existingRemap
+            existingCatIdRemap = existingRemap,
+            periodLedgerEntries = periodLedger
         )
 
         if (result.success) {
-            // Capture pre-merge transaction IDs for cash adjustment
-            val premergeLocalTxnIds = transactions.map { it.id }.toSet()
-
             // Save merged data back to JSON files
             result.mergedTransactions?.let { TransactionRepository.save(applicationContext, it) }
             result.mergedRecurringExpenses?.let { RecurringExpenseRepository.save(applicationContext, it) }
@@ -162,6 +161,7 @@ class SyncWorker(
             result.mergedSavingsGoals?.let { SavingsGoalRepository.save(applicationContext, it) }
             result.mergedAmortizationEntries?.let { AmortizationRepository.save(applicationContext, it) }
             result.mergedCategories?.let { CategoryRepository.save(applicationContext, it) }
+            result.mergedPeriodLedgerEntries?.let { PeriodLedgerRepository.save(applicationContext, it) }
             result.mergedSharedSettings?.let { merged ->
                 SharedSettingsRepository.save(applicationContext, merged)
                 // Write merged settings to app_prefs so the UI picks them up on next launch
@@ -186,43 +186,19 @@ class SyncWorker(
                 syncPrefs.edit().putString("catIdRemap", json.toString()).apply()
             }
 
-            // Adjust availableCash for new remote transactions (matches foreground logic)
-            if (result.mergedTransactions != null) {
-                val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                val budgetStartDate = appPrefs.getString("budgetStartDate", null)?.let {
-                    try { LocalDate.parse(it) } catch (_: Exception) { null }
-                }
-                if (budgetStartDate != null) {
-                    val newRemoteTxns = result.mergedTransactions!!.filter {
-                        it.deviceId != deviceId && it.id !in premergeLocalTxnIds
-                    }
-                    var cash = appPrefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
-                    var cashChanged = false
-                    val mergedRecurring = result.mergedRecurringExpenses ?: recurringExpenses
-                    for (txn in newRemoteTxns) {
-                        val isBudgetAccounted = txn.type == TransactionType.EXPENSE && txn.linkedAmortizationEntryId != null
-                        val recurringDiff = if (txn.type == TransactionType.EXPENSE && txn.linkedRecurringExpenseId != null)
-                            mergedRecurring.find { it.id == txn.linkedRecurringExpenseId }?.let { it.amount - txn.amount }
-                        else null
-                        if (!txn.deleted && !txn.date.isBefore(budgetStartDate)) {
-                            if (recurringDiff != null) {
-                                cash += recurringDiff
-                                cashChanged = true
-                            } else if (txn.type == TransactionType.EXPENSE && !isBudgetAccounted) {
-                                cash -= txn.amount
-                                cashChanged = true
-                            } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
-                                cash += txn.amount
-                                cashChanged = true
-                            }
-                        }
-                    }
-                    if (cashChanged) {
-                        if (cash.isNaN() || cash.isInfinite()) cash = 0.0
-                        cash = BudgetCalculator.roundCents(cash)
-                        appPrefs.edit().putString("availableCash", cash.toString()).apply()
-                    }
-                }
+            // Recompute availableCash from synced data (deterministic — all devices converge)
+            val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            val budgetStartDate = appPrefs.getString("budgetStartDate", null)?.let {
+                try { LocalDate.parse(it) } catch (_: Exception) { null }
+            }
+            if (budgetStartDate != null) {
+                val mergedLedger = result.mergedPeriodLedgerEntries ?: periodLedger
+                val activeTxns = (result.mergedTransactions ?: transactions).filter { !it.deleted }
+                val activeRE = (result.mergedRecurringExpenses ?: recurringExpenses).filter { !it.deleted }
+                val cash = BudgetCalculator.recomputeAvailableCash(
+                    budgetStartDate, mergedLedger, activeTxns, activeRE
+                )
+                appPrefs.edit().putString("availableCash", cash.toString()).apply()
             }
 
             return Result.success()

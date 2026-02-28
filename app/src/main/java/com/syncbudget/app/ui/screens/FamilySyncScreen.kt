@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
-import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Sync
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
@@ -116,7 +115,6 @@ fun FamilySyncScreen(
     generatedPairingCode: String?,
     onDismissPairingCode: () -> Unit,
     onRenameDevice: (deviceId: String, newName: String) -> Unit = { _, _ -> },
-    onSyncCashToAdmin: () -> Unit = {},
     onHelpClick: () -> Unit = {},
     onBack: () -> Unit
 ) {
@@ -414,23 +412,6 @@ fun FamilySyncScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(S.sync.syncNow)
-                    }
-                }
-
-                // Sync Cash to Admin button (admin only)
-                item {
-                    OutlinedButton(
-                        onClick = onSyncCashToAdmin,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = isAdmin
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.AccountBalance,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(S.sync.syncCashToAdmin)
                     }
                 }
 

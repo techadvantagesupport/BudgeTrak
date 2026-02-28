@@ -7,6 +7,7 @@ import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.SharedSettings
 import com.syncbudget.app.data.Transaction
+import com.syncbudget.app.data.sync.PeriodLedgerEntry
 
 object CrdtMerge {
 
@@ -216,6 +217,15 @@ object CrdtMerge {
             deleted_clock = mergedDeletedClock,
             deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
         )
+    }
+
+    /** Whole-entry LWW merge for period ledger (entries are immutable). */
+    fun mergePeriodLedgerEntry(
+        local: PeriodLedgerEntry,
+        remote: PeriodLedgerEntry,
+        localDeviceId: String
+    ): PeriodLedgerEntry {
+        return if (shouldAcceptRemote(local.clock, remote.clock, localDeviceId, remote.deviceId)) remote else local
     }
 
     fun mergeSharedSettings(

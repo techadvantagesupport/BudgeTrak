@@ -14,6 +14,7 @@ import com.syncbudget.app.data.TransactionType
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 data class FullState(
     val transactions: List<Transaction>,
@@ -22,7 +23,8 @@ data class FullState(
     val savingsGoals: List<SavingsGoal>,
     val amortizationEntries: List<AmortizationEntry>,
     val categories: List<Category>,
-    val sharedSettings: SharedSettings = SharedSettings()
+    val sharedSettings: SharedSettings = SharedSettings(),
+    val periodLedgerEntries: List<PeriodLedgerEntry> = emptyList()
 )
 
 object SnapshotManager {
@@ -34,7 +36,8 @@ object SnapshotManager {
         savingsGoals: List<SavingsGoal>,
         amortizationEntries: List<AmortizationEntry>,
         categories: List<Category>,
-        sharedSettings: SharedSettings = SharedSettings()
+        sharedSettings: SharedSettings = SharedSettings(),
+        periodLedgerEntries: List<PeriodLedgerEntry> = emptyList()
     ): JSONObject {
         val json = JSONObject()
 
@@ -206,6 +209,20 @@ object SnapshotManager {
             catArray.put(obj)
         }
         json.put("categories", catArray)
+
+        // Period ledger
+        val plArray = JSONArray()
+        for (e in periodLedgerEntries) {
+            val obj = JSONObject()
+            obj.put("periodStartDate", e.periodStartDate.toString())
+            obj.put("appliedAmount", e.appliedAmount)
+            obj.put("clockAtReset", e.clockAtReset)
+            obj.put("corrected", e.corrected)
+            obj.put("deviceId", e.deviceId)
+            obj.put("clock", e.clock)
+            plArray.put(obj)
+        }
+        json.put("periodLedger", plArray)
 
         json.put("sharedSettings", SharedSettingsRepository.toJson(sharedSettings))
 
@@ -391,6 +408,21 @@ object SnapshotManager {
             }
         } else emptyList()
 
+        val periodLedgerEntries = if (json.has("periodLedger")) {
+            val arr = json.getJSONArray("periodLedger")
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                PeriodLedgerEntry(
+                    periodStartDate = try { LocalDateTime.parse(obj.getString("periodStartDate")) } catch (_: Exception) { LocalDateTime.now() },
+                    appliedAmount = obj.getDouble("appliedAmount"),
+                    clockAtReset = obj.optLong("clockAtReset", 0L),
+                    corrected = obj.optBoolean("corrected", false),
+                    deviceId = obj.optString("deviceId", ""),
+                    clock = obj.optLong("clock", 0L)
+                )
+            }
+        } else emptyList()
+
         val loadedSettings = if (json.has("sharedSettings")) {
             SharedSettingsRepository.fromJson(json.getJSONObject("sharedSettings"))
         } else SharedSettings()
@@ -402,7 +434,8 @@ object SnapshotManager {
             savingsGoals = savingsGoals,
             amortizationEntries = amortizationEntries,
             categories = categories,
-            sharedSettings = loadedSettings
+            sharedSettings = loadedSettings,
+            periodLedgerEntries = periodLedgerEntries
         )
     }
 }

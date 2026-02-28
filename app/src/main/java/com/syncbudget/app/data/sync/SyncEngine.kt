@@ -18,6 +18,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 data class SyncResult(
     val success: Boolean,
@@ -30,6 +31,7 @@ data class SyncResult(
     val mergedSavingsGoals: List<SavingsGoal>? = null,
     val mergedAmortizationEntries: List<AmortizationEntry>? = null,
     val mergedCategories: List<Category>? = null,
+    val mergedPeriodLedgerEntries: List<PeriodLedgerEntry>? = null,
     val mergedSharedSettings: SharedSettings? = null,
     val pendingAdminClaim: AdminClaim? = null,
     val catIdRemap: Map<Int, Int>? = null,
@@ -62,7 +64,8 @@ class SyncEngine(
         amortizationEntries: List<AmortizationEntry>,
         categories: List<Category>,
         sharedSettings: SharedSettings = SharedSettingsRepository.load(context),
-        existingCatIdRemap: Map<Int, Int> = emptyMap()
+        existingCatIdRemap: Map<Int, Int> = emptyMap(),
+        periodLedgerEntries: List<PeriodLedgerEntry> = emptyList()
     ): SyncResult {
         try {
             // Step 0: Stale check — block sync if too many days without success
@@ -119,6 +122,7 @@ class SyncEngine(
             val baseSg = snapshotState?.savingsGoals ?: savingsGoals
             val baseAe = snapshotState?.amortizationEntries ?: amortizationEntries
             val baseCat = snapshotState?.categories ?: categories
+            val basePl = snapshotState?.periodLedgerEntries ?: periodLedgerEntries
             val baseSettings = snapshotState?.sharedSettings ?: sharedSettings
 
             var mergedTxns = baseTxns.toMutableList()
@@ -127,6 +131,7 @@ class SyncEngine(
             var mergedSg = baseSg.toMutableList()
             var mergedAe = baseAe.toMutableList()
             var mergedCat = baseCat.toMutableList()
+            var mergedPl = basePl.toMutableList()
             var mergedSettings = baseSettings
             var settingsChanged = false
             var budgetRecalcNeeded = false
@@ -192,6 +197,9 @@ class SyncEngine(
                                 }
                             }
                         }
+                        "period_ledger" -> mergedPl = mergeRecordIntoList(
+                            mergedPl, change, deviceId
+                        ) { local, remote -> CrdtMerge.mergePeriodLedgerEntry(local, remote, deviceId) }
                         "shared_settings" -> {
                             val remoteSettings = deserializeSharedSettings(change, mergedSettings)
                             val before = mergedSettings
@@ -357,6 +365,9 @@ class SyncEngine(
             for (entry in amortizationEntries) {
                 DeltaBuilder.buildAmortizationEntryDelta(entry, pushClock)?.let { localDeltas.add(it) }
             }
+            for (entry in periodLedgerEntries) {
+                DeltaBuilder.buildPeriodLedgerDelta(entry, pushClock)?.let { localDeltas.add(it) }
+            }
             // Categories always pushed with pushClock=0 so all fields are
             // included — receiving devices need every device's category IDs
             // to build catIdRemap for transaction categoryAmounts.
@@ -415,7 +426,7 @@ class SyncEngine(
             // Step 8: Snapshot maintenance (every 50 deltas)
             if (newSyncVersion > 0 && newSyncVersion % 50 == 0L) {
                 val snapshotJson = SnapshotManager.serializeFullState(
-                    mergedTxns, mergedRe, mergedIs, mergedSg, mergedAe, mergedCat, mergedSettings
+                    mergedTxns, mergedRe, mergedIs, mergedSg, mergedAe, mergedCat, mergedSettings, mergedPl
                 )
                 val snapshotBytes = snapshotJson.toString().toByteArray()
                 val encryptedSnapshot = CryptoHelper.encryptWithKey(snapshotBytes, encryptionKey)
@@ -467,6 +478,7 @@ class SyncEngine(
                 mergedSavingsGoals = if (hasChanges) mergedSg else null,
                 mergedAmortizationEntries = if (hasChanges) mergedAe else null,
                 mergedCategories = if (hasChanges) mergedCat else null,
+                mergedPeriodLedgerEntries = if (hasChanges) mergedPl else null,
                 mergedSharedSettings = if (settingsChanged || snapshotApplied) mergedSettings else null,
                 pendingAdminClaim = adminClaim,
                 catIdRemap = catIdRemap
@@ -532,6 +544,7 @@ class SyncEngine(
             "savings_goal" -> deserializeSavingsGoal(change)
             "amortization_entry" -> deserializeAmortizationEntry(change)
             "category" -> deserializeCategory(change)
+            "period_ledger" -> deserializePeriodLedgerEntry(change)
             else -> return list
         }
         val remote = deserialized as? T
@@ -571,6 +584,7 @@ class SyncEngine(
         is SavingsGoal -> record.id
         is AmortizationEntry -> record.id
         is Category -> record.id
+        is PeriodLedgerEntry -> record.id
         else -> -1
     }
 
@@ -585,6 +599,7 @@ class SyncEngine(
         is AmortizationEntry -> record.amount_clock == 0L || record.source_clock == 0L
         is SavingsGoal -> record.name_clock == 0L
         is Category -> record.name_clock == 0L
+        is PeriodLedgerEntry -> false  // entries are immutable, never skeleton
         else -> false
     }
 
@@ -727,6 +742,18 @@ class SyncEngine(
             deleted_clock = f["deleted"]?.clock ?: 0L,
             isPaused_clock = f["isPaused"]?.clock ?: 0L,
             deviceId_clock = f["deviceId"]?.clock ?: 0L
+        )
+    }
+
+    private fun deserializePeriodLedgerEntry(change: RecordDelta): PeriodLedgerEntry {
+        val f = change.fields
+        return PeriodLedgerEntry(
+            periodStartDate = try { LocalDateTime.parse(f["periodStartDate"]?.value as? String) } catch (_: Exception) { LocalDateTime.now() },
+            appliedAmount = (f["appliedAmount"]?.value as? Number)?.toDouble() ?: 0.0,
+            clockAtReset = (f["clockAtReset"]?.value as? Number)?.toLong() ?: 0L,
+            corrected = f["corrected"]?.value as? Boolean ?: false,
+            deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
+            clock = f["periodStartDate"]?.clock ?: 0L  // whole-entry clock
         )
     }
 

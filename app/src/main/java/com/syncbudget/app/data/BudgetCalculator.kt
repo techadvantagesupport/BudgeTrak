@@ -1,5 +1,6 @@
 package com.syncbudget.app.data
 
+import com.syncbudget.app.data.sync.PeriodLedgerEntry
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -126,9 +127,9 @@ object BudgetCalculator {
     fun calculateSafeBudgetAmount(
         incomeSources: List<IncomeSource>,
         recurringExpenses: List<RecurringExpense>,
-        budgetPeriod: BudgetPeriod
+        budgetPeriod: BudgetPeriod,
+        today: LocalDate = LocalDate.now()
     ): Double {
-        val today = LocalDate.now()
         val oneYearAhead = today.plusYears(1)
 
         val periodsPerYear = countPeriodsCompleted(today, oneYearAhead, budgetPeriod)
@@ -197,9 +198,9 @@ object BudgetCalculator {
 
     fun activeAmortizationDeductions(
         entries: List<AmortizationEntry>,
-        budgetPeriod: BudgetPeriod
+        budgetPeriod: BudgetPeriod,
+        today: LocalDate = LocalDate.now()
     ): Double {
-        val today = LocalDate.now()
         var total = 0.0
         for (entry in entries) {
             if (entry.isPaused) continue
@@ -219,9 +220,9 @@ object BudgetCalculator {
 
     fun activeSavingsGoalDeductions(
         goals: List<SavingsGoal>,
-        budgetPeriod: BudgetPeriod
+        budgetPeriod: BudgetPeriod,
+        today: LocalDate = LocalDate.now()
     ): Double {
-        val today = LocalDate.now()
         var total = 0.0
         for (goal in goals) {
             if (goal.isPaused) continue
@@ -244,5 +245,66 @@ object BudgetCalculator {
             }
         }
         return total
+    }
+
+    /** Compute the full budgetAmount from synced data. Reusable in SyncWorker. */
+    fun computeFullBudgetAmount(
+        incomeSources: List<IncomeSource>,
+        recurringExpenses: List<RecurringExpense>,
+        amortizationEntries: List<AmortizationEntry>,
+        savingsGoals: List<SavingsGoal>,
+        budgetPeriod: BudgetPeriod,
+        isManualBudgetEnabled: Boolean,
+        manualBudgetAmount: Double,
+        today: LocalDate = LocalDate.now()
+    ): Double {
+        val base = if (isManualBudgetEnabled) manualBudgetAmount
+                   else calculateSafeBudgetAmount(incomeSources, recurringExpenses, budgetPeriod, today)
+        val amortDed = activeAmortizationDeductions(amortizationEntries, budgetPeriod, today)
+        val savingsDed = activeSavingsGoalDeductions(savingsGoals, budgetPeriod, today)
+        return roundCents(maxOf(0.0, base - amortDed - savingsDed))
+    }
+
+    /**
+     * Deterministic cash from synced data. All devices with the same synced data
+     * compute the same result — no admin authority needed.
+     *
+     * Formula:
+     *   Σ(ledger appliedAmounts where date ≥ budgetStart)
+     *   − Σ(active expenses, excl. amort-linked & recurring-linked)
+     *   + Σ(active non-budget income)
+     *   + Σ(recurring diffs for recurring-linked expenses)
+     */
+    fun recomputeAvailableCash(
+        budgetStartDate: LocalDate,
+        periodLedgerEntries: List<PeriodLedgerEntry>,
+        activeTransactions: List<Transaction>,
+        activeRecurringExpenses: List<RecurringExpense>
+    ): Double {
+        // Sum period credits from synced ledger
+        var cash = 0.0
+        for (entry in periodLedgerEntries) {
+            if (!entry.periodStartDate.toLocalDate().isBefore(budgetStartDate)) {
+                cash += entry.appliedAmount
+            }
+        }
+        // Apply transaction effects
+        for (txn in activeTransactions) {
+            if (txn.date.isBefore(budgetStartDate)) continue
+            if (txn.type == TransactionType.EXPENSE) {
+                if (txn.linkedAmortizationEntryId != null) continue // fully budget-accounted
+                if (txn.linkedRecurringExpenseId != null) {
+                    // Recurring-linked: only the diff matters (budgeted - actual)
+                    val re = activeRecurringExpenses.find { it.id == txn.linkedRecurringExpenseId }
+                    if (re != null) cash += (re.amount - txn.amount)
+                    else cash -= txn.amount // fallback if RE not synced yet
+                } else {
+                    cash -= txn.amount
+                }
+            } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
+                cash += txn.amount
+            }
+        }
+        return roundCents(cash)
     }
 }

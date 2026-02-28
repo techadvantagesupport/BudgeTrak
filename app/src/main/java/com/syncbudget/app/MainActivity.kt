@@ -39,6 +39,7 @@ import com.syncbudget.app.data.RecurringExpenseRepository
 import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionRepository
 import com.syncbudget.app.data.TransactionType
+import com.syncbudget.app.data.generateTransactionId
 import com.syncbudget.app.data.SharedSettings
 import com.syncbudget.app.data.SharedSettingsRepository
 import com.syncbudget.app.data.sync.DeviceInfo
@@ -308,13 +309,21 @@ class MainActivity : ComponentActivity() {
             var pendingAdminClaim by remember { mutableStateOf<AdminClaim?>(null) }
 
             // availableCash may go negative (= overspent). Guard against NaN/Infinity.
-            // Only persists to local prefs. CRDT sync of availableCash happens
-            // exclusively during budget reset to avoid LWW conflicts between devices
-            // that independently compute cash from the same synced transactions.
             fun persistAvailableCash() {
                 if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
                 availableCash = BudgetCalculator.roundCents(availableCash)
                 prefs.edit().putString("availableCash", availableCash.toString()).apply()
+            }
+
+            // Deterministic cash recomputation from synced data.
+            // All devices with the same synced data compute the same result.
+            fun recomputeCash() {
+                if (budgetStartDate == null) return
+                availableCash = BudgetCalculator.recomputeAvailableCash(
+                    budgetStartDate!!, periodLedger.toList(),
+                    transactions.toList().active, recurringExpenses.toList().active
+                )
+                persistAvailableCash()
             }
 
             // Check if an expense transaction is fully accounted for in the budget
@@ -438,12 +447,10 @@ class MainActivity : ComponentActivity() {
                             amortizationEntries.toList(),
                             categories.toList(),
                             sharedSettings,
-                            existingCatIdRemap = existingRemap
+                            existingCatIdRemap = existingRemap,
+                            periodLedgerEntries = periodLedger.toList()
                         )
                         if (result.success) {
-                            // Capture pre-merge transaction IDs for availableCash adjustment
-                            val premergeLocalTxnIds = transactions.map { it.id }.toSet()
-
                             Snapshot.withMutableSnapshot {
                                 result.mergedTransactions?.let { merged ->
                                     transactions.clear()
@@ -469,6 +476,10 @@ class MainActivity : ComponentActivity() {
                                     categories.clear()
                                     categories.addAll(merged)
                                 }
+                                result.mergedPeriodLedgerEntries?.let { merged ->
+                                    periodLedger.clear()
+                                    periodLedger.addAll(merged)
+                                }
                             }
                             result.mergedTransactions?.let { saveTransactions() }
                             result.mergedRecurringExpenses?.let { saveRecurringExpenses() }
@@ -476,29 +487,7 @@ class MainActivity : ComponentActivity() {
                             result.mergedSavingsGoals?.let { saveSavingsGoals() }
                             result.mergedAmortizationEntries?.let { saveAmortizationEntries() }
                             result.mergedCategories?.let { saveCategories() }
-                            // Adjust availableCash for new remote transactions (#9)
-                            if (result.mergedTransactions != null && budgetStartDate != null) {
-                                val newRemoteTxns = result.mergedTransactions!!.filter {
-                                    it.deviceId != localDeviceId && it.id !in premergeLocalTxnIds
-                                }
-                                var cashChanged = false
-                                for (txn in newRemoteTxns) {
-                                    if (!txn.deleted && !txn.date.isBefore(budgetStartDate)) {
-                                        val recurringDiff = recurringLinkCashEffect(txn)
-                                        if (recurringDiff != null) {
-                                            availableCash += recurringDiff
-                                            cashChanged = true
-                                        } else if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
-                                            availableCash -= txn.amount
-                                            cashChanged = true
-                                        } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
-                                            availableCash += txn.amount
-                                            cashChanged = true
-                                        }
-                                    }
-                                }
-                                if (cashChanged) persistAvailableCash()
-                            }
+                            result.mergedPeriodLedgerEntries?.let { savePeriodLedger() }
                             result.mergedSharedSettings?.let { merged ->
                                 sharedSettings = merged
                                 // Apply synced settings to local state
@@ -514,27 +503,14 @@ class MainActivity : ComponentActivity() {
                                 matchPercent = merged.matchPercent
                                 matchDollar = merged.matchDollar
                                 matchChars = merged.matchChars
-                                // Apply synced budgetStartDate and re-initialize budget
+                                // Apply synced budgetStartDate
                                 val syncedStartDate = merged.budgetStartDate?.let {
                                     try { LocalDate.parse(it) } catch (_: Exception) { null }
                                 }
                                 val budgetStartChanged = syncedStartDate != null && syncedStartDate != budgetStartDate
-                                // Detect if admin pushed a new availableCash (reset or manual sync).
-                                // Only non-admin devices adopt remote cash — admin is authoritative.
-                                val lastSeenAcClock = syncPrefs.getLong("lastSeenAvailableCash_clock", 0L)
-                                val cashPushedByRemote = !isSyncAdmin &&
-                                    merged.availableCash_clock > lastSeenAcClock
                                 if (budgetStartChanged) {
                                     budgetStartDate = syncedStartDate
                                     lastRefreshDate = LocalDate.now()
-                                    // Use synced availableCash from admin reset
-                                    availableCash = if (merged.availableCash_clock > 0L) merged.availableCash else budgetAmount
-                                    syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
-                                } else if (cashPushedByRemote) {
-                                    // Admin used "Sync Cash to Admin" — adopt their value
-                                    availableCash = merged.availableCash
-                                    persistAvailableCash()
-                                    syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
                                 }
                                 // Write all synced settings to app_prefs
                                 val prefsEditor = prefs.edit()
@@ -555,13 +531,10 @@ class MainActivity : ComponentActivity() {
                                         .putString("budgetStartDate", budgetStartDate.toString())
                                         .putString("lastRefreshDate", lastRefreshDate.toString())
                                 }
-                                // Always persist availableCash after sync to keep
-                                // prefs in sync with Compose state
-                                if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
-                                availableCash = BudgetCalculator.roundCents(availableCash)
-                                prefsEditor.putString("availableCash", availableCash.toString())
                                 prefsEditor.apply()
                             }
+                            // Recompute cash from synced data
+                            recomputeCash()
                             // Persist updated category ID remap
                             result.catIdRemap?.let { remap ->
                                 val json = org.json.JSONObject(remap.mapKeys { it.key.toString() })
@@ -645,17 +618,7 @@ class MainActivity : ComponentActivity() {
                 )
                 transactions.add(stamped)
                 saveTransactions()
-                if (budgetStartDate != null && !txn.date.isBefore(budgetStartDate)) {
-                    val recurringDiff = recurringLinkCashEffect(txn)
-                    if (recurringDiff != null) {
-                        availableCash += recurringDiff
-                    } else if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
-                        availableCash -= txn.amount
-                    } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
-                        availableCash += txn.amount
-                    }
-                    persistAvailableCash()
-                }
+                recomputeCash()
             }
 
             // Matching chain for dashboard-added transactions
@@ -720,24 +683,33 @@ class MainActivity : ComponentActivity() {
                             now.toLocalDate()
                         val missedPeriods = BudgetCalculator.countPeriodsCompleted(lastRefreshDate!!, today, budgetPeriod)
                         if (missedPeriods > 0) {
-                            availableCash += budgetAmount * missedPeriods
                             lastRefreshDate = today
 
-                            // Record period ledger entry (deduplicate across devices)
-                            val nowDateTime = LocalDateTime.now()
-                            val alreadyRecorded = periodLedger.any {
-                                it.periodStartDate.toLocalDate() == nowDateTime.toLocalDate()
-                            }
-                            if (!alreadyRecorded) {
-                                periodLedger.add(
-                                    PeriodLedgerEntry(
-                                        periodStartDate = nowDateTime,
-                                        appliedAmount = budgetAmount,
-                                        clockAtReset = lamportClock.value
+                            // Create one ledger entry per missed period with CRDT stamping
+                            for (period in 0 until missedPeriods) {
+                                val periodsBack = (missedPeriods - 1 - period).toLong()
+                                val periodDate = when (budgetPeriod) {
+                                    BudgetPeriod.DAILY -> today.minusDays(periodsBack)
+                                    BudgetPeriod.WEEKLY -> today.minusWeeks(periodsBack)
+                                    BudgetPeriod.MONTHLY -> today.minusMonths(periodsBack)
+                                }
+                                val alreadyRecorded = periodLedger.any {
+                                    it.periodStartDate.toLocalDate() == periodDate
+                                }
+                                if (!alreadyRecorded) {
+                                    val entryClock = lamportClock.tick()
+                                    periodLedger.add(
+                                        PeriodLedgerEntry(
+                                            periodStartDate = periodDate.atStartOfDay(),
+                                            appliedAmount = budgetAmount,
+                                            clockAtReset = entryClock,
+                                            deviceId = localDeviceId,
+                                            clock = entryClock
+                                        )
                                     )
-                                )
-                                savePeriodLedger()
+                                }
                             }
+                            savePeriodLedger()
 
                             // Update savings goals totalSavedSoFar for non-paused, non-complete items.
                             // Use the correct date for each catch-up period so periodsLeft
@@ -784,22 +756,10 @@ class MainActivity : ComponentActivity() {
                             }
                             saveSavingsGoals()
 
-                            persistAvailableCash()
+                            recomputeCash()
                             prefs.edit()
                                 .putString("lastRefreshDate", lastRefreshDate.toString())
                                 .apply()
-
-                            // Admin pushes refreshed cash to CRDT so non-admin devices
-                            // can adopt it on next sync
-                            if (isSyncConfigured && isSyncAdmin) {
-                                val clock = lamportClock.tick()
-                                sharedSettings = sharedSettings.copy(
-                                    availableCash = availableCash,
-                                    availableCash_clock = clock,
-                                    lastChangedBy = localDeviceId
-                                )
-                                SharedSettingsRepository.save(context, sharedSettings)
-                            }
                         }
                     }
                     delay(30_000) // Re-check every 30 seconds
@@ -986,7 +946,7 @@ class MainActivity : ComponentActivity() {
                         syncDevices = syncDevices,
                         localDeviceId = localDeviceId,
                         onSupercharge = { allocations, modes ->
-                            var totalDeducted = 0.0
+                            val deposits = mutableListOf<Pair<String, Double>>() // goalName to capped amount
                             for ((goalId, amount) in allocations) {
                                 val idx = savingsGoals.indexOfFirst { it.id == goalId }
                                 if (idx >= 0) {
@@ -1000,7 +960,6 @@ class MainActivity : ComponentActivity() {
                                             goal.targetDate != null &&
                                             mode == SuperchargeMode.ACHIEVE_SOONER
                                         ) {
-                                            // Target-date goal, Achieve Sooner: move target date earlier
                                             val currentContribution = calculatePerPeriodDeduction(goal, budgetPeriod)
                                             if (currentContribution > 0 && newRemaining > 0) {
                                                 val periodsNeeded = ceil(newRemaining / currentContribution).toLong()
@@ -1022,7 +981,6 @@ class MainActivity : ComponentActivity() {
                                             goal.contributionPerPeriod > 0 &&
                                             mode == SuperchargeMode.REDUCE_CONTRIBUTIONS
                                         ) {
-                                            // Fixed-contribution goal, Reduce: lower contribution rate
                                             val currentPeriodsRemaining = ceil(
                                                 remaining / goal.contributionPerPeriod
                                             ).toLong()
@@ -1039,14 +997,25 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                         savingsGoals[idx] = updatedGoal
-                                        totalDeducted += capped
+                                        deposits.add(goal.name to capped)
                                     }
                                 }
                             }
-                            if (totalDeducted > 0) {
+                            if (deposits.isNotEmpty()) {
                                 saveSavingsGoals()
-                                availableCash -= totalDeducted
-                                persistAvailableCash()
+                                // Create expense transactions so recomputation includes
+                                // the cash outflow (CRDT-correct — syncs to other devices).
+                                val currentIds = transactions.map { it.id }.toSet()
+                                for ((goalName, depositAmount) in deposits) {
+                                    val txn = Transaction(
+                                        id = generateTransactionId(currentIds + transactions.map { it.id }.toSet()),
+                                        source = "Savings: $goalName",
+                                        amount = depositAmount,
+                                        date = LocalDate.now(),
+                                        type = TransactionType.EXPENSE
+                                    )
+                                    addTransactionWithBudgetEffect(txn)
+                                }
                             }
                         }
                     )
@@ -1264,23 +1233,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 saveTransactions()
                             }
-                            if (budgetStartDate != null && old != null) {
-                                // Reverse old effect
-                                if (!old.date.isBefore(budgetStartDate)) {
-                                    val oldRecurringDiff = recurringLinkCashEffect(old)
-                                    if (oldRecurringDiff != null) availableCash -= oldRecurringDiff
-                                    else if (old.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(old)) availableCash += old.amount
-                                    else if (old.type == TransactionType.INCOME && !old.isBudgetIncome) availableCash -= old.amount
-                                }
-                                // Apply new effect
-                                if (!updated.date.isBefore(budgetStartDate)) {
-                                    val newRecurringDiff = recurringLinkCashEffect(updated)
-                                    if (newRecurringDiff != null) availableCash += newRecurringDiff
-                                    else if (updated.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(updated)) availableCash -= updated.amount
-                                    else if (updated.type == TransactionType.INCOME && !updated.isBudgetIncome) availableCash += updated.amount
-                                }
-                                persistAvailableCash()
-                            }
+                            recomputeCash()
                         },
                         onDeleteTransaction = { txn ->
                             val idx = transactions.indexOfFirst { it.id == txn.id }
@@ -1291,20 +1244,9 @@ class MainActivity : ComponentActivity() {
                                 )
                                 saveTransactions()
                             }
-                            if (budgetStartDate != null && !txn.date.isBefore(budgetStartDate)) {
-                                val recurringDiff = recurringLinkCashEffect(txn)
-                                if (recurringDiff != null) {
-                                    availableCash -= recurringDiff
-                                } else if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
-                                    availableCash += txn.amount
-                                } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
-                                    availableCash -= txn.amount
-                                }
-                                persistAvailableCash()
-                            }
+                            recomputeCash()
                         },
                         onDeleteTransactions = { ids ->
-                            val deletedTxns = transactions.filter { it.id in ids && !it.deleted }
                             val clock = lamportClock.tick()
                             transactions.forEachIndexed { index, txn ->
                                 if (txn.id in ids && !txn.deleted) {
@@ -1315,21 +1257,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             saveTransactions()
-                            if (budgetStartDate != null) {
-                                for (txn in deletedTxns) {
-                                    if (!txn.date.isBefore(budgetStartDate)) {
-                                        val recurringDiff = recurringLinkCashEffect(txn)
-                                        if (recurringDiff != null) {
-                                            availableCash -= recurringDiff
-                                        } else if (txn.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(txn)) {
-                                            availableCash += txn.amount
-                                        } else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) {
-                                            availableCash -= txn.amount
-                                        }
-                                    }
-                                }
-                                persistAvailableCash()
-                            }
+                            recomputeCash()
                         },
                         onSerializeFullBackup = {
                             FullBackupSerializer.serialize(context)
@@ -1757,28 +1685,34 @@ class MainActivity : ComponentActivity() {
                                 ZoneId.of(sharedSettings.familyTimezone) else null
                             budgetStartDate = BudgetCalculator.currentPeriodStart(budgetPeriod, resetDayOfWeek, resetDayOfMonth, tz)
                             lastRefreshDate = budgetStartDate
-                            availableCash = budgetAmount
-                            // Record period ledger entry
-                            periodLedger.add(
-                                PeriodLedgerEntry(
-                                    periodStartDate = LocalDateTime.now(),
-                                    appliedAmount = budgetAmount,
-                                    clockAtReset = lamportClock.value
+                            // Record period ledger entry with CRDT stamping
+                            val entryClock = lamportClock.tick()
+                            val entryDate = budgetStartDate!!.atStartOfDay()
+                            val alreadyRecorded = periodLedger.any {
+                                it.periodStartDate.toLocalDate() == budgetStartDate
+                            }
+                            if (!alreadyRecorded) {
+                                periodLedger.add(
+                                    PeriodLedgerEntry(
+                                        periodStartDate = entryDate,
+                                        appliedAmount = budgetAmount,
+                                        clockAtReset = entryClock,
+                                        deviceId = localDeviceId,
+                                        clock = entryClock
+                                    )
                                 )
-                            )
+                            }
                             savePeriodLedger()
                             if (isSyncConfigured) {
                                 val clock = lamportClock.tick()
                                 sharedSettings = sharedSettings.copy(
                                     budgetStartDate = budgetStartDate?.toString(),
                                     budgetStartDate_clock = clock,
-                                    availableCash = availableCash,
-                                    availableCash_clock = clock,
                                     lastChangedBy = localDeviceId
                                 )
                                 SharedSettingsRepository.save(context, sharedSettings)
                             }
-                            persistAvailableCash()
+                            recomputeCash()
                             prefs.edit()
                                 .putString("budgetStartDate", budgetStartDate.toString())
                                 .putString("lastRefreshDate", lastRefreshDate.toString())
@@ -1886,7 +1820,6 @@ class MainActivity : ComponentActivity() {
                                         matchPercent = matchPercent,
                                         matchDollar = matchDollar,
                                         matchChars = matchChars,
-                                        availableCash = availableCash,
                                         lastChangedBy = localDeviceId,
                                         currency_clock = clock,
                                         budgetPeriod_clock = clock,
@@ -1901,8 +1834,7 @@ class MainActivity : ComponentActivity() {
                                         matchDays_clock = clock,
                                         matchPercent_clock = clock,
                                         matchDollar_clock = clock,
-                                        matchChars_clock = clock,
-                                        availableCash_clock = clock
+                                        matchChars_clock = clock
                                     )
                                     SharedSettingsRepository.save(context, sharedSettings)
 
@@ -1992,6 +1924,16 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                     saveIncomeSources()
+                                    // Stamp period ledger entries for sync
+                                    periodLedger.forEachIndexed { i, e ->
+                                        if (e.clock == 0L || e.deviceId.isEmpty()) {
+                                            periodLedger[i] = e.copy(
+                                                deviceId = localDeviceId,
+                                                clock = stampClock
+                                            )
+                                        }
+                                    }
+                                    savePeriodLedger()
 
                                     syncStatus = "synced"
                                 } catch (_: Exception) {
@@ -2170,7 +2112,8 @@ class MainActivity : ComponentActivity() {
                                         amortizationEntries.toList(),
                                         categories.toList(),
                                         sharedSettings,
-                                        existingCatIdRemap = existRemap
+                                        existingCatIdRemap = existRemap,
+                                        periodLedgerEntries = periodLedger.toList()
                                     )
                                     if (result.success) {
                                         result.mergedTransactions?.let { transactions.clear(); transactions.addAll(it); saveTransactions() }
@@ -2179,6 +2122,7 @@ class MainActivity : ComponentActivity() {
                                         result.mergedSavingsGoals?.let { savingsGoals.clear(); savingsGoals.addAll(it); saveSavingsGoals() }
                                         result.mergedAmortizationEntries?.let { amortizationEntries.clear(); amortizationEntries.addAll(it); saveAmortizationEntries() }
                                         result.mergedCategories?.let { categories.clear(); categories.addAll(it); saveCategories() }
+                                        result.mergedPeriodLedgerEntries?.let { periodLedger.clear(); periodLedger.addAll(it); savePeriodLedger() }
                                         result.mergedSharedSettings?.let { merged ->
                                             sharedSettings = merged
                                             currencySymbol = merged.currency
@@ -2197,18 +2141,9 @@ class MainActivity : ComponentActivity() {
                                                 try { LocalDate.parse(it) } catch (_: Exception) { null }
                                             }
                                             val budgetStartChanged = syncedStartDate != null && syncedStartDate != budgetStartDate
-                                            val lastSeenAcClock2 = syncPrefs.getLong("lastSeenAvailableCash_clock", 0L)
-                                            val cashPushedByRemote2 = !isSyncAdmin &&
-                                                merged.availableCash_clock > lastSeenAcClock2
                                             if (budgetStartChanged) {
                                                 budgetStartDate = syncedStartDate
                                                 lastRefreshDate = LocalDate.now()
-                                                availableCash = if (merged.availableCash_clock > 0L) merged.availableCash else budgetAmount
-                                                syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
-                                            } else if (cashPushedByRemote2) {
-                                                availableCash = merged.availableCash
-                                                persistAvailableCash()
-                                                syncPrefs.edit().putLong("lastSeenAvailableCash_clock", merged.availableCash_clock).apply()
                                             }
                                             val prefsEditor = prefs.edit()
                                                 .putString("currencySymbol", merged.currency)
@@ -2228,11 +2163,9 @@ class MainActivity : ComponentActivity() {
                                                     .putString("budgetStartDate", budgetStartDate.toString())
                                                     .putString("lastRefreshDate", lastRefreshDate.toString())
                                             }
-                                            if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
-                                            availableCash = BudgetCalculator.roundCents(availableCash)
-                                            prefsEditor.putString("availableCash", availableCash.toString())
                                             prefsEditor.apply()
                                         }
+                                        recomputeCash()
                                         result.catIdRemap?.let { remap ->
                                             val rj = org.json.JSONObject(remap.mapKeys { it.key.toString() })
                                             syncPrefs.edit().putString("catIdRemap", rj.toString()).apply()
@@ -2293,22 +2226,6 @@ class MainActivity : ComponentActivity() {
                                     syncDevices = GroupManager.getDevices(gId)
                                 } catch (_: Exception) {}
                             }
-                        },
-                        onSyncCashToAdmin = {
-                            // Push admin's local availableCash to SharedSettings CRDT
-                            // so all devices pick it up on next sync
-                            val acClock = lamportClock.tick()
-                            sharedSettings = sharedSettings.copy(
-                                availableCash = availableCash,
-                                availableCash_clock = acClock,
-                                lastChangedBy = localDeviceId
-                            )
-                            SharedSettingsRepository.save(context, sharedSettings)
-                            android.widget.Toast.makeText(
-                                context,
-                                "Available cash synced: ${availableCash}",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
                         },
                         onHelpClick = { currentScreen = "family_sync_help" },
                         onBack = {
@@ -2403,13 +2320,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             saveTransactions()
-                            if (budgetStartDate != null && !dup.date.isBefore(budgetStartDate)) {
-                                val recurringDiff = recurringLinkCashEffect(dup)
-                                if (recurringDiff != null) availableCash -= recurringDiff
-                                else if (dup.type == TransactionType.EXPENSE && !isBudgetAccountedExpense(dup)) availableCash += dup.amount
-                                else if (dup.type == TransactionType.INCOME && !dup.isBudgetIncome) availableCash -= dup.amount
-                                persistAvailableCash()
-                            }
                             addTransactionWithBudgetEffect(dashPendingManualSave!!)
                             dashPendingManualSave = null
                             dashManualDuplicateMatch = null

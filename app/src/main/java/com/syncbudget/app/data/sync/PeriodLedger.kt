@@ -9,8 +9,14 @@ data class PeriodLedgerEntry(
     val periodStartDate: LocalDateTime,
     val appliedAmount: Double,
     val clockAtReset: Long,
-    val corrected: Boolean = false
-)
+    val corrected: Boolean = false,
+    // CRDT sync fields
+    val deviceId: String = "",
+    val clock: Long = 0L  // single creation clock (entries are immutable)
+) {
+    /** Deterministic ID from date — used for CRDT dedup (same date = same entry) */
+    val id: Int get() = periodStartDate.toLocalDate().toEpochDay().toInt()
+}
 
 object PeriodLedgerRepository {
 
@@ -24,6 +30,8 @@ object PeriodLedgerRepository {
             obj.put("appliedAmount", e.appliedAmount)
             obj.put("clockAtReset", e.clockAtReset)
             obj.put("corrected", e.corrected)
+            obj.put("deviceId", e.deviceId)
+            obj.put("clock", e.clock)
             jsonArray.put(obj)
         }
         context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).use { fos ->
@@ -45,7 +53,9 @@ object PeriodLedgerRepository {
                     periodStartDate = LocalDateTime.parse(obj.getString("periodStartDate")),
                     appliedAmount = obj.getDouble("appliedAmount"),
                     clockAtReset = obj.optLong("clockAtReset", 0L),
-                    corrected = obj.optBoolean("corrected", false)
+                    corrected = obj.optBoolean("corrected", false),
+                    deviceId = obj.optString("deviceId", ""),
+                    clock = obj.optLong("clock", 0L)
                 )
             )
         }
