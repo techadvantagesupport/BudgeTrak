@@ -895,18 +895,22 @@ fun TransactionsScreen(
                         recurringExpenses.find { it.id == transaction.linkedRecurringExpenseId }?.amount
                     else null
                     val isLinkedAmortization = transaction.linkedAmortizationEntryId != null
-                    val isAmortComplete = if (isLinkedAmortization) {
-                        val entry = amortizationEntries.find { it.id == transaction.linkedAmortizationEntryId }
-                        if (entry != null) {
-                            val today = LocalDate.now()
-                            val elapsed = when (budgetPeriod) {
-                                BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(entry.startDate, today).toInt()
-                                BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(entry.startDate, today).toInt()
-                                BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(entry.startDate, today).toInt()
-                            }
-                            elapsed >= entry.totalPeriods
-                        } else false
-                    } else false
+                    val amortEntry = if (isLinkedAmortization)
+                        amortizationEntries.find { it.id == transaction.linkedAmortizationEntryId }
+                    else null
+                    val amortElapsed = if (amortEntry != null) {
+                        val today = LocalDate.now()
+                        when (budgetPeriod) {
+                            BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(amortEntry.startDate, today).toInt()
+                            BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(amortEntry.startDate, today).toInt()
+                            BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(amortEntry.startDate, today).toInt()
+                        }
+                    } else 0
+                    val isAmortComplete = amortEntry != null && amortElapsed >= amortEntry.totalPeriods
+                    val linkedAmortizationApplied = if (amortEntry != null) {
+                        val periods = minOf(amortElapsed, amortEntry.totalPeriods)
+                        (amortEntry.amount / amortEntry.totalPeriods) * periods
+                    } else null
                     TransactionRow(
                         transaction = transaction,
                         currencySymbol = currencySymbol,
@@ -950,7 +954,8 @@ fun TransactionsScreen(
                         isLinkedRecurring = isLinkedRecurring,
                         isLinkedAmortization = isLinkedAmortization,
                         isAmortComplete = isAmortComplete,
-                        linkedRecurringAmount = linkedRecurringAmount
+                        linkedRecurringAmount = linkedRecurringAmount,
+                        linkedAmortizationApplied = linkedAmortizationApplied
                     )
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
@@ -2220,7 +2225,8 @@ private fun TransactionRow(
     isLinkedRecurring: Boolean = false,
     isLinkedAmortization: Boolean = false,
     isAmortComplete: Boolean = false,
-    linkedRecurringAmount: Double? = null
+    linkedRecurringAmount: Double? = null,
+    linkedAmortizationApplied: Double? = null
 ) {
     val S = LocalStrings.current
     val isExpense = transaction.type == TransactionType.EXPENSE
@@ -2232,6 +2238,10 @@ private fun TransactionRow(
         displayAmount = kotlin.math.abs(diff)
         amountColor = if (diff >= 0) Color(0xFF4CAF50) else Color(0xFFF44336)
         amountPrefix = if (diff >= 0) "+" else "-"
+    } else if (isLinkedAmortization && linkedAmortizationApplied != null) {
+        displayAmount = linkedAmortizationApplied
+        amountColor = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
+        amountPrefix = if (isExpense) "-" else ""
     } else {
         displayAmount = transaction.amount
         amountColor = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
@@ -2246,6 +2256,7 @@ private fun TransactionRow(
     val categoryIconTint = if (transaction.isUserCategorized) customColors.userCategoryIconTint
         else MaterialTheme.colorScheme.onBackground
 
+    val context = LocalContext.current
     val fontScale = LocalDensity.current.fontScale
     val useExpandedLayout = fontScale > 1.1f
 
@@ -2319,7 +2330,13 @@ private fun TransactionRow(
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = if (isLinkedRecurring || isLinkedAmortization) Modifier.clickable {
+                        val prefix = if (isExpense) "-" else ""
+                        Toast.makeText(context, "$prefix${formatCurrency(transaction.amount, currencySymbol)}", Toast.LENGTH_SHORT).show()
+                    } else Modifier
+                ) {
                     if (isLinkedRecurring) {
                         Icon(
                             imageVector = Icons.Filled.Sync,
