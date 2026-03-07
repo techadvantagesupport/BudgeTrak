@@ -91,6 +91,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.BorderStroke
@@ -2909,6 +2911,9 @@ fun TransactionDialog(
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(scrollState)
+                        .pointerInput(focusManager) {
+                            detectTapGestures(onTap = { focusManager.clearFocus() })
+                        }
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -2924,6 +2929,14 @@ fun TransactionDialog(
                             if (modeButtonsOffset > 0) {
                                 scrollState.animateScrollTo(modeButtonsOffset)
                             }
+                        }
+                    }
+
+                    // Auto-scroll down when pie chart is toggled on
+                    LaunchedEffect(showPieChart) {
+                        if (showPieChart) {
+                            delay(500L)
+                            scrollState.animateScrollTo(scrollState.maxValue)
                         }
                     }
 

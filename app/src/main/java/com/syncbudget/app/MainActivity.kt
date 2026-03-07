@@ -89,6 +89,10 @@ import com.syncbudget.app.ui.screens.TransactionsScreen
 import com.syncbudget.app.ui.strings.AppStrings
 import com.syncbudget.app.ui.strings.EnglishStrings
 import com.syncbudget.app.ui.strings.SpanishStrings
+import com.syncbudget.app.ui.theme.AdAwareAlertDialog
+import com.syncbudget.app.ui.theme.DialogStyle
+import com.syncbudget.app.ui.theme.DialogWarningButton
+import com.syncbudget.app.ui.theme.DialogSecondaryButton
 import com.syncbudget.app.ui.theme.SyncBudgetTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -3002,15 +3006,16 @@ class MainActivity : ComponentActivity() {
 
                 // Confirmation dialog: apply recurring expense amount change to past transactions?
                 pendingREAmountUpdate?.let { (updated, oldAmount) ->
-                    androidx.compose.material3.AlertDialog(
+                    AdAwareAlertDialog(
                         onDismissRequest = {
                             pendingREAmountUpdate = null
                             recomputeCash()
                         },
-                        title = { androidx.compose.material3.Text(strings.common.applyToPastTitle) },
-                        text = { androidx.compose.material3.Text(strings.common.applyToPastBody) },
+                        title = { Text(strings.common.applyToPastTitle) },
+                        text = { Text(strings.common.applyToPastBody) },
+                        style = DialogStyle.WARNING,
                         confirmButton = {
-                            androidx.compose.material3.TextButton(onClick = {
+                            DialogWarningButton(onClick = {
                                 val clock = lamportClock.tick()
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedRecurringExpenseId == updated.id && !txn.deleted) {
@@ -3023,28 +3028,29 @@ class MainActivity : ComponentActivity() {
                                 saveTransactions()
                                 pendingREAmountUpdate = null
                                 recomputeCash()
-                            }) { androidx.compose.material3.Text(strings.common.applyToPastConfirm) }
+                            }) { Text(strings.common.applyToPastConfirm) }
                         },
                         dismissButton = {
-                            androidx.compose.material3.TextButton(onClick = {
+                            DialogSecondaryButton(onClick = {
                                 pendingREAmountUpdate = null
                                 recomputeCash()
-                            }) { androidx.compose.material3.Text(strings.common.applyToPastDeny) }
+                            }) { Text(strings.common.applyToPastDeny) }
                         }
                     )
                 }
 
                 // Confirmation dialog: apply income source amount change to past transactions?
                 pendingISAmountUpdate?.let { (updated, oldAmount) ->
-                    androidx.compose.material3.AlertDialog(
+                    AdAwareAlertDialog(
                         onDismissRequest = {
                             pendingISAmountUpdate = null
                             recomputeCash()
                         },
-                        title = { androidx.compose.material3.Text(strings.common.applyToPastTitle) },
-                        text = { androidx.compose.material3.Text(strings.common.applyToPastBody) },
+                        title = { Text(strings.common.applyToPastTitle) },
+                        text = { Text(strings.common.applyToPastBody) },
+                        style = DialogStyle.WARNING,
                         confirmButton = {
-                            androidx.compose.material3.TextButton(onClick = {
+                            DialogWarningButton(onClick = {
                                 val clock = lamportClock.tick()
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedIncomeSourceId == updated.id && !txn.deleted) {
@@ -3057,13 +3063,13 @@ class MainActivity : ComponentActivity() {
                                 saveTransactions()
                                 pendingISAmountUpdate = null
                                 recomputeCash()
-                            }) { androidx.compose.material3.Text(strings.common.applyToPastConfirm) }
+                            }) { Text(strings.common.applyToPastConfirm) }
                         },
                         dismissButton = {
-                            androidx.compose.material3.TextButton(onClick = {
+                            DialogSecondaryButton(onClick = {
                                 pendingISAmountUpdate = null
                                 recomputeCash()
-                            }) { androidx.compose.material3.Text(strings.common.applyToPastDeny) }
+                            }) { Text(strings.common.applyToPastDeny) }
                         }
                     )
                 }
