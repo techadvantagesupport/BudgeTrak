@@ -328,6 +328,7 @@ fun TransactionsScreen(
     val importApproved = remember { mutableStateListOf<Transaction>() }
     var importIndex by remember { mutableIntStateOf(0) }
     var ignoreAllDuplicates by remember { mutableStateOf(false) }
+    var skipDupForIndex by remember { mutableIntStateOf(-1) }  // skip dup check for this index (Keep Both)
     var currentImportDup by remember { mutableStateOf<Transaction?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
     var pendingUri by remember { mutableStateOf<Uri?>(null) }
@@ -558,49 +559,36 @@ fun TransactionsScreen(
         }
 
         val txn = parsedTransactions[importIndex]
-        if (ignoreAllDuplicates) {
-            // Still check recurring/amortization even when ignoring duplicates
-            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-            if (recurringMatch != null) {
-                currentImportRecurring = recurringMatch
-            } else {
-                val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                if (amortizationMatch != null) {
-                    currentImportAmortization = amortizationMatch
-                } else {
-                    val budgetIncomeMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
-                    if (budgetIncomeMatch != null) {
-                        currentImportBudgetIncome = budgetIncomeMatch
-                    } else {
-                        importApproved.add(txn)
-                        importIndex++
-                    }
-                }
+
+        // Check for duplicate (skip if ignoreAll or this specific index was cleared)
+        val skipDup = ignoreAllDuplicates || skipDupForIndex == importIndex
+        if (skipDupForIndex == importIndex) skipDupForIndex = -1  // one-shot
+
+        if (!skipDup) {
+            val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
+            if (dup != null) {
+                currentImportDup = dup
+                return@LaunchedEffect
             }
-            return@LaunchedEffect
         }
 
-        val dup = findDuplicate(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
-        if (dup == null) {
-            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-            if (recurringMatch != null) {
-                currentImportRecurring = recurringMatch
+        // Linking chain: recurring → amortization → budget income
+        val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
+        if (recurringMatch != null) {
+            currentImportRecurring = recurringMatch
+        } else {
+            val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+            if (amortizationMatch != null) {
+                currentImportAmortization = amortizationMatch
             } else {
-                val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                if (amortizationMatch != null) {
-                    currentImportAmortization = amortizationMatch
+                val budgetIncomeMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
+                if (budgetIncomeMatch != null) {
+                    currentImportBudgetIncome = budgetIncomeMatch
                 } else {
-                    val budgetIncomeMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
-                    if (budgetIncomeMatch != null) {
-                        currentImportBudgetIncome = budgetIncomeMatch
-                    } else {
-                        importApproved.add(txn)
-                        importIndex++
-                    }
+                    importApproved.add(txn)
+                    importIndex++
                 }
             }
-        } else {
-            currentImportDup = dup
         }
     }
 
@@ -1851,25 +1839,25 @@ fun TransactionsScreen(
             categoryMap = categoryMap,
             showIgnoreAll = true,
             onIgnore = {
-                importApproved.add(newTxn)
+                // Keep Both — skip dup check, continue to linking chain
+                skipDupForIndex = importIndex
                 currentImportDup = null
-                importIndex++
             },
             onKeepNew = {
                 onDeleteTransaction(existingDup)
-                importApproved.add(newTxn)
+                // Skip dup check on re-run, continue to linking chain
+                skipDupForIndex = importIndex
                 currentImportDup = null
-                importIndex++
             },
             onKeepExisting = {
                 currentImportDup = null
                 importIndex++
             },
             onIgnoreAll = {
-                importApproved.add(newTxn)
+                // Skip dup check on re-run, continue to linking chain
+                skipDupForIndex = importIndex
                 currentImportDup = null
                 ignoreAllDuplicates = true
-                importIndex++
             }
         )
     }
@@ -1884,19 +1872,81 @@ fun TransactionsScreen(
             categoryMap = categoryMap,
             showIgnoreAll = false,
             onIgnore = {
-                if (pendingManualIsEdit) onUpdateTransaction(pendingManualSave!!)
-                else addAndScroll(pendingManualSave!!)
+                // Keep Both — continue to linking chain
+                val txn = pendingManualSave!!
+                val isEdit = pendingManualIsEdit
                 pendingManualSave = null
                 manualDuplicateMatch = null
                 showManualDuplicateDialog = false
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null
+                if (!alreadyLinked) {
+                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
+                    if (recurringMatch != null) {
+                        pendingRecurringTxn = txn
+                        pendingRecurringMatch = recurringMatch
+                        pendingRecurringIsEdit = isEdit
+                        showRecurringDialog = true
+                    } else {
+                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                        if (amortizationMatch != null) {
+                            pendingAmortizationTxn = txn
+                            pendingAmortizationMatch = amortizationMatch
+                            pendingAmortizationIsEdit = isEdit
+                            showAmortizationDialog = true
+                        } else {
+                            val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
+                            if (budgetMatch != null) {
+                                pendingBudgetIncomeTxn = txn
+                                pendingBudgetIncomeMatch = budgetMatch
+                                pendingBudgetIncomeIsEdit = isEdit
+                                showBudgetIncomeDialog = true
+                            } else {
+                                if (isEdit) onUpdateTransaction(txn) else addAndScroll(txn)
+                            }
+                        }
+                    }
+                } else {
+                    if (isEdit) onUpdateTransaction(txn) else addAndScroll(txn)
+                }
             },
             onKeepNew = {
                 onDeleteTransaction(manualDuplicateMatch!!)
-                if (pendingManualIsEdit) onUpdateTransaction(pendingManualSave!!)
-                else addAndScroll(pendingManualSave!!)
+                // Continue to linking chain after deleting existing
+                val txn = pendingManualSave!!
+                val isEdit = pendingManualIsEdit
                 pendingManualSave = null
                 manualDuplicateMatch = null
                 showManualDuplicateDialog = false
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null
+                if (!alreadyLinked) {
+                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
+                    if (recurringMatch != null) {
+                        pendingRecurringTxn = txn
+                        pendingRecurringMatch = recurringMatch
+                        pendingRecurringIsEdit = isEdit
+                        showRecurringDialog = true
+                    } else {
+                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                        if (amortizationMatch != null) {
+                            pendingAmortizationTxn = txn
+                            pendingAmortizationMatch = amortizationMatch
+                            pendingAmortizationIsEdit = isEdit
+                            showAmortizationDialog = true
+                        } else {
+                            val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
+                            if (budgetMatch != null) {
+                                pendingBudgetIncomeTxn = txn
+                                pendingBudgetIncomeMatch = budgetMatch
+                                pendingBudgetIncomeIsEdit = isEdit
+                                showBudgetIncomeDialog = true
+                            } else {
+                                if (isEdit) onUpdateTransaction(txn) else addAndScroll(txn)
+                            }
+                        }
+                    }
+                } else {
+                    if (isEdit) onUpdateTransaction(txn) else addAndScroll(txn)
+                }
             },
             onKeepExisting = {
                 pendingManualSave = null

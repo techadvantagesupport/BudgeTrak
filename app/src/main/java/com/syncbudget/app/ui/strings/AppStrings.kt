@@ -1146,5 +1146,25 @@ data class WidgetTransactionStrings(
     val descriptionOptional: String,
     val cancel: String,
     val save: String,
-    val freeVersionLimit: String
+    val freeVersionLimit: String,
+    // Matching dialogs
+    val duplicateTitle: String,
+    val duplicateBody: (String, String, String) -> String, // source, amount, date
+    val duplicateExisting: String,
+    val duplicateNew: String,
+    val duplicateKeepOld: String,
+    val duplicateKeepNew: String,
+    val duplicateKeepBoth: String,
+    val recurringTitle: String,
+    val recurringBody: (String) -> String, // source
+    val recurringLink: String,
+    val recurringNoLink: String,
+    val amortizationTitle: String,
+    val amortizationBody: (String) -> String, // source
+    val amortizationLink: String,
+    val amortizationNoLink: String,
+    val budgetIncomeTitle: String,
+    val budgetIncomeBody: (String) -> String, // source
+    val budgetIncomeLink: String,
+    val budgetIncomeNoLink: String
 )

@@ -1420,6 +1420,25 @@ object SpanishStrings : AppStrings {
         descriptionOptional = "Descripci\u00f3n (opcional)",
         cancel = "Cancelar",
         save = "Guardar",
-        freeVersionLimit = "Versi\u00f3n Gratuita: 1 transacci\u00f3n de widget por d\u00eda"
+        freeVersionLimit = "Versi\u00f3n Gratuita: 1 transacci\u00f3n de widget por d\u00eda",
+        duplicateTitle = "Posible duplicado",
+        duplicateBody = { source, amount, date -> "Similar a existente: $source ($amount) el $date" },
+        duplicateExisting = "Existente",
+        duplicateNew = "Nueva",
+        duplicateKeepOld = "Conservar vieja",
+        duplicateKeepNew = "Conservar nueva",
+        duplicateKeepBoth = "Guardar ambas",
+        recurringTitle = "Gasto recurrente",
+        recurringBody = { source -> "Coincide con gasto recurrente \"$source\". \u00bfVincular?" },
+        recurringLink = "Vincular",
+        recurringNoLink = "No",
+        amortizationTitle = "Amortizaci\u00f3n",
+        amortizationBody = { source -> "Coincide con amortizaci\u00f3n \"$source\". \u00bfVincular?" },
+        amortizationLink = "Vincular",
+        amortizationNoLink = "No",
+        budgetIncomeTitle = "Ingreso presupuestario",
+        budgetIncomeBody = { source -> "Coincide con fuente de ingreso \"$source\". \u00bfMarcar como ingreso presupuestario?" },
+        budgetIncomeLink = "S\u00ed",
+        budgetIncomeNoLink = "No"
     )
 }

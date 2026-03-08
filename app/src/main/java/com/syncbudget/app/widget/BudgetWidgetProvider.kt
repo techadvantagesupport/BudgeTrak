@@ -12,6 +12,7 @@ import android.view.View
 import android.widget.RemoteViews
 import com.syncbudget.app.MainActivity
 import com.syncbudget.app.R
+import com.syncbudget.app.data.getDoubleCompat
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 
 class BudgetWidgetProvider : AppWidgetProvider() {
@@ -55,7 +56,7 @@ class BudgetWidgetProvider : AppWidgetProvider() {
         ) {
             val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             val isPaidUser = prefs.getBoolean("isPaidUser", false)
-            val availableCash = prefs.getString("availableCash", "0.0")?.toDoubleOrNull() ?: 0.0
+            val availableCash = prefs.getDoubleCompat("availableCash")
             val currencySymbol = prefs.getString("currencySymbol", "$") ?: "$"
             val showDecimals = prefs.getBoolean("showDecimals", false)
             val decimalPlaces = if (showDecimals) (CURRENCY_DECIMALS[currencySymbol] ?: 2) else 0

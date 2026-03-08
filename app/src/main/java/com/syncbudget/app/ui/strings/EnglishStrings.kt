@@ -331,7 +331,7 @@ object EnglishStrings : AppStrings {
 
     override val amortization = AmortizationStrings(
         title = "Amortization",
-        description = "Spread a large past expense across multiple budget periods so it doesn't hit your budget all at once.",
+        description = "Spread a large expense across multiple budget periods so it doesn't hit your budget all at once.",
         addEntry = "Add Amortization Entry",
         editEntry = "Edit Amortization Entry",
         sourceName = "Merchant/Service",
@@ -1422,6 +1422,25 @@ object EnglishStrings : AppStrings {
         descriptionOptional = "Description (optional)",
         cancel = "Cancel",
         save = "Save",
-        freeVersionLimit = "Free Version: 1 widget transaction per day"
+        freeVersionLimit = "Free Version: 1 widget transaction per day",
+        duplicateTitle = "Possible Duplicate",
+        duplicateBody = { source, amount, date -> "Similar to existing: $source ($amount) on $date" },
+        duplicateExisting = "Existing",
+        duplicateNew = "New",
+        duplicateKeepOld = "Keep Old",
+        duplicateKeepNew = "Keep New",
+        duplicateKeepBoth = "Keep Both",
+        recurringTitle = "Recurring Match",
+        recurringBody = { source -> "Matches recurring expense \"$source\". Link it?" },
+        recurringLink = "Link",
+        recurringNoLink = "No",
+        amortizationTitle = "Amortization Match",
+        amortizationBody = { source -> "Matches amortization \"$source\". Link it?" },
+        amortizationLink = "Link",
+        amortizationNoLink = "No",
+        budgetIncomeTitle = "Budget Income Match",
+        budgetIncomeBody = { source -> "Matches income source \"$source\". Mark as budget income?" },
+        budgetIncomeLink = "Yes",
+        budgetIncomeNoLink = "No"
     )
 }

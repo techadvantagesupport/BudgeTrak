@@ -61,7 +61,7 @@ object WidgetRenderer {
         val dividerColor = if (isDarkMode) DARK_DIVIDER else LIGHT_DIVIDER
 
         val isNegative = amount < 0
-        val absAmountScaled = (abs(amount) * pow10(decimalPlaces)).toLong()
+        val absAmountScaled = kotlin.math.round(abs(amount) * pow10(decimalPlaces)).toLong()
         val divisor = pow10(decimalPlaces).toLong()
         val wholePart = (absAmountScaled / divisor).toInt()
         val decimalPart = (absAmountScaled % divisor).toInt()

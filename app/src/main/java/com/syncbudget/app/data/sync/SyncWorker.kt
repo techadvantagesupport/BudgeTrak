@@ -138,6 +138,19 @@ class SyncWorker(
             syncPrefs.edit().putBoolean("migration_remove_skeleton_categories", true).apply()
         }
 
+        // One-time fix: non-admin icon clock inflation (see MainActivity for details)
+        if (!GroupManager.isAdmin(applicationContext) &&
+            !syncPrefs.getBoolean("migration_reset_nonadmin_icon_clock", false)) {
+            var changed = false
+            categories = categories.map { c ->
+                if (c.iconName_clock > 0L && c.deviceId == deviceId) {
+                    changed = true; c.copy(iconName_clock = 0L)
+                } else c
+            }
+            if (changed) CategoryRepository.save(applicationContext, categories)
+            syncPrefs.edit().putBoolean("migration_reset_nonadmin_icon_clock", true).apply()
+        }
+
         // One-time migration: fix stale budget-start ledger entry.
         // If the period ledger entry on the budgetStartDate has a clock older
         // than the budgetStartDate_clock, it was created BEFORE the budget reset

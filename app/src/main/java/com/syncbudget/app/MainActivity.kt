@@ -27,6 +27,7 @@ import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.CategoryRepository
 import com.syncbudget.app.data.DEFAULT_CATEGORY_DEFS
+import com.syncbudget.app.data.getDoubleCompat
 import com.syncbudget.app.data.getAllKnownNamesForTag
 import com.syncbudget.app.data.getDefaultCategoryName
 import com.syncbudget.app.data.AmortizationRepository
@@ -118,6 +119,32 @@ import java.time.temporal.ChronoUnit
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Crash logger — writes stack trace to Download/crash_log.txt
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val sb = StringBuilder()
+                sb.appendLine("=== Crash ${java.time.LocalDateTime.now()} ===")
+                sb.appendLine("Thread: ${thread.name}")
+                sb.appendLine("Android: ${android.os.Build.VERSION.SDK_INT} (${android.os.Build.VERSION.RELEASE})")
+                sb.appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                sb.appendLine()
+                var t: Throwable? = throwable
+                while (t != null) {
+                    sb.appendLine("${t.javaClass.name}: ${t.message}")
+                    for (el in t.stackTrace) sb.appendLine("  at $el")
+                    t = t.cause
+                    if (t != null) sb.appendLine("Caused by:")
+                }
+                val dir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS
+                )
+                java.io.File(dir, "crash_log.txt").appendText(sb.toString())
+            } catch (_: Exception) {}
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
         enableEdgeToEdge()
         setContent {
             val soundPlayer = remember { FlipSoundPlayer(this@MainActivity) }
@@ -171,8 +198,7 @@ class MainActivity : ComponentActivity() {
             // Matching configuration
             var matchDays by remember { mutableIntStateOf(prefs.getInt("matchDays", 7)) }
             var matchPercent by remember { mutableDoubleStateOf(
-                try { prefs.getString("matchPercent", null)?.toDoubleOrNull() } catch (_: ClassCastException) { null }
-                    ?: try { prefs.getFloat("matchPercent", 1.0f).toDouble() } catch (_: ClassCastException) { 1.0 }
+                prefs.getDoubleCompat("matchPercent", 1.0)
             ) }
             var matchDollar by remember { mutableIntStateOf(prefs.getInt("matchDollar", 1)) }
             var matchChars by remember { mutableIntStateOf(prefs.getInt("matchChars", 5)) }
@@ -193,13 +219,13 @@ class MainActivity : ComponentActivity() {
             // Budget state
             var isManualBudgetEnabled by remember { mutableStateOf(prefs.getBoolean("isManualBudgetEnabled", false)) }
             var manualBudgetAmount by remember { mutableDoubleStateOf(
-                prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull() ?: 0.0
+                prefs.getDoubleCompat("manualBudgetAmount")
             ) }
             var incomeMode by remember { mutableStateOf(
                 try { IncomeMode.valueOf(prefs.getString("incomeMode", null) ?: "FIXED") } catch (_: Exception) { IncomeMode.FIXED }
             ) }
             var availableCash by remember { mutableDoubleStateOf(
-                prefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
+                prefs.getDoubleCompat("availableCash")
             ) }
             var budgetStartDate by remember {
                 mutableStateOf<LocalDate?>(
@@ -538,6 +564,22 @@ class MainActivity : ComponentActivity() {
                     syncPrefs.edit().putBoolean("migration_remove_skeleton_categories", true).apply()
                 }
 
+                // One-time fix: non-admin devices that joined with the old code had
+                // iconName_clock stamped to a high value, causing their default icons
+                // to overwrite admin's customized icons during CRDT merge.  Reset
+                // iconName_clock to 0 so defaults never win.
+                if (!isSyncAdmin && !syncPrefs.getBoolean("migration_reset_nonadmin_icon_clock", false)) {
+                    var changed = false
+                    categories.forEachIndexed { i, c ->
+                        if (c.iconName_clock > 0L && c.deviceId == localDeviceId) {
+                            categories[i] = c.copy(iconName_clock = 0L)
+                            changed = true
+                        }
+                    }
+                    if (changed) saveCategories()
+                    syncPrefs.edit().putBoolean("migration_reset_nonadmin_icon_clock", true).apply()
+                }
+
                 while (true) {
                     // File-based lock works across processes (unlike ReentrantLock)
                     val syncFileLock = SyncWorker.createSyncLock(context)
@@ -616,6 +658,24 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             if (anyRescued) saveIncomeSources()
+                        }
+
+                        // Merge disk transactions into memory before snapshotting.
+                        // The widget writes directly to disk; without this, the
+                        // sync loop would overwrite disk with the stale in-memory
+                        // list, silently erasing widget-added transactions.
+                        val diskTxns = TransactionRepository.load(context)
+                        val memTxnIds = transactions.map { it.id }.toSet()
+                        var diskMerged = false
+                        for (dt in diskTxns) {
+                            if (dt.id !in memTxnIds) {
+                                transactions.add(dt)
+                                diskMerged = true
+                            }
+                        }
+                        if (diskMerged) {
+                            saveTransactions()
+                            recomputeCash()
                         }
 
                         // Capture snapshots before sync — records added to
@@ -912,6 +972,26 @@ class MainActivity : ComponentActivity() {
                     } catch (e: Exception) {
                         android.util.Log.e("SyncLoop", "Foreground sync failed", e)
                         syncStatus = "error"
+                        // Write sync errors to crash_log.txt for debugging
+                        try {
+                            val sb = StringBuilder()
+                            sb.appendLine("=== SyncLoop Error ${java.time.LocalDateTime.now()} ===")
+                            sb.appendLine("Android: ${android.os.Build.VERSION.SDK_INT} (${android.os.Build.VERSION.RELEASE})")
+                            sb.appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                            sb.appendLine()
+                            var t: Throwable? = e
+                            while (t != null) {
+                                sb.appendLine("${t.javaClass.name}: ${t.message}")
+                                for (el in t.stackTrace) sb.appendLine("  at $el")
+                                t = t.cause
+                                if (t != null) sb.appendLine("Caused by:")
+                            }
+                            sb.appendLine()
+                            val dir = android.os.Environment.getExternalStoragePublicDirectory(
+                                android.os.Environment.DIRECTORY_DOWNLOADS
+                            )
+                            java.io.File(dir, "crash_log.txt").appendText(sb.toString())
+                        } catch (_: Exception) {}
                     } finally {
                         syncFileLock.unlock()
                     }
@@ -972,19 +1052,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Matching chain for dashboard-added transactions
-            fun runMatchingChain(txn: Transaction) {
+            // Linking chain: recurring/amortization/income match (no duplicate check)
+            fun runLinkingChain(txn: Transaction) {
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null
-                val activeTransactions = transactions.toList().active
-                val activeRecurring = recurringExpenses.toList().active
-                val activeAmort = amortizationEntries.toList().active
-                val activeIncome = incomeSources.toList().active
-                val dup = findDuplicate(txn, activeTransactions, percentTolerance, matchDollar, matchDays, matchChars)
-                if (dup != null) {
-                    dashPendingManualSave = txn
-                    dashManualDuplicateMatch = dup
-                    dashShowManualDuplicateDialog = true
-                } else if (!alreadyLinked) {
+                if (!alreadyLinked) {
+                    val activeRecurring = recurringExpenses.toList().active
+                    val activeAmort = amortizationEntries.toList().active
+                    val activeIncome = incomeSources.toList().active
                     val recurringMatch = findRecurringExpenseMatch(txn, activeRecurring, percentTolerance, matchDollar, matchChars, matchDays)
                     if (recurringMatch != null) {
                         dashPendingRecurringTxn = txn
@@ -1009,6 +1083,19 @@ class MainActivity : ComponentActivity() {
                     }
                 } else {
                     addTransactionWithBudgetEffect(txn)
+                }
+            }
+
+            // Full matching chain: duplicate check first, then linking
+            fun runMatchingChain(txn: Transaction) {
+                val activeTransactions = transactions.toList().active
+                val dup = findDuplicate(txn, activeTransactions, percentTolerance, matchDollar, matchDays, matchChars)
+                if (dup != null) {
+                    dashPendingManualSave = txn
+                    dashManualDuplicateMatch = dup
+                    dashShowManualDuplicateDialog = true
+                } else {
+                    runLinkingChain(txn)
                 }
             }
 
@@ -1146,7 +1233,7 @@ class MainActivity : ComponentActivity() {
                     dump.appendLine("isSyncConfigured: $isSyncConfigured")
                     dump.appendLine()
                     dump.appendLine("── App Prefs ──")
-                    dump.appendLine("availableCash (prefs): ${prefs.getString("availableCash", "MISSING")}")
+                    dump.appendLine("availableCash (prefs): ${prefs.getDoubleCompat("availableCash")}")
                     dump.appendLine("availableCash (state): $availableCash")
                     dump.appendLine("budgetStartDate: $budgetStartDate")
                     dump.appendLine("lastRefreshDate: $lastRefreshDate")
@@ -1714,14 +1801,13 @@ class MainActivity : ComponentActivity() {
                             resetDayOfWeek = prefs.getInt("resetDayOfWeek", 7)
                             resetDayOfMonth = prefs.getInt("resetDayOfMonth", 1)
                             isManualBudgetEnabled = prefs.getBoolean("isManualBudgetEnabled", false)
-                            manualBudgetAmount = prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull() ?: 0.0
-                            availableCash = prefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
+                            manualBudgetAmount = prefs.getDoubleCompat("manualBudgetAmount")
+                            availableCash = prefs.getDoubleCompat("availableCash")
                             budgetStartDate = prefs.getString("budgetStartDate", null)?.let { LocalDate.parse(it) }
                             lastRefreshDate = prefs.getString("lastRefreshDate", null)?.let { LocalDate.parse(it) }
                             weekStartSunday = prefs.getBoolean("weekStartSunday", true)
                             matchDays = prefs.getInt("matchDays", 7)
-                            matchPercent = (try { prefs.getString("matchPercent", null)?.toDoubleOrNull() } catch (_: ClassCastException) { null })
-                                ?: try { prefs.getFloat("matchPercent", 1.0f).toDouble() } catch (_: ClassCastException) { 1.0 }
+                            matchPercent = prefs.getDoubleCompat("matchPercent", 1.0)
                             matchDollar = prefs.getInt("matchDollar", 1)
                             matchChars = prefs.getInt("matchChars", 5)
 
@@ -2537,7 +2623,11 @@ class MainActivity : ComponentActivity() {
                                             if (c.name_clock == 0L || c.deviceId.isEmpty()) {
                                                 categories[i] = c.copy(
                                                     deviceId = localDeviceId,
-                                                    name_clock = stampClock, iconName_clock = stampClock,
+                                                    name_clock = stampClock,
+                                                    // Don't stamp iconName_clock — joining device's
+                                                    // default icons should never override admin's
+                                                    // customizations in CRDT merge
+                                                    iconName_clock = 0L,
                                                     tag_clock = if (c.tag.isNotEmpty()) stampClock else 0L,
                                                     deviceId_clock = stampClock
                                                 )
@@ -3003,10 +3093,11 @@ class MainActivity : ComponentActivity() {
                         categoryMap = categoryMap,
                         showIgnoreAll = false,
                         onIgnore = {
-                            addTransactionWithBudgetEffect(dashPendingManualSave!!)
+                            val txn = dashPendingManualSave!!
                             dashPendingManualSave = null
                             dashManualDuplicateMatch = null
                             dashShowManualDuplicateDialog = false
+                            runLinkingChain(txn)
                         },
                         onKeepNew = {
                             val dup = dashManualDuplicateMatch!!
@@ -3018,10 +3109,11 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             saveTransactions()
-                            addTransactionWithBudgetEffect(dashPendingManualSave!!)
+                            val txn = dashPendingManualSave!!
                             dashPendingManualSave = null
                             dashManualDuplicateMatch = null
                             dashShowManualDuplicateDialog = false
+                            runLinkingChain(txn)
                         },
                         onKeepExisting = {
                             dashPendingManualSave = null

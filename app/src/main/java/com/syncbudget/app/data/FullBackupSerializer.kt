@@ -47,9 +47,7 @@ object FullBackupSerializer {
         // Local prefs
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val localPrefs = JSONObject()
-        localPrefs.put("availableCash",
-            prefs.getString("availableCash", null)?.toDoubleOrNull() ?: 0.0
-        )
+        localPrefs.put("availableCash", prefs.getDoubleCompat("availableCash"))
         localPrefs.put("lastRefreshDate", prefs.getString("lastRefreshDate", null) ?: JSONObject.NULL)
         localPrefs.put("budgetStartDate", prefs.getString("budgetStartDate", null) ?: JSONObject.NULL)
         localPrefs.put("currencySymbol", prefs.getString("currencySymbol", "$"))
@@ -63,13 +61,10 @@ object FullBackupSerializer {
         localPrefs.put("resetDayOfWeek", prefs.getInt("resetDayOfWeek", 7))
         localPrefs.put("resetDayOfMonth", prefs.getInt("resetDayOfMonth", 1))
         localPrefs.put("isManualBudgetEnabled", prefs.getBoolean("isManualBudgetEnabled", false))
-        localPrefs.put("manualBudgetAmount",
-            prefs.getString("manualBudgetAmount", null)?.toDoubleOrNull() ?: 0.0
-        )
+        localPrefs.put("manualBudgetAmount", prefs.getDoubleCompat("manualBudgetAmount"))
         localPrefs.put("weekStartSunday", prefs.getBoolean("weekStartSunday", true))
         localPrefs.put("matchDays", prefs.getInt("matchDays", 7))
-        localPrefs.put("matchPercent", (try { prefs.getString("matchPercent", null)?.toDoubleOrNull() } catch (_: ClassCastException) { null })
-            ?: try { prefs.getFloat("matchPercent", 1.0f).toDouble() } catch (_: ClassCastException) { 1.0 })
+        localPrefs.put("matchPercent", prefs.getDoubleCompat("matchPercent", 1.0))
         localPrefs.put("matchDollar", prefs.getInt("matchDollar", 1))
         localPrefs.put("matchChars", prefs.getInt("matchChars", 5))
         json.put("localPrefs", localPrefs)

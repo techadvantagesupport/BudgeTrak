@@ -35,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -60,21 +61,36 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
+import com.syncbudget.app.data.AmortizationEntry
+import com.syncbudget.app.data.AmortizationRepository
+import com.syncbudget.app.data.BudgetCalculator
 import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.CategoryRepository
+import com.syncbudget.app.data.IncomeMode
+import com.syncbudget.app.data.IncomeSource
+import com.syncbudget.app.data.IncomeSourceRepository
+import com.syncbudget.app.data.RecurringExpense
+import com.syncbudget.app.data.RecurringExpenseRepository
 import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionRepository
 import com.syncbudget.app.data.TransactionType
+import com.syncbudget.app.data.findAmortizationMatch
+import com.syncbudget.app.data.findBudgetIncomeMatch
+import com.syncbudget.app.data.findDuplicate
+import com.syncbudget.app.data.findRecurringExpenseMatch
 import com.syncbudget.app.data.generateTransactionId
 import com.syncbudget.app.data.getCategoryIcon
 import com.syncbudget.app.data.sync.LamportClock
 import com.syncbudget.app.data.sync.SyncIdGenerator
 import com.syncbudget.app.data.sync.active
+import com.syncbudget.app.data.getDoubleCompat
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.strings.AppStrings
 import com.syncbudget.app.ui.strings.EnglishStrings
 import com.syncbudget.app.ui.strings.SpanishStrings
+import com.syncbudget.app.ui.strings.WidgetTransactionStrings
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 class WidgetTransactionActivity : ComponentActivity() {
 
@@ -93,6 +109,10 @@ class WidgetTransactionActivity : ComponentActivity() {
                 val appLanguage = prefs.getString("appLanguage", "en") ?: "en"
                 val S: AppStrings = if (appLanguage == "es") SpanishStrings else EnglishStrings
                 val W = S.widgetTransaction
+                val dateFormatPattern = prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd"
+                val dateFormatter = remember(dateFormatPattern) {
+                    DateTimeFormatter.ofPattern(dateFormatPattern)
+                }
 
                 val categories = remember { CategoryRepository.load(context).active.filter { it.widgetVisible } }
                 val selectedCategoryIds = remember { mutableStateMapOf<Int, Boolean>() }
@@ -107,6 +127,21 @@ class WidgetTransactionActivity : ComponentActivity() {
                 val widgetTxCount = if (widgetTxDate == today) prefs.getInt("widgetTxCount", 0) else 0
                 val atDailyLimit = !isPaidUser && widgetTxCount >= 1
 
+                // Matching settings
+                val matchDays = prefs.getInt("matchDays", 7)
+                val matchPercent = prefs.getDoubleCompat("matchPercent", 1.0)
+                val matchDollar = prefs.getInt("matchDollar", 1)
+                val matchChars = prefs.getInt("matchChars", 5)
+                val percentTolerance = matchPercent / 100.0
+
+                // Matching dialog state
+                var pendingTxn by remember { mutableStateOf<Transaction?>(null) }
+                var pendingCatAmounts by remember { mutableStateOf<List<CategoryAmount>>(emptyList()) }
+                var duplicateMatch by remember { mutableStateOf<Transaction?>(null) }
+                var recurringMatch by remember { mutableStateOf<RecurringExpense?>(null) }
+                var amortizationMatch by remember { mutableStateOf<AmortizationEntry?>(null) }
+                var budgetIncomeMatch by remember { mutableStateOf<IncomeSource?>(null) }
+
                 val headerBg = if (isExpense) Color(0xFFB71C1C) else Color(0xFF1B5E20)
                 val headerText = Color.White
                 val title = if (isExpense) W.quickExpense else W.quickIncome
@@ -120,6 +155,59 @@ class WidgetTransactionActivity : ComponentActivity() {
                 val isSingleCategory = selectedIds.size == 1
                 val canSave = parsedAmount != null && parsedAmount > 0 && source.isNotBlank() &&
                     selectedIds.isNotEmpty() && (isSingleCategory || abs(remaining) < 0.005)
+
+                // Check for recurring/amortization/income linking (no duplicate check)
+                fun runLinkingChain(txn: Transaction, catAmounts: List<CategoryAmount>) {
+                    val alreadyLinked = txn.linkedRecurringExpenseId != null ||
+                        txn.linkedAmortizationEntryId != null ||
+                        txn.linkedIncomeSourceId != null
+                    if (!alreadyLinked) {
+                        val activeRecurring = RecurringExpenseRepository.load(context).active
+                        val reMatch = findRecurringExpenseMatch(txn, activeRecurring, percentTolerance, matchDollar, matchChars, matchDays)
+                        if (reMatch != null) {
+                            pendingTxn = txn
+                            pendingCatAmounts = catAmounts
+                            recurringMatch = reMatch
+                            return
+                        }
+                        val activeAmort = AmortizationRepository.load(context).active
+                        val amMatch = findAmortizationMatch(txn, activeAmort, percentTolerance, matchDollar, matchChars)
+                        if (amMatch != null) {
+                            pendingTxn = txn
+                            pendingCatAmounts = catAmounts
+                            amortizationMatch = amMatch
+                            return
+                        }
+                        val activeIncome = IncomeSourceRepository.load(context).active
+                        val incMatch = findBudgetIncomeMatch(txn, activeIncome, matchChars, matchDays)
+                        if (incMatch != null) {
+                            pendingTxn = txn
+                            pendingCatAmounts = catAmounts
+                            budgetIncomeMatch = incMatch
+                            return
+                        }
+                    }
+                    // No matches — save directly
+                    saveTransaction(context, txn)
+                    prefs.edit()
+                        .putString("widgetTxDate", today)
+                        .putInt("widgetTxCount", widgetTxCount + 1)
+                        .apply()
+                    finish()
+                }
+
+                // Full matching chain: duplicate check first, then linking
+                fun runMatchingChain(txn: Transaction, catAmounts: List<CategoryAmount>) {
+                    val existingTransactions = TransactionRepository.load(context).active
+                    val dup = findDuplicate(txn, existingTransactions, percentTolerance, matchDollar, matchDays, matchChars)
+                    if (dup != null) {
+                        pendingTxn = txn
+                        pendingCatAmounts = catAmounts
+                        duplicateMatch = dup
+                        return
+                    }
+                    runLinkingChain(txn, catAmounts)
+                }
 
                 Surface(
                     modifier = Modifier
@@ -371,20 +459,38 @@ class WidgetTransactionActivity : ComponentActivity() {
                                             if (catAmt > 0) CategoryAmount(id, catAmt) else null
                                         }
                                     }
-                                    saveTransaction(
-                                        context = context,
-                                        amount = pa,
+                                    val lamportClock = LamportClock(context)
+                                    val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
+                                    val clock = lamportClock.tick()
+                                    val transactions = TransactionRepository.load(context)
+                                    val existingIds = transactions.map { it.id }.toSet()
+                                    val txn = Transaction(
+                                        id = generateTransactionId(existingIds),
+                                        type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME,
+                                        date = LocalDate.now(),
                                         source = source.trim(),
                                         description = description.trim(),
-                                        isExpense = isExpense,
-                                        catAmounts = catAmounts
+                                        amount = pa,
+                                        categoryAmounts = catAmounts,
+                                        isUserCategorized = catAmounts.isNotEmpty(),
+                                        deviceId = deviceId,
+                                        source_clock = clock,
+                                        description_clock = clock,
+                                        amount_clock = clock,
+                                        date_clock = clock,
+                                        type_clock = clock,
+                                        categoryAmounts_clock = clock,
+                                        isUserCategorized_clock = clock,
+                                        isBudgetIncome_clock = clock,
+                                        linkedRecurringExpenseId_clock = clock,
+                                        linkedAmortizationEntryId_clock = clock,
+                                        linkedIncomeSourceId_clock = clock,
+                                        amortizationAppliedAmount_clock = clock,
+                                        linkedRecurringExpenseAmount_clock = clock,
+                                        linkedIncomeSourceAmount_clock = clock,
+                                        deviceId_clock = clock
                                     )
-                                    // Track widget transaction count for non-paid daily limit
-                                    prefs.edit()
-                                        .putString("widgetTxDate", today)
-                                        .putInt("widgetTxCount", widgetTxCount + 1)
-                                        .apply()
-                                    finish()
+                                    runMatchingChain(txn, catAmounts)
                                 },
                                 enabled = canSave && !atDailyLimit,
                                 colors = ButtonDefaults.buttonColors(
@@ -397,60 +503,423 @@ class WidgetTransactionActivity : ComponentActivity() {
                         }
                     }
                 }
+
+                // --- Styled dialog helpers (dark-theme hardcoded) ---
+                val dialogHeaderColor = Color(0xFF1B5E20)
+                val dialogHeaderTextColor = Color(0xFFE8F5E9)
+                val dialogFooterColor = Color(0xFF1A3A1A)
+                val dialogSectionLabelColor = Color(0xFF81C784)
+                val duplicateHeaderColor = Color(0xFFB71C1C)
+                val duplicateHeaderTextColor = Color.White
+                val dialogShape = RoundedCornerShape(16.dp)
+
+                // Duplicate match dialog (3 options: Keep Old, Keep New, Keep Both)
+                if (duplicateMatch != null && pendingTxn != null) {
+                    val dup = duplicateMatch!!
+                    val txn = pendingTxn!!
+                    Dialog(
+                        onDismissRequest = {
+                            duplicateMatch = null
+                            pendingTxn = null
+                        }
+                    ) {
+                        Surface(shape = dialogShape, color = MaterialTheme.colorScheme.surface) {
+                            Column {
+                                // Header
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(duplicateHeaderColor, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Text(W.duplicateTitle, color = duplicateHeaderTextColor, style = MaterialTheme.typography.titleMedium)
+                                }
+                                // Body
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(W.duplicateExisting, color = dialogSectionLabelColor, style = MaterialTheme.typography.labelMedium)
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF424242))
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text(dup.source, style = MaterialTheme.typography.bodyMedium)
+                                            Text(
+                                                "$currencySymbol${"%.${maxDecimals}f".format(dup.amount)}  •  ${dup.date.format(dateFormatter)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.padding(top = 12.dp))
+                                    Text(W.duplicateNew, color = dialogSectionLabelColor, style = MaterialTheme.typography.labelMedium)
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF424242))
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text(txn.source, style = MaterialTheme.typography.bodyMedium)
+                                            Text(
+                                                "$currencySymbol${"%.${maxDecimals}f".format(txn.amount)}  •  ${txn.date.format(dateFormatter)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                                // Footer
+                                HorizontalDivider(color = Color(0xFF424242))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(dialogFooterColor, RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                                ) {
+                                    // Keep Old — discard new, finish
+                                    Button(
+                                        onClick = {
+                                            duplicateMatch = null
+                                            pendingTxn = null
+                                            finish()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3A3A3A))
+                                    ) { Text(W.duplicateKeepOld, color = Color(0xFFCCCCCC)) }
+                                    // Keep New — delete old, continue to linking
+                                    Button(
+                                        onClick = {
+                                            val existing = TransactionRepository.load(context).toMutableList()
+                                            val idx = existing.indexOfFirst { it.id == dup.id }
+                                            if (idx >= 0) {
+                                                val lamportClock = LamportClock(context)
+                                                val clk = lamportClock.tick()
+                                                existing[idx] = existing[idx].copy(deleted = true, deviceId_clock = clk)
+                                                TransactionRepository.save(context, existing)
+                                            }
+                                            val t = pendingTxn!!
+                                            val c = pendingCatAmounts
+                                            duplicateMatch = null
+                                            runLinkingChain(t, c)
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
+                                    ) { Text(W.duplicateKeepNew, color = Color.White) }
+                                    // Keep Both — continue to linking
+                                    Button(
+                                        onClick = {
+                                            val t = pendingTxn!!
+                                            val c = pendingCatAmounts
+                                            duplicateMatch = null
+                                            runLinkingChain(t, c)
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
+                                    ) { Text(W.duplicateKeepBoth, color = Color.White) }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Recurring expense match dialog
+                if (recurringMatch != null && pendingTxn != null) {
+                    val re = recurringMatch!!
+                    Dialog(
+                        onDismissRequest = {
+                            recurringMatch = null
+                            saveTransaction(context, pendingTxn!!)
+                            prefs.edit()
+                                .putString("widgetTxDate", today)
+                                .putInt("widgetTxCount", widgetTxCount + 1)
+                                .apply()
+                            pendingTxn = null
+                            finish()
+                        }
+                    ) {
+                        Surface(shape = dialogShape, color = MaterialTheme.colorScheme.surface) {
+                            Column {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(dialogHeaderColor, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Text(W.recurringTitle, color = dialogHeaderTextColor, style = MaterialTheme.typography.titleMedium)
+                                }
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(W.recurringBody(re.source), style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(modifier = Modifier.padding(top = 4.dp))
+                                    Text(
+                                        "$currencySymbol${"%.${maxDecimals}f".format(re.amount)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                HorizontalDivider(color = Color(0xFF424242))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(dialogFooterColor, RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            saveTransaction(context, pendingTxn!!)
+                                            prefs.edit()
+                                                .putString("widgetTxDate", today)
+                                                .putInt("widgetTxCount", widgetTxCount + 1)
+                                                .apply()
+                                            recurringMatch = null
+                                            pendingTxn = null
+                                            finish()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3A3A3A))
+                                    ) { Text(W.recurringNoLink, color = Color(0xFFCCCCCC)) }
+                                    Button(
+                                        onClick = {
+                                            saveTransaction(context, pendingTxn!!.copy(
+                                                linkedRecurringExpenseId = re.id,
+                                                linkedRecurringExpenseAmount = re.amount
+                                            ))
+                                            prefs.edit()
+                                                .putString("widgetTxDate", today)
+                                                .putInt("widgetTxCount", widgetTxCount + 1)
+                                                .apply()
+                                            recurringMatch = null
+                                            pendingTxn = null
+                                            finish()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
+                                    ) { Text(W.recurringLink, color = Color.White) }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Amortization match dialog
+                if (amortizationMatch != null && pendingTxn != null) {
+                    val am = amortizationMatch!!
+                    Dialog(
+                        onDismissRequest = {
+                            amortizationMatch = null
+                            saveTransaction(context, pendingTxn!!)
+                            prefs.edit()
+                                .putString("widgetTxDate", today)
+                                .putInt("widgetTxCount", widgetTxCount + 1)
+                                .apply()
+                            pendingTxn = null
+                            finish()
+                        }
+                    ) {
+                        Surface(shape = dialogShape, color = MaterialTheme.colorScheme.surface) {
+                            Column {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(dialogHeaderColor, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Text(W.amortizationTitle, color = dialogHeaderTextColor, style = MaterialTheme.typography.titleMedium)
+                                }
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(W.amortizationBody(am.source), style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(modifier = Modifier.padding(top = 4.dp))
+                                    Text(
+                                        "$currencySymbol${"%.${maxDecimals}f".format(am.amount)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                HorizontalDivider(color = Color(0xFF424242))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(dialogFooterColor, RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            saveTransaction(context, pendingTxn!!)
+                                            prefs.edit()
+                                                .putString("widgetTxDate", today)
+                                                .putInt("widgetTxCount", widgetTxCount + 1)
+                                                .apply()
+                                            amortizationMatch = null
+                                            pendingTxn = null
+                                            finish()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3A3A3A))
+                                    ) { Text(W.amortizationNoLink, color = Color(0xFFCCCCCC)) }
+                                    Button(
+                                        onClick = {
+                                            saveTransaction(context, pendingTxn!!.copy(
+                                                linkedAmortizationEntryId = am.id
+                                            ))
+                                            prefs.edit()
+                                                .putString("widgetTxDate", today)
+                                                .putInt("widgetTxCount", widgetTxCount + 1)
+                                                .apply()
+                                            amortizationMatch = null
+                                            pendingTxn = null
+                                            finish()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
+                                    ) { Text(W.amortizationLink, color = Color.White) }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Budget income match dialog
+                if (budgetIncomeMatch != null && pendingTxn != null) {
+                    val inc = budgetIncomeMatch!!
+                    Dialog(
+                        onDismissRequest = {
+                            budgetIncomeMatch = null
+                            saveTransaction(context, pendingTxn!!)
+                            prefs.edit()
+                                .putString("widgetTxDate", today)
+                                .putInt("widgetTxCount", widgetTxCount + 1)
+                                .apply()
+                            pendingTxn = null
+                            finish()
+                        }
+                    ) {
+                        Surface(shape = dialogShape, color = MaterialTheme.colorScheme.surface) {
+                            Column {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(dialogHeaderColor, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Text(W.budgetIncomeTitle, color = dialogHeaderTextColor, style = MaterialTheme.typography.titleMedium)
+                                }
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(W.budgetIncomeBody(inc.source), style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(modifier = Modifier.padding(top = 4.dp))
+                                    Text(
+                                        "$currencySymbol${"%.${maxDecimals}f".format(inc.amount)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                HorizontalDivider(color = Color(0xFF424242))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(dialogFooterColor, RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            saveTransaction(context, pendingTxn!!)
+                                            prefs.edit()
+                                                .putString("widgetTxDate", today)
+                                                .putInt("widgetTxCount", widgetTxCount + 1)
+                                                .apply()
+                                            budgetIncomeMatch = null
+                                            pendingTxn = null
+                                            finish()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3A3A3A))
+                                    ) { Text(W.budgetIncomeNoLink, color = Color(0xFFCCCCCC)) }
+                                    Button(
+                                        onClick = {
+                                            val recurringIncomeCatId = CategoryRepository.load(context)
+                                                .active.find { it.tag == "recurring_income" }?.id
+                                            val baseTxn = pendingTxn!!
+                                            val linked = baseTxn.copy(
+                                                isBudgetIncome = true,
+                                                linkedIncomeSourceId = inc.id,
+                                                linkedIncomeSourceAmount = inc.amount,
+                                                categoryAmounts = if (recurringIncomeCatId != null)
+                                                    listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
+                                                else baseTxn.categoryAmounts,
+                                                isUserCategorized = true
+                                            )
+                                            saveTransaction(context, linked)
+                                            prefs.edit()
+                                                .putString("widgetTxDate", today)
+                                                .putInt("widgetTxCount", widgetTxCount + 1)
+                                                .apply()
+                                            budgetIncomeMatch = null
+                                            pendingTxn = null
+                                            finish()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
+                                    ) { Text(W.budgetIncomeLink, color = Color.White) }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
     private fun saveTransaction(
         context: Context,
-        amount: Double,
-        source: String,
-        description: String,
-        isExpense: Boolean,
-        catAmounts: List<CategoryAmount> = emptyList()
+        txn: Transaction
     ) {
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val lamportClock = LamportClock(context)
-        val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
-        val clock = lamportClock.tick()
 
         val transactions = TransactionRepository.load(context).toMutableList()
-        val existingIds = transactions.map { it.id }.toSet()
-
-        val txn = Transaction(
-            id = generateTransactionId(existingIds),
-            type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME,
-            date = LocalDate.now(),
-            source = source,
-            description = description,
-            amount = amount,
-            categoryAmounts = catAmounts,
-            isUserCategorized = catAmounts.isNotEmpty(),
-            deviceId = deviceId,
-            source_clock = clock,
-            description_clock = clock,
-            amount_clock = clock,
-            date_clock = clock,
-            type_clock = clock,
-            categoryAmounts_clock = clock,
-            isUserCategorized_clock = clock,
-            isBudgetIncome_clock = clock,
-            linkedRecurringExpenseId_clock = clock,
-            linkedAmortizationEntryId_clock = clock,
-            linkedIncomeSourceId_clock = clock,
-            amortizationAppliedAmount_clock = clock,
-            linkedRecurringExpenseAmount_clock = clock,
-            linkedIncomeSourceAmount_clock = clock,
-            deviceId_clock = clock
-        )
-
         transactions.add(txn)
         TransactionRepository.save(context, transactions)
 
-        // Update available cash
-        val currentCash = prefs.getString("availableCash", "0.0")?.toDoubleOrNull() ?: 0.0
-        val newCash = if (isExpense) currentCash - amount else currentCash + amount
-        prefs.edit().putString("availableCash", newCash.toString()).apply()
+        // Update available cash — mirror BudgetCalculator.recomputeAvailableCash logic
+        val incomeMode = try {
+            IncomeMode.valueOf(prefs.getString("incomeMode", null) ?: "FIXED")
+        } catch (_: Exception) { IncomeMode.FIXED }
+        val currentCash = prefs.getDoubleCompat("availableCash")
+        val cashDelta = if (txn.type == TransactionType.EXPENSE) {
+            when {
+                txn.linkedAmortizationEntryId != null -> 0.0  // fully budget-accounted
+                txn.linkedRecurringExpenseId != null && txn.linkedRecurringExpenseAmount > 0.0 ->
+                    txn.linkedRecurringExpenseAmount - txn.amount  // delta from budgeted amount
+                else -> -txn.amount
+            }
+        } else {
+            // Income — behavior depends on income mode
+            when {
+                txn.linkedIncomeSourceId != null -> when (incomeMode) {
+                    IncomeMode.FIXED -> 0.0  // already in budget, no cash effect
+                    IncomeMode.ACTUAL -> {
+                        // Delta between actual and budgeted
+                        if (txn.linkedIncomeSourceAmount > 0.0)
+                            txn.amount - txn.linkedIncomeSourceAmount
+                        else txn.amount
+                    }
+                    IncomeMode.ACTUAL_ADJUST -> {
+                        // Update the income source amount to match, then delta is 0
+                        val srcId = txn.linkedIncomeSourceId!!
+                        val sources = IncomeSourceRepository.load(context).toMutableList()
+                        val idx = sources.indexOfFirst { it.id == srcId }
+                        if (idx >= 0 && sources[idx].amount != txn.amount) {
+                            val lamportClock = LamportClock(context)
+                            val clk = lamportClock.tick()
+                            sources[idx] = sources[idx].copy(
+                                amount = txn.amount,
+                                amount_clock = clk
+                            )
+                            IncomeSourceRepository.save(context, sources)
+                        }
+                        0.0  // source adjusted, no cash delta
+                    }
+                }
+                txn.isBudgetIncome -> 0.0
+                else -> txn.amount
+            }
+        }
+        if (cashDelta != 0.0) {
+            val newCash = BudgetCalculator.roundCents(currentCash + cashDelta)
+            prefs.edit().putString("availableCash", newCash.toString()).apply()
+        }
 
         // Mark sync dirty
         val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
