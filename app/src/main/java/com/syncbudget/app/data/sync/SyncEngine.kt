@@ -16,6 +16,7 @@ import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.RepeatType
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -54,6 +55,27 @@ class SyncEngine(
     }
 
     private val prefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+
+    private val syncLogFile: java.io.File by lazy {
+        val dir = android.os.Environment.getExternalStoragePublicDirectory(
+            android.os.Environment.DIRECTORY_DOWNLOADS
+        )
+        java.io.File(dir, "sync_log.txt")
+    }
+
+    private var progressCallback: ((String) -> Unit)? = null
+
+    private fun syncLog(msg: String) {
+        val ts = LocalDateTime.now().toString()
+        val line = "[$ts] $msg\n"
+        android.util.Log.d("SyncEngine", msg)
+        try { syncLogFile.appendText(line) } catch (_: Exception) {}
+    }
+
+    private fun reportProgress(msg: String) {
+        syncLog(msg)
+        progressCallback?.invoke(msg)
+    }
 
     private var lastSyncVersion: Long
         get() = prefs.getLong("lastSyncVersion", 0L)
@@ -115,9 +137,13 @@ class SyncEngine(
         categories: List<Category>,
         sharedSettings: SharedSettings = SharedSettingsRepository.load(context),
         existingCatIdRemap: Map<Int, Int> = emptyMap(),
-        periodLedgerEntries: List<PeriodLedgerEntry> = emptyList()
+        periodLedgerEntries: List<PeriodLedgerEntry> = emptyList(),
+        onProgress: ((String) -> Unit)? = null
     ): SyncResult {
         try {
+            progressCallback = onProgress
+            syncLog("=== Sync started (device=$deviceId, syncVer=$lastSyncVersion, pushClock=$lastPushedClock) ===")
+
             // Step 0: Stale check — block sync if too many days without success
             val lastSync = prefs.getLong("lastSuccessfulSync", 0L)
             if (lastSync > 0L) {
@@ -140,6 +166,8 @@ class SyncEngine(
             }
             if (deviceRecord == null) {
                 // New device — try to bootstrap from snapshot
+                syncLog("No device record found — bootstrapping from snapshot")
+                reportProgress("Loading family data…")
                 val snapshot = FirestoreService.getSnapshot(groupId)
                 if (snapshot == null) {
                     // Verify the group itself still exists before concluding removal
@@ -161,9 +189,30 @@ class SyncEngine(
                 FirestoreService.updateDeviceMetadata(groupId, deviceId, snapshot.snapshotVersion)
                 snapshotApplied = true
             } else {
-                // Existing device — check if stale enough to benefit from snapshot catch-up
                 val lastSync = prefs.getLong("lastSuccessfulSync", 0L)
-                if (lastSync > 0L) {
+                if (lastSync == 0L && lastSyncVersion == 0L) {
+                    // Device record exists (created during join) but has never
+                    // completed a sync.  Bootstrap from snapshot just like a new device.
+                    syncLog("Device record exists but never synced — bootstrapping from snapshot")
+                    reportProgress("Loading family data…")
+                    val snapshot = FirestoreService.getSnapshot(groupId)
+                    if (snapshot != null) {
+                        val decrypted = decryptSnapshot(snapshot)
+                        if (decrypted != null) {
+                            snapshotState = decrypted
+                            lastSyncVersion = snapshot.snapshotVersion
+                            FirestoreService.updateDeviceMetadata(groupId, deviceId, snapshot.snapshotVersion)
+                            snapshotApplied = true
+                            syncLog("Snapshot applied (version ${snapshot.snapshotVersion})")
+                        } else {
+                            syncLog("Snapshot decrypt failed — falling through to delta fetch from 0")
+                        }
+                    } else {
+                        syncLog("No snapshot available — falling through to delta fetch from 0")
+                    }
+                    // else: fall through to normal delta fetch from version 0
+                } else if (lastSync > 0L) {
+                    // Existing device — check if stale enough to benefit from snapshot catch-up
                     val daysSinceSync = (System.currentTimeMillis() - lastSync) / (24 * 60 * 60 * 1000L)
                     if (daysSinceSync > STALE_CHECK_DAYS) {
                         val nextVersion = FirestoreService.getGroupNextVersion(groupId)
@@ -186,11 +235,17 @@ class SyncEngine(
             }
 
             // Step 2: Fetch remote deltas (including post-snapshot deltas for new devices)
+            syncLog("Fetching deltas from version $lastSyncVersion")
+            reportProgress("Checking for updates…")
             val remoteDeltas = FirestoreService.fetchDeltas(groupId, lastSyncVersion)
+            syncLog("Fetched ${remoteDeltas.size} deltas")
+            if (remoteDeltas.size > 10) {
+                reportProgress("Processing ${remoteDeltas.size} updates…")
+            }
 
             // Step 3: Decrypt and deserialize remote deltas
             val packets = mutableListOf<DeltaPacket>()
-            for (delta in remoteDeltas) {
+            for ((idx, delta) in remoteDeltas.withIndex()) {
                 if (delta.sourceDeviceId == deviceId) continue // skip own deltas
                 try {
                     val encrypted = Base64.decode(delta.encryptedPayload, Base64.NO_WRAP)
@@ -201,7 +256,12 @@ class SyncEngine(
                     android.util.Log.w("SyncEngine", "Skipping unreadable delta from ${delta.sourceDeviceId}: ${e.message}")
                     continue
                 }
+                if (idx % 100 == 99) {
+                    reportProgress("Decrypting ${idx + 1}/${remoteDeltas.size}…")
+                    yield() // cooperate with cancellation during heavy decrypt
+                }
             }
+            syncLog("Decrypted ${packets.size} packets (skipped ${remoteDeltas.size - packets.size} own/unreadable)")
 
             // Step 4: Per-field CRDT merge — use snapshot state as base if applied
             val baseTxns: List<Transaction>
@@ -255,7 +315,32 @@ class SyncEngine(
             var budgetRecalcNeeded = false
             val catIdRemap = existingCatIdRemap.toMutableMap() // remote ID -> local ID (seeded from persistent map)
 
-            for (packet in packets) {
+            // Build index maps for O(1) lookups during merge (avoids O(n²) indexOfFirst)
+            val txnIndex = buildIndexMap(mergedTxns)
+            val reIndex = buildIndexMap(mergedRe)
+            val isIndex = buildIndexMap(mergedIs)
+            val sgIndex = buildIndexMap(mergedSg)
+            val aeIndex = buildIndexMap(mergedAe)
+            val plIndex = buildIndexMap(mergedPl)
+
+            syncLog("Merging ${packets.size} delta packets")
+
+            // Build category index maps for O(1) lookups
+            val catIndexById = mutableMapOf<Int, Int>()
+            val catIndexByTag = mutableMapOf<String, Int>()
+            val catIndexByName = mutableMapOf<String, Int>()
+            for (i in mergedCat.indices) {
+                val cat = mergedCat[i]
+                catIndexById[cat.id] = i
+                if (cat.tag.isNotEmpty()) catIndexByTag[cat.tag] = i
+                if (cat.name.isNotEmpty() && cat.tag.isNotEmpty()) catIndexByName[cat.name] = i
+            }
+
+            for ((packetIdx, packet) in packets.withIndex()) {
+                if (packetIdx % 50 == 0 && packetIdx > 0) {
+                    reportProgress("Merging $packetIdx/${packets.size}…")
+                    yield() // cooperate with coroutine cancellation
+                }
                 // Merge with max field clock from the packet (NOT the wall-clock
                 // timestamp, which would inflate our logical counter to ~1.7 billion).
                 val maxFieldClock = packet.changes.maxOfOrNull { change ->
@@ -265,58 +350,62 @@ class SyncEngine(
                 for (change in packet.changes) {
                     when (change.type) {
                         "transaction" -> mergedTxns = mergeRecordIntoList(
-                            mergedTxns, change, deviceId
+                            mergedTxns, change, deviceId, txnIndex
                         ) { local, remote -> CrdtMerge.mergeTransaction(local, remote, deviceId) }
                         "recurring_expense" -> {
                             mergedRe = mergeRecordIntoList(
-                                mergedRe, change, deviceId
+                                mergedRe, change, deviceId, reIndex
                             ) { local, remote -> CrdtMerge.mergeRecurringExpense(local, remote, deviceId) }
                             budgetRecalcNeeded = true
                         }
                         "income_source" -> {
                             mergedIs = mergeRecordIntoList(
-                                mergedIs, change, deviceId
+                                mergedIs, change, deviceId, isIndex
                             ) { local, remote -> CrdtMerge.mergeIncomeSource(local, remote, deviceId) }
                             budgetRecalcNeeded = true
                         }
                         "savings_goal" -> mergedSg = mergeRecordIntoList(
-                            mergedSg, change, deviceId
+                            mergedSg, change, deviceId, sgIndex
                         ) { local, remote -> CrdtMerge.mergeSavingsGoal(local, remote, deviceId) }
                         "amortization_entry" -> {
                             mergedAe = mergeRecordIntoList(
-                                mergedAe, change, deviceId
+                                mergedAe, change, deviceId, aeIndex
                             ) { local, remote -> CrdtMerge.mergeAmortizationEntry(local, remote, deviceId) }
                             budgetRecalcNeeded = true
                         }
                         "category" -> {
                             val remoteCat = deserializeCategory(change)
-                            val byId = mergedCat.indexOfFirst { it.id == change.id }
-                            if (byId >= 0) {
+                            val byId = catIndexById[change.id]
+                            if (byId != null) {
                                 mergedCat[byId] = CrdtMerge.mergeCategory(mergedCat[byId], remoteCat, deviceId)
                             } else {
                                 // Deduplicate by tag: if a local category has the same tag, merge into it
-                                val byTag = if (remoteCat.tag.isNotEmpty())
-                                    mergedCat.indexOfFirst { it.tag == remoteCat.tag } else -1
-                                if (byTag >= 0) {
+                                val byTag = if (remoteCat.tag.isNotEmpty()) catIndexByTag[remoteCat.tag] else null
+                                if (byTag != null) {
                                     catIdRemap[change.id] = mergedCat[byTag].id
                                     mergedCat[byTag] = CrdtMerge.mergeCategory(mergedCat[byTag], remoteCat, deviceId)
+                                    catIndexById[change.id] = byTag // cache for future lookups
                                 } else {
                                     // Fallback: match by name against known defaults (handles
                                     // remote categories arriving without a tag field)
                                     val byName = if (remoteCat.tag.isEmpty() && remoteCat.name.isNotEmpty())
-                                        mergedCat.indexOfFirst { it.tag.isNotEmpty() && it.name == remoteCat.name }
-                                    else -1
-                                    if (byName >= 0) {
+                                        catIndexByName[remoteCat.name] else null
+                                    if (byName != null) {
                                         catIdRemap[change.id] = mergedCat[byName].id
                                         mergedCat[byName] = CrdtMerge.mergeCategory(mergedCat[byName], remoteCat, deviceId)
+                                        catIndexById[change.id] = byName
                                     } else {
+                                        val newIdx = mergedCat.size
                                         mergedCat.add(remoteCat)
+                                        catIndexById[remoteCat.id] = newIdx
+                                        if (remoteCat.tag.isNotEmpty()) catIndexByTag[remoteCat.tag] = newIdx
+                                        if (remoteCat.name.isNotEmpty()) catIndexByName[remoteCat.name] = newIdx
                                     }
                                 }
                             }
                         }
                         "period_ledger" -> mergedPl = mergeRecordIntoList(
-                            mergedPl, change, deviceId
+                            mergedPl, change, deviceId, plIndex
                         ) { local, remote -> CrdtMerge.mergePeriodLedgerEntry(local, remote, deviceId) }
                         "shared_settings" -> {
                             val remoteSettings = deserializeSharedSettings(change, mergedSettings)
@@ -337,6 +426,7 @@ class SyncEngine(
                     }
                 }
             }
+            syncLog("Merge complete: ${mergedTxns.size} txns, ${mergedRe.size} RE, ${mergedIs.size} IS, ${mergedCat.size} cats")
 
             // Step 5: Remap category IDs in transactions (handles different random IDs per device)
             // Only Transaction has categoryAmounts with categoryId references.
@@ -458,59 +548,61 @@ class SyncEngine(
                 }
             }
 
-            // Step 6: Push ALL local records regardless of deviceId ownership.
-            // After the deviceId_clock CRDT fix, deviceId converges to the
-            // original creator's value on all devices. Using deviceId as a push
-            // filter would block non-admin devices from pushing their own
-            // records once convergence occurs.  DeltaBuilder's threshold
-            // (field_clock > lastPushedClock) already prevents re-pushing
-            // unchanged data, so the filter is unnecessary.  CRDT merge on
-            // the receiving side is idempotent, making redundant pushes safe.
+            // Step 6: Push records.  After a snapshot bootstrap, use the MERGED
+            // data instead of the original local data.  The local data may contain
+            // stale/wrong values (e.g., period ledger entries with applied=0.0 from
+            // join stamping) that would poison the admin's data via CRDT.  Using
+            // merged data ensures correct snapshot values are propagated.
+            // DeltaBuilder's threshold (field_clock > lastPushedClock) still
+            // prevents re-pushing unchanged data, and CRDT merge on the receiving
+            // side is idempotent, making redundant pushes safe.
+            val pushTxns = if (snapshotApplied || snapshotCatchUp) mergedTxns else transactions
+            val pushRe = if (snapshotApplied || snapshotCatchUp) mergedRe else recurringExpenses
+            val pushIs = if (snapshotApplied || snapshotCatchUp) mergedIs else incomeSources
+            val pushSg = if (snapshotApplied || snapshotCatchUp) mergedSg else savingsGoals
+            val pushAe = if (snapshotApplied || snapshotCatchUp) mergedAe else amortizationEntries
+            val pushPl = if (snapshotApplied || snapshotCatchUp) mergedPl else periodLedgerEntries
+            val pushCat = if (snapshotApplied || snapshotCatchUp) mergedCat else categories
+            val pushSettings = if (snapshotApplied || snapshotCatchUp) mergedSettings else sharedSettings
+
             val localDeltas = mutableListOf<RecordDelta>()
             val pushClock = lastPushedClock
-            for (txn in transactions) {
+            for (txn in pushTxns) {
                 DeltaBuilder.buildTransactionDelta(txn, pushClock)?.let { localDeltas.add(it) }
             }
-            for (re in recurringExpenses) {
+            for (re in pushRe) {
                 DeltaBuilder.buildRecurringExpenseDelta(re, pushClock)?.let { localDeltas.add(it) }
             }
-            for (src in incomeSources) {
+            for (src in pushIs) {
                 DeltaBuilder.buildIncomeSourceDelta(src, pushClock)?.let { localDeltas.add(it) }
             }
-            for (goal in savingsGoals) {
+            for (goal in pushSg) {
                 DeltaBuilder.buildSavingsGoalDelta(goal, pushClock)?.let { localDeltas.add(it) }
             }
-            for (entry in amortizationEntries) {
+            for (entry in pushAe) {
                 DeltaBuilder.buildAmortizationEntryDelta(entry, pushClock)?.let { localDeltas.add(it) }
             }
             // Push deduped period ledger — avoids pushing multiple deltas for the
             // same epoch-day ID which would create duplicates on receiving devices.
-            for (entry in PeriodLedgerRepository.dedup(periodLedgerEntries)) {
+            for (entry in PeriodLedgerRepository.dedup(pushPl)) {
                 DeltaBuilder.buildPeriodLedgerDelta(entry, pushClock)?.let { localDeltas.add(it) }
             }
-            // Categories use the same pushClock threshold as other types.
-            // New devices get all categories from the snapshot bootstrap,
-            // and catIdRemap is persisted across syncs, so re-pushing
-            // unchanged categories every sync is unnecessary.
-            for (cat in categories) {
+            for (cat in pushCat) {
                 DeltaBuilder.buildCategoryDelta(cat, pushClock)?.let { localDeltas.add(it) }
             }
             // SharedSettings is always pushed (shared, not per-device)
-            DeltaBuilder.buildSharedSettingsDelta(sharedSettings, pushClock)?.let { localDeltas.add(it) }
+            DeltaBuilder.buildSharedSettingsDelta(pushSettings, pushClock)?.let { localDeltas.add(it) }
 
+            syncLog("Built ${localDeltas.size} local deltas to push")
             var deltasPushed = 0
             if (localDeltas.isNotEmpty()) {
-                // Only count locally-owned records for maxDeltaClock.
-                // Foreign records (received from other devices and re-pushed)
-                // can have arbitrarily high field clocks that would inflate
-                // lastPushedClock past locally-created records' clocks,
-                // permanently stranding them (DeltaBuilder skips fields
-                // with clock ≤ lastPushedClock).  The deviceId filter is
-                // sufficient — all local clocks come from our own lamport
-                // counter, and the lamport merge below ensures future ticks
-                // stay ahead of lastPushedClock.
+                reportProgress("Sending local changes…")
+                // Advance lastPushedClock past ALL pushed records (including
+                // foreign records received via merge).  This prevents re-pushing
+                // received data on the next sync cycle.  Any locally-owned records
+                // whose clocks fall below the new lastPushedClock will be caught
+                // by the rescue mechanism on the next sync.
                 val maxDeltaClock = localDeltas
-                    .filter { it.deviceId == deviceId }
                     .maxOfOrNull { delta ->
                         delta.fields.values.maxOfOrNull { it.clock } ?: 0L
                     } ?: lastPushedClock
@@ -530,8 +622,10 @@ class SyncEngine(
                 val encrypted = CryptoHelper.encryptWithKey(serialized, encryptionKey)
                 val encoded = Base64.encodeToString(encrypted, Base64.NO_WRAP)
 
+                syncLog("Pushing delta (${encoded.length} chars encoded)")
                 FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded)
                 deltasPushed = localDeltas.size
+                syncLog("Push complete ($deltasPushed records)")
             }
 
             // Step 7: Update metadata
@@ -608,6 +702,8 @@ class SyncEngine(
             // If remap fixed orphaned category IDs, include transactions even
             // when no new deltas arrived — otherwise the fix is never persisted.
             val txnsChanged = hasChanges || remapChangedTxns
+            syncLog("=== Sync complete: received=${packets.sumOf { it.changes.size }}, pushed=$deltasPushed, snapshot=${snapshotApplied} ===")
+            progressCallback = null
             return SyncResult(
                 success = true,
                 deltasReceived = packets.sumOf { it.changes.size },
@@ -631,6 +727,7 @@ class SyncEngine(
                 e is javax.crypto.AEADBadTagException -> "encryption_error"
                 else -> e.message
             }
+            syncLog("=== Sync FAILED: $errorCode — ${e.javaClass.simpleName}: ${e.message} ===")
             return SyncResult(success = false, error = errorCode)
         }
     }
@@ -678,6 +775,7 @@ class SyncEngine(
         list: MutableList<T>,
         change: RecordDelta,
         localDeviceId: String,
+        indexById: MutableMap<Int, Int>? = null,
         mergeFn: (T, T) -> T
     ): MutableList<T> {
         val deserialized: Any = when (change.type) {
@@ -698,26 +796,31 @@ class SyncEngine(
             return list
         }
 
-        val existingIndex = list.indexOfFirst { getId(it) == change.id }
+        // Use index map for O(1) lookup when available, fall back to linear scan
+        val existingIndex = indexById?.get(change.id) ?: list.indexOfFirst { getId(it) == change.id }
         if (existingIndex >= 0) {
             list[existingIndex] = mergeFn(list[existingIndex], remote)
         } else {
             // Guard: don't add skeleton records from partial deltas.
-            // When the pushing device has a stale LamportClock, some field
-            // clocks may be below lastPushedClock, producing a delta that
-            // is missing critical fields (amount, name, etc.).  Adding such
-            // a record shows the user a broken $0 / empty-name entry.
-            // Skip it — the full record will arrive on a subsequent sync
-            // once the pushing device's clock catches up.
             if (isSkeletonRecord(remote)) {
                 android.util.Log.w("SyncEngine",
                     "Skipping skeleton ${change.type} id=${change.id} " +
                     "(missing critical field clocks)")
                 return list
             }
+            val newIdx = list.size
             list.add(remote)
+            indexById?.put(change.id, newIdx)
         }
         return list
+    }
+
+    private fun <T : Any> buildIndexMap(list: List<T>): MutableMap<Int, Int> {
+        val map = mutableMapOf<Int, Int>()
+        for (i in list.indices) {
+            map[getId(list[i])] = i
+        }
+        return map
     }
 
     private fun getId(record: Any): Int = when (record) {
@@ -768,6 +871,7 @@ class SyncEngine(
             categoryAmounts = categoryAmounts,
             amount = (f["amount"]?.value as? Number)?.toDouble() ?: 0.0,
             isUserCategorized = f["isUserCategorized"]?.value as? Boolean ?: true,
+            excludeFromBudget = f["excludeFromBudget"]?.value as? Boolean ?: false,
             isBudgetIncome = f["isBudgetIncome"]?.value as? Boolean ?: false,
             linkedRecurringExpenseId = (f["linkedRecurringExpenseId"]?.value as? Number)?.toInt(),
             linkedAmortizationEntryId = (f["linkedAmortizationEntryId"]?.value as? Number)?.toInt(),
@@ -784,6 +888,7 @@ class SyncEngine(
             type_clock = f["type"]?.clock ?: 0L,
             categoryAmounts_clock = f["categoryAmounts"]?.clock ?: 0L,
             isUserCategorized_clock = f["isUserCategorized"]?.clock ?: 0L,
+            excludeFromBudget_clock = f["excludeFromBudget"]?.clock ?: 0L,
             isBudgetIncome_clock = f["isBudgetIncome"]?.clock ?: 0L,
             linkedRecurringExpenseId_clock = f["linkedRecurringExpenseId"]?.clock ?: 0L,
             linkedAmortizationEntryId_clock = f["linkedAmortizationEntryId"]?.clock ?: 0L,

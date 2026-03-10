@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -76,12 +77,15 @@ import com.syncbudget.app.data.generateRecurringExpenseId
 import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.strings.LocalStrings
+import com.syncbudget.app.ui.theme.LocalAppToast
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import com.syncbudget.app.ui.theme.PulsingScrollArrow
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -113,6 +117,8 @@ fun RecurringExpensesScreen(
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
     val context = LocalContext.current
+    val toastState = LocalAppToast.current
+    var savingsTextYPx by remember { mutableIntStateOf(0) }
     val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<RecurringExpense?>(null) }
@@ -212,13 +218,10 @@ fun RecurringExpensesScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier
                                     .weight(1f)
+                                    .onGloballyPositioned { savingsTextYPx = it.positionInWindow().y.toInt() }
                                     .clickable {
                                         if (lowPointDateStr.isNotEmpty()) {
-                                            Toast.makeText(
-                                                context,
-                                                S.recurringExpenses.savingsLowPointToast(lowPointDateStr),
-                                                Toast.LENGTH_LONG
-                                            ).show()
+                                            toastState.show(S.recurringExpenses.savingsLowPointToast(lowPointDateStr), savingsTextYPx)
                                         }
                                     }
                             )
@@ -339,12 +342,12 @@ fun RecurringExpensesScreen(
                     ExpenseRow(expense, next, null, currencySymbol, dateFormatter, S,
                         onEdit = { editingExpense = expense },
                         onDelete = { deletingExpense = expense },
-                        onLongPress = {
+                        onLongPress = { yPx ->
                             val linked = transactions.filter { it.linkedRecurringExpenseId == expense.id }
                                 .sortedByDescending { it.date }
                                 .take(10)
                             if (linked.isEmpty()) {
-                                Toast.makeText(context, S.recurringExpenses.noLinkedTransactions, Toast.LENGTH_SHORT).show()
+                                toastState.show(S.recurringExpenses.noLinkedTransactions, yPx)
                             } else {
                                 linkedTransactionsExpense = expense
                             }
@@ -400,12 +403,12 @@ fun RecurringExpensesScreen(
                     ExpenseRow(expense, next, null, currencySymbol, dateFormatter, S,
                         onEdit = { editingExpense = expense },
                         onDelete = { deletingExpense = expense },
-                        onLongPress = {
+                        onLongPress = { yPx ->
                             val linked = transactions.filter { it.linkedRecurringExpenseId == expense.id }
                                 .sortedByDescending { it.date }
                                 .take(10)
                             if (linked.isEmpty()) {
-                                Toast.makeText(context, S.recurringExpenses.noLinkedTransactions, Toast.LENGTH_SHORT).show()
+                                toastState.show(S.recurringExpenses.noLinkedTransactions, yPx)
                             } else {
                                 linkedTransactionsExpense = expense
                             }
@@ -461,12 +464,12 @@ fun RecurringExpensesScreen(
                     ExpenseRow(expense, next, periodLabel(expense), currencySymbol, dateFormatter, S,
                         onEdit = { editingExpense = expense },
                         onDelete = { deletingExpense = expense },
-                        onLongPress = {
+                        onLongPress = { yPx ->
                             val linked = transactions.filter { it.linkedRecurringExpenseId == expense.id }
                                 .sortedByDescending { it.date }
                                 .take(10)
                             if (linked.isEmpty()) {
-                                Toast.makeText(context, S.recurringExpenses.noLinkedTransactions, Toast.LENGTH_SHORT).show()
+                                toastState.show(S.recurringExpenses.noLinkedTransactions, yPx)
                             } else {
                                 linkedTransactionsExpense = expense
                             }
@@ -592,12 +595,14 @@ private fun ExpenseRow(
     S: com.syncbudget.app.ui.strings.AppStrings,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onLongPress: () -> Unit = {}
+    onLongPress: (Int) -> Unit = {}
 ) {
+    var rowYPx by remember { mutableIntStateOf(0) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onEdit, onLongClick = onLongPress)
+            .onGloballyPositioned { rowYPx = it.positionInWindow().y.toInt() }
+            .combinedClickable(onClick = onEdit, onLongClick = { onLongPress(rowYPx) })
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -652,6 +657,7 @@ private fun AddEditExpenseDialog(
 ) {
     val S = LocalStrings.current
     val context = LocalContext.current
+    val toastState = LocalAppToast.current
     val isEdit = existingExpense != null
     val title = if (isEdit) S.recurringExpenses.editExpense else S.recurringExpenses.addExpense
     val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
@@ -997,11 +1003,12 @@ private fun AddEditExpenseDialog(
                 }
 
                 DialogFooter {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
                     Spacer(modifier = Modifier.width(8.dp))
                     DialogPrimaryButton(
                         onClick = {
@@ -1103,18 +1110,22 @@ private fun AddEditExpenseDialog(
             title = "Select Date",
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                DialogPrimaryButton(onClick = {
+                var okBtnYPx by remember { mutableIntStateOf(0) }
+                DialogPrimaryButton(
+                    onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
                             val selected = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
                             val monthInterval = intervalText.toIntOrNull() ?: 1
                             if (repeatType == RepeatType.MONTHS && monthInterval != 12 && selected.dayOfMonth > 28) {
-                                Toast.makeText(context, S.common.dateDayTooHigh, Toast.LENGTH_SHORT).show()
+                                toastState.show(S.common.dateDayTooHigh, okBtnYPx)
                             } else {
                                 startDate = selected
                                 showDatePicker = false
                             }
                         }
-                    }) { Text(S.common.ok) }
+                    },
+                    modifier = Modifier.onGloballyPositioned { okBtnYPx = it.positionInWindow().y.toInt() }
+                ) { Text(S.common.ok) }
             },
             dismissButton = {
                 DialogSecondaryButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }

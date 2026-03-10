@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -581,11 +582,12 @@ private fun AddEditSavingsGoalDialog(
                 }
 
                 DialogFooter {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
                     Spacer(modifier = Modifier.width(8.dp))
                     DialogPrimaryButton(onClick = {
                             val isTypeValid = if (isTargetDateType) isTargetDateValid else isContributionValid

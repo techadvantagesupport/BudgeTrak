@@ -1,11 +1,11 @@
 package com.syncbudget.app.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +39,7 @@ import com.syncbudget.app.ui.theme.DialogWarningButton
 import com.syncbudget.app.ui.theme.dialogHeaderColor
 import com.syncbudget.app.ui.theme.dialogHeaderTextColor
 import com.syncbudget.app.ui.theme.dialogFooterColor
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -74,7 +75,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.syncbudget.app.data.sync.AdminClaim
 import com.syncbudget.app.data.sync.DeviceInfo
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import com.syncbudget.app.ui.strings.LocalStrings
+import com.syncbudget.app.ui.theme.LocalAppToast
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 
 private val COMMON_TIMEZONES = listOf(
@@ -129,6 +134,7 @@ fun FamilySyncScreen(
     onClaimAdmin: () -> Unit = {},
     onObjectClaim: () -> Unit = {},
     syncErrorMessage: String? = null,
+    syncProgressMessage: String? = null,
     onCreateGroup: (nickname: String) -> Unit,
     onJoinGroup: (pairingCode: String, nickname: String) -> Unit,
     onLeaveGroup: () -> Unit,
@@ -144,6 +150,7 @@ fun FamilySyncScreen(
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
     val context = LocalContext.current
+    val toastState = LocalAppToast.current
     val clipboardManager = LocalClipboardManager.current
 
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -359,14 +366,16 @@ fun FamilySyncScreen(
                             fontFamily = FontFamily.Monospace,
                             modifier = Modifier.weight(1f)
                         )
+                        var copyBtnYPx by remember { mutableIntStateOf(0) }
                         IconButton(
                             onClick = {
                                 groupId?.let {
                                     clipboardManager.setText(AnnotatedString(it))
-                                    Toast.makeText(context, S.sync.pairingCodeCopied, Toast.LENGTH_SHORT).show()
+                                    toastState.show(S.sync.pairingCodeCopied, copyBtnYPx)
                                 }
                             },
                             modifier = Modifier.size(32.dp)
+                                .onGloballyPositioned { copyBtnYPx = it.positionInWindow().y.toInt() }
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.ContentCopy,
@@ -730,10 +739,14 @@ fun FamilySyncScreen(
                     }
                 },
                 confirmButton = {
-                    DialogPrimaryButton(onClick = {
-                        clipboardManager.setText(AnnotatedString(generatedPairingCode))
-                        Toast.makeText(context, S.sync.pairingCodeCopied, Toast.LENGTH_SHORT).show()
-                    }) {
+                    var copyDlgBtnYPx by remember { mutableIntStateOf(0) }
+                    DialogPrimaryButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(generatedPairingCode))
+                            toastState.show(S.sync.pairingCodeCopied, copyDlgBtnYPx)
+                        },
+                        modifier = Modifier.onGloballyPositioned { copyDlgBtnYPx = it.positionInWindow().y.toInt() }
+                    ) {
                         Text("Copy")
                     }
                 },
@@ -1019,13 +1032,13 @@ fun FamilySyncScreen(
                                 .background(footerBg)
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
-                            Row(
+                            FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 DialogSecondaryButton(onClick = { showRepairDialog = false }) {
-                                    Text(S.common.cancel)
+                                    Text(S.common.cancel, maxLines = 1)
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 DialogPrimaryButton(onClick = {
@@ -1033,10 +1046,39 @@ fun FamilySyncScreen(
                                     onSaveDeviceRoster(result)
                                     showRepairDialog = false
                                 }) {
-                                    Text(S.common.save)
+                                    Text(S.common.save, maxLines = 1)
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Sync progress overlay
+        if (syncProgressMessage != null) {
+            AdAwareDialog(
+                onDismissRequest = { /* non-dismissable while in progress */ }
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(48.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = syncProgressMessage ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }

@@ -1,6 +1,5 @@
 package com.syncbudget.app.ui.screens
 
-import android.widget.Toast
 import androidx.compose.animation.animateColor
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.animation.core.LinearEasing
@@ -104,6 +103,7 @@ import com.syncbudget.app.ui.components.FlipDisplay
 import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.data.sync.DeviceInfo
 import com.syncbudget.app.ui.strings.LocalStrings
+import com.syncbudget.app.ui.theme.LocalAppToast
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -115,6 +115,9 @@ import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 
 // SuperchargeMode is in com.syncbudget.app.data.SuperchargeMode
 
@@ -275,7 +278,8 @@ fun MainScreen(
     syncStatus: String = "off",
     staleDays: Int = 0,
     syncDevices: List<DeviceInfo> = emptyList(),
-    localDeviceId: String = ""
+    localDeviceId: String = "",
+    onSyncNow: () -> Unit = {}
 ) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
@@ -416,7 +420,8 @@ fun MainScreen(
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(start = 20.dp, bottom = 20.dp),
+                            .padding(start = 20.dp, bottom = 20.dp)
+                            .clickable(enabled = syncStatus != "syncing") { onSyncNow() },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -622,6 +627,8 @@ private fun SpendingPieChart(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val toastState = LocalAppToast.current
+    var tapYPx by remember { mutableIntStateOf(0) }
     val S = LocalStrings.current
     val chartedCategories = remember(categories) { categories.filter { it.charted } }
     val categoryMap = remember(categories) { categories.associateBy { it.id } }
@@ -641,6 +648,7 @@ private fun SpendingPieChart(
 
     val filteredExpenses = transactions.filter {
         it.type == TransactionType.EXPENSE &&
+            !it.excludeFromBudget &&
             !it.date.isBefore(startDate) &&
             !it.date.isAfter(today)
     }
@@ -769,14 +777,9 @@ private fun SpendingPieChart(
                             tint = w.color,
                             modifier = Modifier
                                 .size(20.dp)
+                                .onGloballyPositioned { tapYPx = it.positionInWindow().y.toInt() }
                                 .clickable {
-                                    Toast
-                                        .makeText(
-                                            context,
-                                            "${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}",
-                                            Toast.LENGTH_SHORT
-                                        )
-                                        .show()
+                                    toastState.show("${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}", tapYPx)
                                 }
                         )
                     }
@@ -837,14 +840,9 @@ private fun SpendingPieChart(
                         modifier = Modifier
                             .offset(x = iconX, y = iconY)
                             .size(iconSize)
+                            .onGloballyPositioned { tapYPx = it.positionInWindow().y.toInt() }
                             .clickable {
-                                Toast
-                                    .makeText(
-                                        context,
-                                        "${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}",
-                                        Toast.LENGTH_SHORT
-                                    )
-                                    .show()
+                                toastState.show("${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}", tapYPx)
                             }
                     )
                 }
@@ -875,14 +873,9 @@ private fun SpendingPieChart(
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(w.color)
                                             .border(1.dp, LocalSyncBudgetColors.current.displayBorder, RoundedCornerShape(8.dp))
+                                            .onGloballyPositioned { tapYPx = it.positionInWindow().y.toInt() }
                                             .clickable {
-                                                Toast
-                                                    .makeText(
-                                                        context,
-                                                        "${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}",
-                                                        Toast.LENGTH_SHORT
-                                                    )
-                                                    .show()
+                                                toastState.show("${w.categoryName}: ${formatCurrency(w.amount, currencySymbol)}", tapYPx)
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {

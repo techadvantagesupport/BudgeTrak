@@ -126,8 +126,8 @@ object GroupManager {
         SyncWorker.cancel(context)
     }
 
-    suspend fun dissolveGroup(context: Context, groupId: String) {
-        FirestoreService.deleteGroup(groupId)
+    suspend fun dissolveGroup(context: Context, groupId: String, onProgress: ((String) -> Unit)? = null) {
+        FirestoreService.deleteGroup(groupId, onProgress)
         leaveGroup(context)
     }
 

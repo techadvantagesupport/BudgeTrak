@@ -60,7 +60,10 @@ class BudgetWidgetProvider : AppWidgetProvider() {
             val currencySymbol = prefs.getString("currencySymbol", "$") ?: "$"
             val showDecimals = prefs.getBoolean("showDecimals", false)
             val decimalPlaces = if (showDecimals) (CURRENCY_DECIMALS[currencySymbol] ?: 2) else 0
-            val digitCount = prefs.getInt("digitCount", 3)
+            // Auto-calculate digit count from actual amount, matching the app's MainScreen logic
+            var div = 1; repeat(decimalPlaces) { div *= 10 }
+            val wholePart = (kotlin.math.round(kotlin.math.abs(availableCash) * div).toLong() / div).toInt()
+            val digitCount = maxOf(1, wholePart.toString().length)
             val showLogo = prefs.getBoolean("showWidgetLogo", true)
 
             val views = RemoteViews(context.packageName, R.layout.widget_layout)

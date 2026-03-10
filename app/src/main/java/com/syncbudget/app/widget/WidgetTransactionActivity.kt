@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -584,8 +585,9 @@ class WidgetTransactionActivity : ComponentActivity() {
                                             pendingTxn = null
                                             finish()
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3A3A3A))
-                                    ) { Text(W.duplicateKeepOld, color = Color(0xFFCCCCCC)) }
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C)),
+                                        contentPadding = PaddingValues(horizontal = 15.dp, vertical = 5.dp)
+                                    ) { Text(W.duplicateKeepOld.replace(" ", "\n"), color = Color.White, textAlign = TextAlign.Center) }
                                     // Keep New — delete old, continue to linking
                                     Button(
                                         onClick = {
@@ -602,8 +604,9 @@ class WidgetTransactionActivity : ComponentActivity() {
                                             duplicateMatch = null
                                             runLinkingChain(t, c)
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
-                                    ) { Text(W.duplicateKeepNew, color = Color.White) }
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C)),
+                                        contentPadding = PaddingValues(horizontal = 15.dp, vertical = 5.dp)
+                                    ) { Text(W.duplicateKeepNew.replace(" ", "\n"), color = Color.White, textAlign = TextAlign.Center) }
                                     // Keep Both — continue to linking
                                     Button(
                                         onClick = {
@@ -612,8 +615,9 @@ class WidgetTransactionActivity : ComponentActivity() {
                                             duplicateMatch = null
                                             runLinkingChain(t, c)
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
-                                    ) { Text(W.duplicateKeepBoth, color = Color.White) }
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C)),
+                                        contentPadding = PaddingValues(horizontal = 15.dp, vertical = 5.dp)
+                                    ) { Text(W.duplicateKeepBoth.replace(" ", "\n"), color = Color.White, textAlign = TextAlign.Center) }
                                 }
                             }
                         }

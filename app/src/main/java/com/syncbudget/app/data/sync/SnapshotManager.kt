@@ -52,6 +52,7 @@ object SnapshotManager {
             obj.put("description", t.description)
             obj.put("amount", t.amount)
             obj.put("isUserCategorized", t.isUserCategorized)
+            obj.put("excludeFromBudget", t.excludeFromBudget)
             obj.put("isBudgetIncome", t.isBudgetIncome)
             obj.put("linkedRecurringExpenseId", t.linkedRecurringExpenseId ?: JSONObject.NULL)
             obj.put("linkedAmortizationEntryId", t.linkedAmortizationEntryId ?: JSONObject.NULL)
@@ -78,6 +79,7 @@ object SnapshotManager {
             obj.put("type_clock", t.type_clock)
             obj.put("categoryAmounts_clock", t.categoryAmounts_clock)
             obj.put("isUserCategorized_clock", t.isUserCategorized_clock)
+            obj.put("excludeFromBudget_clock", t.excludeFromBudget_clock)
             obj.put("isBudgetIncome_clock", t.isBudgetIncome_clock)
             obj.put("linkedRecurringExpenseId_clock", t.linkedRecurringExpenseId_clock)
             obj.put("linkedAmortizationEntryId_clock", t.linkedAmortizationEntryId_clock)
@@ -260,6 +262,7 @@ object SnapshotManager {
                     categoryAmounts = categoryAmounts,
                     amount = obj.getDouble("amount"),
                     isUserCategorized = if (obj.has("isUserCategorized")) obj.getBoolean("isUserCategorized") else true,
+                    excludeFromBudget = obj.optBoolean("excludeFromBudget", false),
                     isBudgetIncome = if (obj.has("isBudgetIncome")) obj.getBoolean("isBudgetIncome") else false,
                     linkedRecurringExpenseId = if (obj.has("linkedRecurringExpenseId") && !obj.isNull("linkedRecurringExpenseId")) obj.getInt("linkedRecurringExpenseId") else null,
                     linkedAmortizationEntryId = if (obj.has("linkedAmortizationEntryId") && !obj.isNull("linkedAmortizationEntryId")) obj.getInt("linkedAmortizationEntryId") else null,
@@ -276,6 +279,7 @@ object SnapshotManager {
                     type_clock = obj.optLong("type_clock", 0L),
                     categoryAmounts_clock = obj.optLong("categoryAmounts_clock", 0L),
                     isUserCategorized_clock = obj.optLong("isUserCategorized_clock", 0L),
+                    excludeFromBudget_clock = obj.optLong("excludeFromBudget_clock", 0L),
                     isBudgetIncome_clock = obj.optLong("isBudgetIncome_clock", 0L),
                     linkedRecurringExpenseId_clock = obj.optLong("linkedRecurringExpenseId_clock", 0L),
                     linkedAmortizationEntryId_clock = obj.optLong("linkedAmortizationEntryId_clock", 0L),

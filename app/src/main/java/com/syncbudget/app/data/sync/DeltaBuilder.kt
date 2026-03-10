@@ -39,6 +39,7 @@ object DeltaBuilder {
             fields["categoryAmounts"] = FieldDelta(catJson.toString(), txn.categoryAmounts_clock)
         }
         if (txn.isUserCategorized_clock > lastPushedClock) fields["isUserCategorized"] = FieldDelta(txn.isUserCategorized, txn.isUserCategorized_clock)
+        if (txn.excludeFromBudget_clock > lastPushedClock) fields["excludeFromBudget"] = FieldDelta(txn.excludeFromBudget, txn.excludeFromBudget_clock)
         if (txn.isBudgetIncome_clock > lastPushedClock) fields["isBudgetIncome"] = FieldDelta(txn.isBudgetIncome, txn.isBudgetIncome_clock)
         if (txn.linkedRecurringExpenseId_clock > lastPushedClock) fields["linkedRecurringExpenseId"] = FieldDelta(txn.linkedRecurringExpenseId, txn.linkedRecurringExpenseId_clock)
         if (txn.linkedAmortizationEntryId_clock > lastPushedClock) fields["linkedAmortizationEntryId"] = FieldDelta(txn.linkedAmortizationEntryId, txn.linkedAmortizationEntryId_clock)
@@ -64,6 +65,7 @@ object DeltaBuilder {
         ensureField(fields, "linkedRecurringExpenseAmount", txn.linkedRecurringExpenseAmount, txn.linkedRecurringExpenseAmount_clock)
         ensureField(fields, "linkedIncomeSourceAmount", txn.linkedIncomeSourceAmount, txn.linkedIncomeSourceAmount_clock)
         ensureField(fields, "isBudgetIncome", txn.isBudgetIncome, txn.isBudgetIncome_clock)
+        ensureField(fields, "excludeFromBudget", txn.excludeFromBudget, txn.excludeFromBudget_clock)
         if ("categoryAmounts" !in fields && txn.categoryAmounts_clock > 0L) {
             val catJson = JSONArray()
             for (ca in txn.categoryAmounts) {

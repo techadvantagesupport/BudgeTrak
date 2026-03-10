@@ -352,6 +352,7 @@ object BudgetCalculator {
         // Apply transaction effects
         for (txn in activeTransactions) {
             if (txn.date.isBefore(budgetStartDate)) continue
+            if (txn.excludeFromBudget) continue
             if (txn.type == TransactionType.EXPENSE) {
                 if (txn.linkedAmortizationEntryId != null) continue // fully budget-accounted
                 if (txn.amortizationAppliedAmount > 0.0) {

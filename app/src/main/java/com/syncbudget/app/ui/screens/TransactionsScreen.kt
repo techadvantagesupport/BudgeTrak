@@ -1,7 +1,6 @@
 package com.syncbudget.app.ui.screens
 
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,11 +13,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,6 +52,10 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.QuestionMark
+import androidx.compose.material.icons.filled.ThumbUpAlt
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -110,6 +115,7 @@ import com.syncbudget.app.ui.theme.dialogHeaderColor
 import com.syncbudget.app.ui.theme.dialogHeaderTextColor
 import com.syncbudget.app.ui.theme.dialogFooterColor
 import com.syncbudget.app.ui.theme.dialogSectionLabelColor
+import com.syncbudget.app.ui.theme.LocalAppToast
 import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -143,6 +149,7 @@ import com.syncbudget.app.data.serializeTransactionsCsv
 import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInWindow
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.components.CURRENCY_SUFFIX_SYMBOLS
 import com.syncbudget.app.ui.components.PieChartEditor
@@ -240,6 +247,7 @@ fun TransactionsScreen(
     // Convert user-facing percent (e.g. 1.0 = 1%) to fraction (0.01)
     val percentTolerance = matchPercent / 100.0
 
+    val toastState = LocalAppToast.current
     var viewFilter by remember { mutableStateOf(ViewFilter.ALL) }
     var showAddIncome by remember { mutableStateOf(false) }
     var showAddExpense by remember { mutableStateOf(false) }
@@ -269,6 +277,7 @@ fun TransactionsScreen(
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     var showBulkCategoryChange by remember { mutableStateOf(false) }
     var showBulkMerchantEdit by remember { mutableStateOf(false) }
+    var showBulkVerify by remember { mutableStateOf(false) }
 
     BackHandler(enabled = selectionMode) {
         selectionMode = false
@@ -366,9 +375,9 @@ fun TransactionsScreen(
             context.contentResolver.openOutputStream(uri)?.use { os ->
                 os.write(csvContent.toByteArray())
             }
-            Toast.makeText(context, S.transactions.savedSuccessfully(toSave.size), Toast.LENGTH_SHORT).show()
+            toastState.show(S.transactions.savedSuccessfully(toSave.size))
         } catch (e: Exception) {
-            Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            toastState.show("Save failed: ${e.message}")
         }
     }
 
@@ -396,10 +405,10 @@ fun TransactionsScreen(
             savePasswordConfirm = ""
             val msg = if (includeAllData) S.transactions.fullBackupSaved
                       else S.transactions.savedSuccessfully(transactions.size)
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            toastState.show(msg)
             includeAllData = false
         } catch (e: Exception) {
-            Toast.makeText(context, "Encrypted save failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            toastState.show("Encrypted save failed: ${e.message}")
         }
     }
 
@@ -412,10 +421,10 @@ fun TransactionsScreen(
             context.contentResolver.openOutputStream(uri)?.use { os ->
                 os.write(content.toByteArray())
             }
-            Toast.makeText(context, S.transactions.fullBackupSaved, Toast.LENGTH_SHORT).show()
+            toastState.show(S.transactions.fullBackupSaved)
             includeAllData = false
         } catch (e: Exception) {
-            Toast.makeText(context, "Save failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            toastState.show("Save failed: ${e.message}")
         }
     }
 
@@ -537,7 +546,7 @@ fun TransactionsScreen(
     }
 
     // Duplicate check loop
-    LaunchedEffect(importStage, importIndex, ignoreAllDuplicates) {
+    LaunchedEffect(importStage, importIndex, ignoreAllDuplicates, currentImportDup, currentImportRecurring, currentImportAmortization, currentImportBudgetIncome) {
         if (importStage != ImportStage.DUPLICATE_CHECK) return@LaunchedEffect
         if (currentImportDup != null || currentImportRecurring != null || currentImportAmortization != null || currentImportBudgetIncome != null) return@LaunchedEffect
         if (importIndex >= parsedTransactions.size) {
@@ -553,7 +562,7 @@ fun TransactionsScreen(
             } else {
                 S.transactions.loadedSuccessfully(count, totalFileTransactions)
             }
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            toastState.show(message)
             importStage = null
             return@LaunchedEffect
         }
@@ -878,6 +887,17 @@ fun TransactionsScreen(
                     }
                     IconButton(onClick = {
                         if (selectedIds.any { it.value }) {
+                            showBulkVerify = true
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Filled.ThumbUpAlt,
+                            contentDescription = S.transactions.verifiedToast,
+                            tint = Color(0xFF2E7D32)
+                        )
+                    }
+                    IconButton(onClick = {
+                        if (selectedIds.any { it.value }) {
                             showBulkDeleteConfirm = true
                         }
                     }) {
@@ -1109,38 +1129,45 @@ fun TransactionsScreen(
             incomeSources = incomeSources,
             onDismiss = { editingTransaction = null },
             onSave = { updated ->
-                val alreadyLinked = updated.linkedRecurringExpenseId != null || updated.linkedAmortizationEntryId != null || updated.linkedIncomeSourceId != null
-                val dup = findDuplicate(updated, transactions.filter { it.id != updated.id }, percentTolerance, matchDollar, matchDays, matchChars)
-                if (dup != null) {
-                    pendingManualSave = updated
-                    manualDuplicateMatch = dup
-                    pendingManualIsEdit = true
-                    showManualDuplicateDialog = true
-                } else if (alreadyLinked) {
+                // Only run duplicate/matching checks if merchant, date, or amount changed
+                val orig = txn
+                val coreChanged = updated.source != orig.source || updated.date != orig.date || updated.amount != orig.amount
+                if (!coreChanged) {
                     onUpdateTransaction(updated)
                 } else {
-                    val recurringMatch = findRecurringExpenseMatch(updated, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-                    if (recurringMatch != null) {
-                        pendingRecurringTxn = updated
-                        pendingRecurringMatch = recurringMatch
-                        pendingRecurringIsEdit = true
-                        showRecurringDialog = true
+                    val alreadyLinked = updated.linkedRecurringExpenseId != null || updated.linkedAmortizationEntryId != null || updated.linkedIncomeSourceId != null
+                    val dup = findDuplicate(updated, transactions.filter { it.id != updated.id }, percentTolerance, matchDollar, matchDays, matchChars)
+                    if (dup != null) {
+                        pendingManualSave = updated
+                        manualDuplicateMatch = dup
+                        pendingManualIsEdit = true
+                        showManualDuplicateDialog = true
+                    } else if (alreadyLinked) {
+                        onUpdateTransaction(updated)
                     } else {
-                        val amortizationMatch = findAmortizationMatch(updated, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                        if (amortizationMatch != null) {
-                            pendingAmortizationTxn = updated
-                            pendingAmortizationMatch = amortizationMatch
-                            pendingAmortizationIsEdit = true
-                            showAmortizationDialog = true
+                        val recurringMatch = findRecurringExpenseMatch(updated, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
+                        if (recurringMatch != null) {
+                            pendingRecurringTxn = updated
+                            pendingRecurringMatch = recurringMatch
+                            pendingRecurringIsEdit = true
+                            showRecurringDialog = true
                         } else {
-                            val budgetMatch = findBudgetIncomeMatch(updated, incomeSources, matchChars, matchDays)
-                            if (budgetMatch != null) {
-                                pendingBudgetIncomeTxn = updated
-                                pendingBudgetIncomeMatch = budgetMatch
-                                pendingBudgetIncomeIsEdit = true
-                                showBudgetIncomeDialog = true
+                            val amortizationMatch = findAmortizationMatch(updated, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                            if (amortizationMatch != null) {
+                                pendingAmortizationTxn = updated
+                                pendingAmortizationMatch = amortizationMatch
+                                pendingAmortizationIsEdit = true
+                                showAmortizationDialog = true
                             } else {
-                                onUpdateTransaction(updated)
+                                val budgetMatch = findBudgetIncomeMatch(updated, incomeSources, matchChars, matchDays)
+                                if (budgetMatch != null) {
+                                    pendingBudgetIncomeTxn = updated
+                                    pendingBudgetIncomeMatch = budgetMatch
+                                    pendingBudgetIncomeIsEdit = true
+                                    showBudgetIncomeDialog = true
+                                } else {
+                                    onUpdateTransaction(updated)
+                                }
                             }
                         }
                     }
@@ -1180,7 +1207,9 @@ fun TransactionsScreen(
     // Date search - start
     if (showDateSearchStart) {
         SearchDatePickerDialog(
-            title = S.transactions.startDate,
+            title = S.transactions.dateRangeSearch,
+            headline = S.transactions.startDate,
+            confirmLabel = S.common.next,
             onDismiss = { showDateSearchStart = false },
             onDateSelected = { date ->
                 dateSearchStart = date
@@ -1196,7 +1225,9 @@ fun TransactionsScreen(
     // Date search - end
     if (showDateSearchEnd) {
         SearchDatePickerDialog(
-            title = S.transactions.endDate,
+            title = S.transactions.dateRangeSearch,
+            headline = S.transactions.endDate,
+            confirmLabel = S.transactions.search,
             onDismiss = { showDateSearchEnd = false; dateSearchStart = null },
             onDateSelected = { endDate ->
                 val start = dateSearchStart
@@ -1212,6 +1243,10 @@ fun TransactionsScreen(
                 }
                 showDateSearchEnd = false
                 dateSearchStart = null
+            },
+            onBack = {
+                showDateSearchEnd = false
+                showDateSearchStart = true
             },
             bankFilterChecked = bankFilterOnly,
             onBankFilterChanged = { bankFilterOnly = it },
@@ -1256,6 +1291,50 @@ fun TransactionsScreen(
                 }
             }
         )
+    }
+
+    // Bulk verify/unverify dialog
+    if (showBulkVerify) {
+        val count = selectedIds.count { it.value }
+        MatchDialogCard(
+            title = S.transactions.bulkVerifyTitle,
+            onDismiss = { showBulkVerify = false },
+            buttons = {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    DialogSecondaryButton(
+                        onClick = { showBulkVerify = false }
+                    ) { Text(S.common.cancel, maxLines = 1) }
+                    DialogPrimaryButton(
+                        onClick = {
+                            val idsToChange = selectedIds.filter { it.value }.keys
+                            transactions.filter { it.id in idsToChange }.forEach { txn ->
+                                onUpdateTransaction(txn.copy(isUserCategorized = true))
+                            }
+                            selectedIds.clear()
+                            selectionMode = false
+                            showBulkVerify = false
+                        }
+                    ) { Text(S.transactions.markVerified, maxLines = 1) }
+                    DialogPrimaryButton(
+                        onClick = {
+                            val idsToChange = selectedIds.filter { it.value }.keys
+                            transactions.filter { it.id in idsToChange }.forEach { txn ->
+                                onUpdateTransaction(txn.copy(isUserCategorized = false))
+                            }
+                            selectedIds.clear()
+                            selectionMode = false
+                            showBulkVerify = false
+                        }
+                    ) { Text(S.transactions.markUnverified, maxLines = 1) }
+                }
+            }
+        ) {
+            Text(S.transactions.bulkVerifyMessage(count))
+        }
     }
 
     // Bulk category change dialog
@@ -1314,8 +1393,7 @@ fun TransactionsScreen(
                         transactions.filter { it.id in idsToChange }.forEach { txn ->
                             onUpdateTransaction(
                                 txn.copy(
-                                    categoryAmounts = listOf(CategoryAmount(catId, txn.amount)),
-                                    isUserCategorized = true
+                                    categoryAmounts = listOf(CategoryAmount(catId, txn.amount))
                                 )
                             )
                         }
@@ -1374,12 +1452,13 @@ fun TransactionsScreen(
                         )
                     }
                     DialogFooter {
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.End,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             DialogSecondaryButton(onClick = { showBulkMerchantEdit = false }) {
-                                Text(S.common.cancel)
+                                Text(S.common.cancel, maxLines = 1)
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             DialogPrimaryButton(
@@ -1528,9 +1607,10 @@ fun TransactionsScreen(
                     }
 
                     DialogFooter {
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.End,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             DialogSecondaryButton(onClick = {
                                 showSaveDialog = false
@@ -1636,13 +1716,17 @@ fun TransactionsScreen(
                         )
                     }
                 } else {
-                    DialogWarningButton(onClick = {
-                        onLoadFullBackup(pendingFullBackupContent!!)
-                        scrollToTopTrigger++
-                        showFullBackupDialog = false
-                        pendingFullBackupContent = null
-                        Toast.makeText(context, S.transactions.fullBackupRestored, Toast.LENGTH_SHORT).show()
-                    }) { Text(S.transactions.loadAllDataOverwrite) }
+                    var restoreBtnYPx by remember { mutableIntStateOf(0) }
+                    DialogWarningButton(
+                        onClick = {
+                            onLoadFullBackup(pendingFullBackupContent!!)
+                            scrollToTopTrigger++
+                            showFullBackupDialog = false
+                            pendingFullBackupContent = null
+                            toastState.show(S.transactions.fullBackupRestored, restoreBtnYPx)
+                        },
+                        modifier = Modifier.onGloballyPositioned { restoreBtnYPx = it.positionInWindow().y.toInt() }
+                    ) { Text(S.transactions.loadAllDataOverwrite) }
                 }
             },
             dismissButton = {
@@ -1745,9 +1829,10 @@ fun TransactionsScreen(
                     }
 
                     DialogFooter {
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.End,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             DialogSecondaryButton(onClick = {
                                 showImportFormatDialog = false
@@ -2140,6 +2225,7 @@ fun TransactionsScreen(
             }
         )
     }
+
 }
 
 @Composable
@@ -2257,10 +2343,10 @@ fun BudgetIncomeConfirmDialog(
         title = S.transactions.budgetIncomeMatchTitle(transaction.source),
         onDismiss = onNotBudgetIncome,
         buttons = {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                DialogSecondaryButton(onClick = onNotBudgetIncome) { Text(S.transactions.noExtraIncome) }
+            FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                DialogSecondaryButton(onClick = onNotBudgetIncome) { Text(S.transactions.noExtraIncome, maxLines = 1) }
                 Spacer(modifier = Modifier.width(8.dp))
-                DialogPrimaryButton(onClick = onConfirmBudgetIncome) { Text(S.transactions.yesBudgetIncome) }
+                DialogPrimaryButton(onClick = onConfirmBudgetIncome) { Text(S.transactions.yesBudgetIncome, maxLines = 1) }
             }
         }
     ) {
@@ -2299,10 +2385,10 @@ fun AmortizationConfirmDialog(
         title = S.transactions.amortizationMatchTitle(transaction.source),
         onDismiss = onNotAmortized,
         buttons = {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                DialogSecondaryButton(onClick = onNotAmortized) { Text(S.transactions.noRegularAmort) }
+            FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                DialogSecondaryButton(onClick = onNotAmortized) { Text(S.transactions.noRegularAmort, maxLines = 1) }
                 Spacer(modifier = Modifier.width(8.dp))
-                DialogPrimaryButton(onClick = onConfirmAmortization) { Text(S.transactions.yesAmortization) }
+                DialogPrimaryButton(onClick = onConfirmAmortization) { Text(S.transactions.yesAmortization, maxLines = 1) }
             }
         }
     ) {
@@ -2342,10 +2428,10 @@ fun RecurringExpenseConfirmDialog(
         title = S.transactions.recurringMatchTitle(transaction.source),
         onDismiss = onNotRecurring,
         buttons = {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                DialogSecondaryButton(onClick = onNotRecurring) { Text(S.transactions.noRegularExpense) }
+            FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                DialogSecondaryButton(onClick = onNotRecurring) { Text(S.transactions.noRegularExpense, maxLines = 1) }
                 Spacer(modifier = Modifier.width(8.dp))
-                DialogPrimaryButton(onClick = onConfirmRecurring) { Text(S.transactions.yesRecurring) }
+                DialogPrimaryButton(onClick = onConfirmRecurring) { Text(S.transactions.yesRecurring, maxLines = 1) }
             }
         }
     ) {
@@ -2396,21 +2482,29 @@ fun DuplicateResolutionDialog(
         title = S.transactions.duplicateDetected,
         onDismiss = onKeepExisting,
         buttons = {
-            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
-                ) {
-                    DialogSecondaryButton(onClick = onKeepExisting) { Text(S.transactions.keepExisting) }
-                    DialogSecondaryButton(onClick = onKeepNew) { Text(S.transactions.keepNew) }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Build label/action list: 3 buttons normally, 4 during import
+                val labels = mutableListOf(S.transactions.keepExisting, S.transactions.keepNew, S.transactions.keepBoth)
+                val actions = mutableListOf(onKeepExisting, onKeepNew, onIgnore)
+                if (showIgnoreAll) {
+                    labels.add(S.transactions.ignoreAll)
+                    actions.add(onIgnoreAll)
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
-                ) {
-                    DialogSecondaryButton(onClick = onIgnore) { Text(S.transactions.ignore) }
-                    if (showIgnoreAll) {
-                        DialogPrimaryButton(onClick = onIgnoreAll) { Text(S.transactions.ignoreAll) }
+
+                labels.forEachIndexed { idx, label ->
+                    DialogPrimaryButton(
+                        onClick = actions[idx],
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
                     }
                 }
             }
@@ -2493,6 +2587,11 @@ private fun TransactionRow(
         effectAmount = linkedAmortizationApplied
         effectColor = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
         effectPrefix = if (isExpense) "-" else ""
+    } else if (transaction.excludeFromBudget) {
+        showEffect = true
+        effectAmount = 0.0
+        effectColor = Color(0xFF9E9E9E)
+        effectPrefix = ""
     } else {
         showEffect = false
         effectAmount = 0.0
@@ -2507,7 +2606,7 @@ private fun TransactionRow(
 
     // For non-linked transactions, use colored amount as before
     val isLinked = isLinkedRecurring || isLinkedAmortization || isLinkedIncome
-    val actualAmountColor = if (isLinked) MaterialTheme.colorScheme.onBackground
+    val actualAmountColor = if (isLinked || transaction.excludeFromBudget) MaterialTheme.colorScheme.onBackground
         else if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
 
     val hasMultipleCategories = transaction.categoryAmounts.size > 1
@@ -2632,6 +2731,14 @@ private fun TransactionRow(
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(Modifier.width(3.dp))
+                    } else if (transaction.excludeFromBudget) {
+                        Icon(
+                            imageVector = Icons.Filled.Block,
+                            contentDescription = null,
+                            tint = Color(0xFF9E9E9E),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(3.dp))
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
@@ -2641,7 +2748,7 @@ private fun TransactionRow(
                             color = actualAmountColor,
                             textAlign = TextAlign.End
                         )
-                        if (isLinked && showEffect) {
+                        if ((isLinked || transaction.excludeFromBudget) && showEffect) {
                             Text(
                                 text = formattedEffect,
                                 style = MaterialTheme.typography.bodySmall,
@@ -2776,6 +2883,7 @@ fun TransactionDialog(
     val S = LocalStrings.current
     val maxDecimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
     val context = LocalContext.current
+    val toastState = LocalAppToast.current
     val isEdit = editTransaction != null
     var selectedDate by remember {
         mutableStateOf(editTransaction?.date ?: LocalDate.now())
@@ -2785,6 +2893,8 @@ fun TransactionDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showValidation by remember { mutableStateOf(false) }
+    var verified by remember { mutableStateOf(editTransaction?.isUserCategorized ?: true) }
+    var excludeFromBudget by remember { mutableStateOf(editTransaction?.excludeFromBudget ?: false) }
 
     // Linked entry state
     var linkedRecurringId by remember { mutableStateOf(editTransaction?.linkedRecurringExpenseId) }
@@ -2927,6 +3037,7 @@ fun TransactionDialog(
     // Scroll state for auto-scrolling to mode buttons after category selection
     val scrollState = rememberScrollState()
     var modeButtonsOffset by remember { mutableIntStateOf(0) }
+    var modeButtonsWindowY by remember { mutableIntStateOf(0) }
 
     // Currency prefix/suffix
     val isCurrencySuffix = currencySymbol in CURRENCY_SUFFIX_SYMBOLS
@@ -3211,6 +3322,7 @@ fun TransactionDialog(
                             .fillMaxWidth()
                             .onGloballyPositioned { coords ->
                                 modeButtonsOffset = coords.positionInParent().y.toInt()
+                                modeButtonsWindowY = coords.positionInWindow().y.toInt()
                             },
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
@@ -3218,7 +3330,7 @@ fun TransactionDialog(
                         // Pie chart mode
                         IconButton(onClick = {
                             if (!totalFilled) {
-                                Toast.makeText(context, "Enter a total to enable this mode.", Toast.LENGTH_SHORT).show()
+                                toastState.show("Enter a total to enable this mode.", modeButtonsWindowY)
                             } else {
                                 showPieChart = !showPieChart
                                 if (showPieChart) usePercentage = false
@@ -3267,7 +3379,7 @@ fun TransactionDialog(
                         // Percentage mode
                         IconButton(onClick = {
                             if (!totalFilled) {
-                                Toast.makeText(context, "Enter a total to enable this mode.", Toast.LENGTH_SHORT).show()
+                                toastState.show("Enter a total to enable this mode.", modeButtonsWindowY)
                             } else if (!usePercentage) {
                                 showPieChart = false
                                 // Convert amounts to percentages
@@ -3524,6 +3636,40 @@ fun TransactionDialog(
                                     tint = Color(0xFFF44336)
                                 )
                             }
+                            var thumbYPx by remember { mutableIntStateOf(0) }
+                            IconButton(
+                                onClick = {
+                                    verified = !verified
+                                    val msg = if (verified) S.transactions.verifiedToast else S.transactions.unverifiedToast
+                                    toastState.show(msg, thumbYPx)
+                                },
+                                modifier = Modifier.onGloballyPositioned { coords ->
+                                    thumbYPx = coords.positionInWindow().y.toInt()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (verified) Icons.Filled.ThumbUpAlt else Icons.Filled.QuestionMark,
+                                    contentDescription = S.transactions.verifiedToast,
+                                    tint = if (verified) Color(0xFF2E7D32) else Color(0xFFF44336)
+                                )
+                            }
+                            var excludeYPx by remember { mutableIntStateOf(0) }
+                            IconButton(
+                                onClick = {
+                                    excludeFromBudget = !excludeFromBudget
+                                    val msg = if (excludeFromBudget) S.transactions.excludedToast else S.transactions.includedToast
+                                    toastState.show(msg, excludeYPx)
+                                },
+                                modifier = Modifier.onGloballyPositioned { coords ->
+                                    excludeYPx = coords.positionInWindow().y.toInt()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (excludeFromBudget) Icons.Filled.Block else Icons.Filled.Check,
+                                    contentDescription = S.transactions.excludedToast,
+                                    tint = if (excludeFromBudget) Color(0xFFF44336) else Color(0xFF2E7D32)
+                                )
+                            }
                             Spacer(modifier = Modifier.weight(1f))
                         }
                         DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
@@ -3600,7 +3746,8 @@ fun TransactionDialog(
                                     linkedIncomeSourceId = linkedIncomeId,
                                     linkedRecurringExpenseAmount = if (linkedRecurringId != null) reAmount else editTransaction.linkedRecurringExpenseAmount,
                                     linkedIncomeSourceAmount = if (linkedIncomeId != null) isAmount else editTransaction.linkedIncomeSourceAmount,
-                                    isUserCategorized = true
+                                    isUserCategorized = verified,
+                                    excludeFromBudget = excludeFromBudget
                                 )
                             } else {
                                 Transaction(
@@ -3615,7 +3762,8 @@ fun TransactionDialog(
                                     linkedAmortizationEntryId = linkedAmortizationId,
                                     linkedIncomeSourceId = linkedIncomeId,
                                     linkedRecurringExpenseAmount = reAmount,
-                                    linkedIncomeSourceAmount = isAmount
+                                    linkedIncomeSourceAmount = isAmount,
+                                    excludeFromBudget = excludeFromBudget
                                 )
                             }
                             onSave(txn)
@@ -3680,6 +3828,13 @@ fun TransactionDialog(
                                             selectedCategoryIds[cat.id] = false
                                         }
                                     } else {
+                                        // Transition from 1→2 categories: carry single amount to total
+                                        if (selectedCats.size == 1 && singleAmountText.isNotBlank()) {
+                                            totalAmountText = singleAmountText
+                                            userOwnedFields = userOwnedFields + "total"
+                                            // Clear the first category's amount so it doesn't duplicate the total
+                                            categoryAmountTexts[selectedCats[0].id] = ""
+                                        }
                                         selectedCategoryIds[cat.id] = true
                                         if (cat.id !in categoryAmountTexts) {
                                             categoryAmountTexts[cat.id] = ""
@@ -3947,6 +4102,7 @@ fun TransactionDialog(
                 }
             },
             confirmButton = {
+                var fixBtnYPx by remember { mutableIntStateOf(0) }
                 DialogPrimaryButton(
                     onClick = {
                         val targetId = adjustTargetId ?: return@DialogPrimaryButton
@@ -3961,7 +4117,7 @@ fun TransactionDialog(
                             }
                             val newAmount = mismatchTotal - otherSum
                             if (newAmount < 0) {
-                                Toast.makeText(context, "Unable to Fix", Toast.LENGTH_SHORT).show()
+                                toastState.show("Unable to Fix", fixBtnYPx)
                             } else {
                                 categoryAmountTexts[catId] = formatAmount(newAmount, maxDecimals)
                                 showSumMismatchDialog = false
@@ -3969,6 +4125,7 @@ fun TransactionDialog(
                             }
                         }
                     },
+                    modifier = Modifier.onGloballyPositioned { fixBtnYPx = it.positionInWindow().y.toInt() },
                     enabled = adjustTargetId != null
                 ) {
                     Text(S.common.save)
@@ -4189,6 +4346,7 @@ fun TransactionDialog(
             }
         )
     }
+
 }
 
 @Composable
@@ -4228,15 +4386,16 @@ private fun TextSearchDialog(
                     )
                 }
                 DialogFooter {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.End,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
                         Spacer(modifier = Modifier.width(8.dp))
                         DialogPrimaryButton(onClick = {
                             if (query.isNotBlank()) onSearch(query.trim())
-                        }) { Text(S.transactions.search) }
+                        }) { Text(S.transactions.search, maxLines = 1) }
                     }
                 }
             }
@@ -4296,17 +4455,18 @@ private fun AmountSearchDialog(
                     )
                 }
                 DialogFooter {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.End,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
                         Spacer(modifier = Modifier.width(8.dp))
                         DialogPrimaryButton(onClick = {
                             val min = minText.toDoubleOrNull() ?: 0.0
                             val max = maxText.toDoubleOrNull() ?: Double.MAX_VALUE
                             onSearch(min, max)
-                        }) { Text(S.transactions.search) }
+                        }) { Text(S.transactions.search, maxLines = 1) }
                     }
                 }
             }
@@ -4318,8 +4478,11 @@ private fun AmountSearchDialog(
 @Composable
 private fun SearchDatePickerDialog(
     title: String,
+    headline: String,
+    confirmLabel: String,
     onDismiss: () -> Unit,
     onDateSelected: (LocalDate) -> Unit,
+    onBack: (() -> Unit)? = null,
     bankFilterChecked: Boolean = false,
     onBankFilterChanged: (Boolean) -> Unit = {},
     showBankFilter: Boolean = false
@@ -4338,10 +4501,16 @@ private fun SearchDatePickerDialog(
                         .toLocalDate()
                     onDateSelected(date)
                 }
-            }) { Text(S.common.ok) }
+            }) { Text(confirmLabel) }
         },
         dismissButton = {
-            DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+            FlowRow(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
+                if (onBack != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    DialogSecondaryButton(onClick = onBack) { Text(S.common.back, maxLines = 1) }
+                }
+            }
         }
     ) {
         Column {
@@ -4365,7 +4534,25 @@ private fun SearchDatePickerDialog(
                     )
                 }
             }
-            DatePicker(state = datePickerState, title = null)
+            DatePicker(
+                state = datePickerState,
+                title = null,
+                headline = {
+                    val selectedMillis = datePickerState.selectedDateMillis
+                    Text(
+                        text = if (selectedMillis != null) {
+                            val date = Instant.ofEpochMilli(selectedMillis)
+                                .atZone(ZoneId.of("UTC"))
+                                .toLocalDate()
+                            date.format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy"))
+                        } else {
+                            headline
+                        },
+                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, bottom = 12.dp),
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                }
+            )
         }
     }
 }

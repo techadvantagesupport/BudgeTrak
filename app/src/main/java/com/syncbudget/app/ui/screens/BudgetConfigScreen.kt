@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -77,7 +78,9 @@ import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
-import android.widget.Toast
+import com.syncbudget.app.ui.theme.LocalAppToast
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import java.time.DayOfWeek
 import java.time.Instant
@@ -564,6 +567,7 @@ private fun AddEditIncomeDialog(
 ) {
     val S = LocalStrings.current
     val context = LocalContext.current
+    val toastState = LocalAppToast.current
     val isEdit = existingSource != null
     val title = if (isEdit) S.budgetConfig.editIncomeSource else S.budgetConfig.addIncomeSource
 
@@ -917,11 +921,12 @@ private fun AddEditIncomeDialog(
                 }
 
                 DialogFooter {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
                     Spacer(modifier = Modifier.width(8.dp))
                     DialogPrimaryButton(
                         onClick = {
@@ -1023,18 +1028,22 @@ private fun AddEditIncomeDialog(
             title = "Select Date",
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                DialogPrimaryButton(onClick = {
+                var okBtnYPx by remember { mutableIntStateOf(0) }
+                DialogPrimaryButton(
+                    onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
                             val selected = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
                             val monthInterval = intervalText.toIntOrNull() ?: 1
                             if (repeatType == RepeatType.MONTHS && monthInterval != 12 && selected.dayOfMonth > 28) {
-                                Toast.makeText(context, S.common.dateDayTooHigh, Toast.LENGTH_SHORT).show()
+                                toastState.show(S.common.dateDayTooHigh, okBtnYPx)
                             } else {
                                 startDate = selected
                                 showDatePicker = false
                             }
                         }
-                    }) { Text(S.common.ok) }
+                    },
+                    modifier = Modifier.onGloballyPositioned { okBtnYPx = it.positionInWindow().y.toInt() }
+                ) { Text(S.common.ok) }
             },
             dismissButton = {
                 DialogSecondaryButton(onClick = { showDatePicker = false }) { Text(S.common.cancel) }
@@ -1189,11 +1198,12 @@ private fun BudgetResetDialog(
                 }
 
                 DialogFooter {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                    DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
                     Spacer(modifier = Modifier.width(8.dp))
                     DialogPrimaryButton(
                         onClick = {

@@ -285,31 +285,45 @@ object FirestoreService {
         updateGroupActivity(groupId)
     }
 
-    suspend fun deleteGroup(groupId: String) {
+    suspend fun deleteGroup(groupId: String, onProgress: ((String) -> Unit)? = null) {
         val groupRef = db.collection("groups").document(groupId)
 
-        // Fetch all subcollections in parallel
-        val deltasTask = groupRef.collection("deltas").get()
-        val devicesTask = groupRef.collection("devices").get()
-        val snapshotsTask = groupRef.collection("snapshots").get()
-        val deltas = deltasTask.await()
-        val devices = devicesTask.await()
-        val snapshots = snapshotsTask.await()
+        // Delete subcollections in paginated batches to avoid downloading
+        // huge payloads (e.g. 600+ encrypted delta documents).
+        val labels = mapOf("deltas" to "sync history", "devices" to "devices", "snapshots" to "snapshots")
+        for (subCollection in listOf("deltas", "devices", "snapshots")) {
+            onProgress?.invoke("Removing ${labels[subCollection]}…")
+            deleteSubcollection(groupRef.collection(subCollection), onProgress = onProgress)
+        }
 
-        // Batch-delete all documents (max 500 per batch, well within limits)
-        val allDocs = deltas.documents + devices.documents + snapshots.documents
-        val chunks = allDocs.chunked(499)
-        for ((i, chunk) in chunks.withIndex()) {
+        // Delete the group document itself
+        onProgress?.invoke("Finalizing…")
+        groupRef.delete().await()
+    }
+
+    /** Paginated subcollection delete — fetches only document IDs in
+     *  batches to avoid downloading large payload fields. */
+    private suspend fun deleteSubcollection(
+        collection: com.google.firebase.firestore.CollectionReference,
+        batchSize: Int = 200,
+        onProgress: ((String) -> Unit)? = null
+    ) {
+        var totalDeleted = 0
+        while (true) {
+            val snapshot = collection
+                .limit(batchSize.toLong())
+                .get()
+                .await()
+            if (snapshot.isEmpty) break
             val batch = db.batch()
-            for (doc in chunk) {
+            for (doc in snapshot.documents) {
                 batch.delete(doc.reference)
             }
-            if (i == chunks.lastIndex) batch.delete(groupRef)
             batch.commit().await()
-        }
-        // If there were no subcollection docs, still delete the group doc
-        if (allDocs.isEmpty()) {
-            groupRef.delete().await()
+            totalDeleted += snapshot.size()
+            if (totalDeleted > batchSize) {
+                onProgress?.invoke("Removed $totalDeleted records…")
+            }
         }
     }
 

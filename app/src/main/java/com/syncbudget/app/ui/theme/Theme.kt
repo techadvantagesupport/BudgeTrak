@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,10 +14,12 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -41,16 +44,22 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -121,11 +130,14 @@ fun dialogSectionLabelColor(): Color {
 }
 
 /** Green filled primary button for dialogs. */
+private val CompactButtonPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+
 @Composable
 fun DialogPrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    contentPadding: PaddingValues = CompactButtonPadding,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
     Button(
@@ -133,6 +145,7 @@ fun DialogPrimaryButton(
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
+        contentPadding = contentPadding,
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isSystemInDarkTheme()) Color(0xFF388E3C) else Color(0xFF2E7D32),
             contentColor = Color.White
@@ -147,6 +160,7 @@ fun DialogSecondaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    contentPadding: PaddingValues = CompactButtonPadding,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
     Button(
@@ -154,12 +168,106 @@ fun DialogSecondaryButton(
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
+        contentPadding = contentPadding,
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isSystemInDarkTheme()) Color(0xFF3A3A3A) else Color(0xFFE0E0E0),
             contentColor = if (isSystemInDarkTheme()) Color(0xFFCCCCCC) else Color(0xFF555555)
         ),
         content = content
     )
+}
+
+// ── App Toast ─────────────────────────────────────────────────────
+
+val LocalAppToast = staticCompositionLocalOf { AppToastState() }
+
+class AppToastState {
+    var message by mutableStateOf<String?>(null)
+        private set
+    var tapYPx by mutableIntStateOf(0)
+        private set
+    var counter by mutableIntStateOf(0)
+        private set
+
+    /** Show a toast near the tap that triggered it. [windowYPx] from positionInWindow(). */
+    fun show(msg: String, windowYPx: Int = -1) {
+        message = msg
+        tapYPx = windowYPx
+        counter++
+    }
+
+    fun dismiss() {
+        message = null
+    }
+}
+
+@Composable
+fun AppToast(state: AppToastState) {
+    val msg = state.message ?: return
+    val density = LocalDensity.current
+    val adBannerDp = LocalAdBannerHeight.current
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val isDark = isSystemInDarkTheme()
+
+    LaunchedEffect(state.counter) {
+        if (state.message != null) {
+            kotlinx.coroutines.delay(2500)
+            state.dismiss()
+        }
+    }
+
+    val adBannerPx = with(density) { adBannerDp.toPx() }.toInt()
+    val statusBarPx = with(density) { 24.dp.toPx() }.toInt()  // approximate
+    val toastHeightPx = with(density) { 48.dp.toPx() }.toInt()
+    val marginPx = with(density) { 12.dp.toPx() }.toInt()
+    val screenHeightPx = with(density) { screenHeightDp.dp.toPx() }.toInt()
+    val minY = statusBarPx + adBannerPx + marginPx  // below status bar + ad
+
+    val usableHeight = screenHeightPx - minY
+    val posY = if (state.tapYPx <= 0) {
+        // No tap position provided — show at 60% of usable screen
+        minY + (usableHeight * 0.6f).toInt()
+    } else {
+        // Try above the tap point
+        val aboveY = state.tapYPx - toastHeightPx - marginPx
+        val belowY = state.tapYPx + toastHeightPx + marginPx
+        if (aboveY >= minY) aboveY
+        else if (belowY + toastHeightPx <= screenHeightPx) belowY
+        else minY
+    }
+
+    val offsetY = with(density) { posY.toDp() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .offset(y = offsetY),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = if (isDark) Color(0xFF2A2A2A) else Color(0xFFF5F5F5),
+            tonalElevation = 6.dp,
+            shadowElevation = 6.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Image(
+                    painter = androidx.compose.ui.res.painterResource(id = com.syncbudget.app.R.mipmap.ic_launcher_foreground),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp)
+                )
+                Text(
+                    text = msg,
+                    color = if (isDark) Color(0xFFE0E0E0) else Color(0xFF333333),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+    }
 }
 
 /** Red filled danger button for dialogs. */
@@ -263,9 +371,10 @@ fun AdAwareDatePickerDialog(
                     content()
                 }
                 DialogFooter {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.End,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         dismissButton()
                         Spacer(modifier = Modifier.width(8.dp))
@@ -292,6 +401,7 @@ fun AdAwareDialog(
     content: @Composable () -> Unit
 ) {
     val adPadding = LocalAdBannerHeight.current
+    val appToast = LocalAppToast.current
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = properties
@@ -330,6 +440,9 @@ fun AdAwareDialog(
             ) {
                 content()
             }
+
+            // Toast overlay inside dialog window
+            AppToast(appToast)
         }
     }
 }
@@ -481,6 +594,7 @@ private val LightColorScheme = lightColorScheme(
 fun SyncBudgetTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     strings: AppStrings = EnglishStrings,
+    adBannerHeight: Dp = 0.dp,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
@@ -508,14 +622,22 @@ fun SyncBudgetTheme(
         )
     }
 
+    val appToastState = remember { AppToastState() }
+
     CompositionLocalProvider(
         LocalSyncBudgetColors provides customColors,
-        LocalStrings provides strings
+        LocalStrings provides strings,
+        LocalAppToast provides appToastState,
+        LocalAdBannerHeight provides adBannerHeight
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = SyncBudgetTypography,
-            content = content
-        )
+            typography = SyncBudgetTypography
+        ) {
+            Box {
+                content()
+                AppToast(appToastState)
+            }
+        }
     }
 }
