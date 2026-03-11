@@ -509,7 +509,7 @@ fun MainScreen(
                 // Chart type toggle icon
                 Icon(
                     imageVector = if (showBarChart) Icons.Filled.PieChart else Icons.Filled.BarChart,
-                    contentDescription = if (showBarChart) "Switch to pie chart" else "Switch to bar chart",
+                    contentDescription = if (showBarChart) S.dashboard.switchToPieChart else S.dashboard.switchToBarChart,
                     tint = chartBarFg,
                     modifier = Modifier
                         .background(
@@ -1000,7 +1000,7 @@ private fun SavingsSuperchargeDialog(
                         Spacer(modifier = Modifier.height(4.dp))
                         if (isOverBudget) {
                             Text(
-                                text = "Total (${formatCurrency(totalAllocated, currencySymbol)}) exceeds available cash",
+                                text = S.dashboard.superchargeExceedsCash(formatCurrency(totalAllocated, currencySymbol)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFFF44336)
                             )

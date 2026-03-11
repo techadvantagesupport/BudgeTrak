@@ -70,7 +70,8 @@ object EnglishStrings : AppStrings {
         exampleBiMonthlyDay2 = "e.g. 15",
         language = "Language",
         dateDayTooHigh = "Please select a date between the 1st and 28th of the month",
-        descriptionFieldLabel = "Description"
+        descriptionFieldLabel = "Description",
+        selectDate = "Select Date"
     )
 
     override val dashboard = DashboardStrings(
@@ -101,7 +102,12 @@ object EnglishStrings : AppStrings {
         superchargeNewPayoff = { date -> "New payoff: $date" },
         superchargeNewCompletion = { date -> "Completes: $date" },
         superchargeAutoAdjust = "Contributions adjust automatically",
-        superchargeTargetDateNote = "This will change your target date"
+        superchargeTargetDateNote = "This will change your target date",
+        superchargeExceedsCash = { total -> "Total ($total) exceeds available cash" },
+        upgradeForFullWidget = "Upgrade for full widget",
+        adPlaceholder = "Ad",
+        switchToPieChart = "Switch to pie chart",
+        switchToBarChart = "Switch to bar chart"
     )
 
     override val settings = SettingsStrings(
@@ -275,6 +281,7 @@ object EnglishStrings : AppStrings {
         parseError = "Parse Error",
         unknownError = "Unknown error",
         parsedBeforeError = { count: Int -> "$count transactions parsed before error." },
+        rowsSkippedWarning = { skipped: Int, total: Int -> "$skipped of $total rows in the file could not be parsed and were skipped." },
         keep = "Keep",
         requiredMerchantExample = "Required, e.g. Grocery Store",
         moveCategoryValue = "Move Category Value",
@@ -303,7 +310,16 @@ object EnglishStrings : AppStrings {
         linkedToRecurring = { name -> "Recurring: $name" },
         linkedToAmortization = { name -> "Amortization: $name" },
         linkedToIncome = { name -> "Income: $name" },
-        unmodifiedBankTransactions = "Unverified Transactions"
+        unmodifiedBankTransactions = "Unverified Transactions",
+        formatGenericCsv = "Any Bank CSV",
+        formatUsBank = "US Bank",
+        formatBudgeXyncCsv = "BudgeXync CSV Save File",
+        formatBudgeXyncEncrypted = "BudgeXync Encrypted Save File",
+        unknown = "Unknown",
+        amountExample = "e.g. 42.50",
+        moveCategoryBody = { valueLabel, catName -> "Where would you like to place $valueLabel from $catName?" },
+        sumMismatchBody = { catTotal, txnTotal -> "Category amounts total $catTotal but Total is $txnTotal." },
+        selectFieldToAdjust = "Select field to adjust:"
     )
 
     override val futureExpenditures = FutureExpendituresStrings(
@@ -472,7 +488,8 @@ object EnglishStrings : AppStrings {
         dissolveError = "Failed to reach server \u2014 try again later",
         enterNickname = "Your name",
         createGroupTitle = "Create Group",
-        renameDevice = "Rename Device"
+        renameDevice = "Rename Device",
+        copy = "Copy"
     )
 
     // ── Help Screen Strings ──

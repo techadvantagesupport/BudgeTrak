@@ -88,6 +88,10 @@ class BudgetWidgetProvider : AppWidgetProvider() {
             // Solari gets up to 75% of widget height; bitmap auto-sizes to card content
             val maxSolariHeight = (heightPx * 3) / 4
 
+            // Get translated upgrade text for non-paid widget overlay
+            val appLang = prefs.getString("appLanguage", "en") ?: "en"
+            val widgetStrings = if (appLang == "es")
+                com.syncbudget.app.ui.strings.SpanishStrings else com.syncbudget.app.ui.strings.EnglishStrings
             val result = WidgetRenderer.render(
                 widgetWidth = widthPx,
                 maxHeight = maxSolariHeight,
@@ -96,7 +100,8 @@ class BudgetWidgetProvider : AppWidgetProvider() {
                 amount = availableCash,
                 currencySymbol = currencySymbol,
                 decimalPlaces = decimalPlaces,
-                minDigitCount = digitCount
+                minDigitCount = digitCount,
+                upgradeText = widgetStrings.dashboard.upgradeForFullWidget
             )
 
             views.setImageViewBitmap(R.id.widget_solari, result.bitmap)

@@ -662,6 +662,26 @@ class MainActivity : ComponentActivity() {
                             syncPrefs.edit().putBoolean("rescue_stranded_v2_done", true).apply()
                         }
 
+                        // One-time migration: stamp excludeFromBudget_clock and isBudgetIncome_clock
+                        // for transactions where the flag is set but the clock is still 0.
+                        if (!syncPrefs.getBoolean("migration_stamp_exclude_budget_clocks", false)) {
+                            val migClk = lamportClock.tick()
+                            var changed = false
+                            transactions.forEachIndexed { i, t ->
+                                val needsExclude = t.excludeFromBudget && t.excludeFromBudget_clock == 0L
+                                val needsBudgetIncome = t.isBudgetIncome && t.isBudgetIncome_clock == 0L
+                                if (needsExclude || needsBudgetIncome) {
+                                    changed = true
+                                    transactions[i] = t.copy(
+                                        excludeFromBudget_clock = if (needsExclude) migClk else t.excludeFromBudget_clock,
+                                        isBudgetIncome_clock = if (needsBudgetIncome) migClk else t.isBudgetIncome_clock
+                                    )
+                                }
+                            }
+                            if (changed) saveTransactions()
+                            syncPrefs.edit().putBoolean("migration_stamp_exclude_budget_clocks", true).apply()
+                        }
+
                         // Merge disk transactions into memory before snapshotting.
                         // The widget writes directly to disk; without this, the
                         // sync loop would overwrite disk with the stale in-memory
@@ -773,7 +793,8 @@ class MainActivity : ComponentActivity() {
                                             source_clock = clk, description_clock = clk,
                                             amount_clock = clk, date_clock = clk,
                                             type_clock = clk, categoryAmounts_clock = clk,
-                                            isUserCategorized_clock = clk, isBudgetIncome_clock = clk,
+                                            isUserCategorized_clock = clk, excludeFromBudget_clock = clk,
+                                            isBudgetIncome_clock = clk,
                                             linkedRecurringExpenseId_clock = clk,
                                             linkedAmortizationEntryId_clock = clk,
                                             linkedIncomeSourceId_clock = clk,
@@ -1032,6 +1053,7 @@ class MainActivity : ComponentActivity() {
                     type_clock = clock,
                     categoryAmounts_clock = clock,
                     isUserCategorized_clock = clock,
+                    excludeFromBudget_clock = clock,
                     isBudgetIncome_clock = clock,
                     linkedRecurringExpenseId_clock = clock,
                     linkedAmortizationEntryId_clock = clock,
@@ -1176,6 +1198,7 @@ class MainActivity : ComponentActivity() {
                             // Update savings goals totalSavedSoFar for non-paused, non-complete items.
                             // Use the correct date for each catch-up period so periodsLeft
                             // decreases properly (instead of using today for all iterations).
+                            val savingsClk = lamportClock.tick()
                             for (period in 0 until missedPeriods) {
                                 val periodsBack = (missedPeriods - 1 - period).toLong()
                                 val periodDate = when (budgetPeriod) {
@@ -1197,7 +1220,8 @@ class MainActivity : ComponentActivity() {
                                                     if (periods > 0) {
                                                         val deduction = BudgetCalculator.roundCents(minOf(remaining / periods.toDouble(), remaining))
                                                         savingsGoals[idx] = goal.copy(
-                                                            totalSavedSoFar = goal.totalSavedSoFar + deduction
+                                                            totalSavedSoFar = goal.totalSavedSoFar + deduction,
+                                                            totalSavedSoFar_clock = savingsClk
                                                         )
                                                     }
                                                 }
@@ -1208,7 +1232,8 @@ class MainActivity : ComponentActivity() {
                                                 ))
                                                 if (contribution > 0) {
                                                     savingsGoals[idx] = goal.copy(
-                                                        totalSavedSoFar = goal.totalSavedSoFar + contribution
+                                                        totalSavedSoFar = goal.totalSavedSoFar + contribution,
+                                                        totalSavedSoFar_clock = savingsClk
                                                     )
                                                 }
                                             }
@@ -1285,12 +1310,17 @@ class MainActivity : ComponentActivity() {
                                 "${ca.categoryId}($name):${ca.amount}"
                             }
                         val linkDesc = listOfNotNull(
-                            txn.linkedRecurringExpenseId?.let { "reId=$it(clk=${txn.linkedRecurringExpenseId_clock})" },
-                            txn.linkedAmortizationEntryId?.let { "aeId=$it(clk=${txn.linkedAmortizationEntryId_clock})" }
+                            txn.linkedRecurringExpenseId?.let { "reId=$it(clk=${txn.linkedRecurringExpenseId_clock},reAmt=${txn.linkedRecurringExpenseAmount})" },
+                            txn.linkedAmortizationEntryId?.let { "aeId=$it(clk=${txn.linkedAmortizationEntryId_clock},appl=${txn.amortizationAppliedAmount})" },
+                            txn.linkedIncomeSourceId?.let { "isId=$it(clk=${txn.linkedIncomeSourceId_clock},isAmt=${txn.linkedIncomeSourceAmount})" }
                         ).joinToString(" ").ifEmpty { "" }
-                        dump.appendLine("  ${txn.date} ${txn.type} ${txn.amount} '${txn.source}' dev=${txn.deviceId.take(8)}… ba=$budgetAccounted aClk=${txn.amount_clock} cClk=${txn.categoryAmounts_clock} dIdClk=${txn.deviceId_clock} $linkDesc $catDesc")
-                        if (txn.type == TransactionType.EXPENSE && !budgetAccounted) totalExpense += txn.amount
-                        else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome) totalIncome += txn.amount
+                        val flagDesc = listOfNotNull(
+                            if (txn.excludeFromBudget) "ef=true(clk=${txn.excludeFromBudget_clock})" else null,
+                            if (txn.isBudgetIncome) "bi=true" else null
+                        ).joinToString(" ").let { if (it.isNotEmpty()) "$it " else "" }
+                        dump.appendLine("  ${txn.date} ${txn.type} ${txn.amount} '${txn.source}' dev=${txn.deviceId.take(8)}… ba=$budgetAccounted ${flagDesc}aClk=${txn.amount_clock} cClk=${txn.categoryAmounts_clock} dIdClk=${txn.deviceId_clock} $linkDesc $catDesc")
+                        if (txn.type == TransactionType.EXPENSE && !budgetAccounted && !txn.excludeFromBudget) totalExpense += txn.amount
+                        else if (txn.type == TransactionType.INCOME && !txn.isBudgetIncome && !txn.excludeFromBudget) totalIncome += txn.amount
                     }
                     dump.appendLine("Period expense total (non-budget-accounted): $totalExpense")
                     dump.appendLine("Period extra income total: $totalIncome")
@@ -1350,7 +1380,7 @@ class MainActivity : ComponentActivity() {
                             .border(1.dp, Color.Gray),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Ad", color = Color.Gray, fontSize = 12.sp)
+                        Text(strings.dashboard.adPlaceholder, color = Color.Gray, fontSize = 12.sp)
                     }
                 }
 
@@ -1426,7 +1456,8 @@ class MainActivity : ComponentActivity() {
                                                 source_clock = clk, description_clock = clk,
                                                 amount_clock = clk, date_clock = clk,
                                                 type_clock = clk, categoryAmounts_clock = clk,
-                                                isUserCategorized_clock = clk, isBudgetIncome_clock = clk,
+                                                isUserCategorized_clock = clk, excludeFromBudget_clock = clk,
+                                                isBudgetIncome_clock = clk,
                                                 linkedRecurringExpenseId_clock = clk,
                                                 linkedAmortizationEntryId_clock = clk,
                                                 linkedIncomeSourceId_clock = clk,
@@ -1606,6 +1637,7 @@ class MainActivity : ComponentActivity() {
                         localDeviceId = localDeviceId,
                         onSyncNow = doSyncNow,
                         onSupercharge = { allocations, modes ->
+                            val superClk = lamportClock.tick()
                             val deposits = mutableListOf<Pair<String, Double>>() // goalName to capped amount
                             for ((goalId, amount) in allocations) {
                                 val idx = savingsGoals.indexOfFirst { it.id == goalId }
@@ -1631,10 +1663,13 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 goal.copy(
                                                     totalSavedSoFar = goal.totalSavedSoFar + capped,
-                                                    targetDate = newTargetDate
+                                                    totalSavedSoFar_clock = superClk,
+                                                    targetDate = newTargetDate,
+                                                    targetDate_clock = superClk
                                                 )
                                             } else {
-                                                goal.copy(totalSavedSoFar = goal.totalSavedSoFar + capped)
+                                                goal.copy(totalSavedSoFar = goal.totalSavedSoFar + capped,
+                                                    totalSavedSoFar_clock = superClk)
                                             }
                                         } else if (
                                             goal.targetDate == null &&
@@ -1649,11 +1684,14 @@ class MainActivity : ComponentActivity() {
                                             else 0.0
                                             goal.copy(
                                                 totalSavedSoFar = goal.totalSavedSoFar + capped,
-                                                contributionPerPeriod = newContribution
+                                                totalSavedSoFar_clock = superClk,
+                                                contributionPerPeriod = newContribution,
+                                                contributionPerPeriod_clock = superClk
                                             )
                                         } else {
                                             goal.copy(
-                                                totalSavedSoFar = goal.totalSavedSoFar + capped
+                                                totalSavedSoFar = goal.totalSavedSoFar + capped,
+                                                totalSavedSoFar_clock = superClk
                                             )
                                         }
                                         savingsGoals[idx] = updatedGoal
@@ -1793,6 +1831,8 @@ class MainActivity : ComponentActivity() {
                                 name_clock = clock,
                                 iconName_clock = clock,
                                 tag_clock = if (cat.tag.isNotEmpty()) clock else 0L,
+                                charted_clock = clock,
+                                widgetVisible_clock = clock,
                                 deviceId_clock = clock
                             ))
                             saveCategories()
@@ -1923,6 +1963,7 @@ class MainActivity : ComponentActivity() {
                                     type_clock = if (updated.type != prev.type) clock else prev.type_clock,
                                     categoryAmounts_clock = if (updated.categoryAmounts != prev.categoryAmounts) clock else prev.categoryAmounts_clock,
                                     isUserCategorized_clock = if (updated.isUserCategorized != prev.isUserCategorized) clock else prev.isUserCategorized_clock,
+                                    excludeFromBudget_clock = if (updated.excludeFromBudget != prev.excludeFromBudget) clock else prev.excludeFromBudget_clock,
                                     isBudgetIncome_clock = if (updated.isBudgetIncome != prev.isBudgetIncome) clock else prev.isBudgetIncome_clock,
                                     linkedRecurringExpenseId_clock = if (updated.linkedRecurringExpenseId != prev.linkedRecurringExpenseId) clock else prev.linkedRecurringExpenseId_clock,
                                     linkedAmortizationEntryId_clock = if (updated.linkedAmortizationEntryId != prev.linkedAmortizationEntryId) clock else prev.linkedAmortizationEntryId_clock,
@@ -2717,6 +2758,7 @@ class MainActivity : ComponentActivity() {
                                                 date_clock = stampClock, type_clock = stampClock,
                                                 categoryAmounts_clock = stampClock,
                                                 isUserCategorized_clock = stampClock,
+                                                excludeFromBudget_clock = stampClock,
                                                 isBudgetIncome_clock = stampClock,
                                                 linkedRecurringExpenseId_clock = stampClock,
                                                 linkedAmortizationEntryId_clock = stampClock,
@@ -2735,7 +2777,8 @@ class MainActivity : ComponentActivity() {
                                                 deviceId = localDeviceId,
                                                 name_clock = stampClock, iconName_clock = stampClock,
                                                 tag_clock = if (c.tag.isNotEmpty()) stampClock else 0L,
-                                                deviceId_clock = stampClock
+                                                charted_clock = stampClock, widgetVisible_clock = stampClock,
+                                                deleted_clock = stampClock, deviceId_clock = stampClock
                                             )
                                         }
                                     }
@@ -2747,7 +2790,7 @@ class MainActivity : ComponentActivity() {
                                                 name_clock = stampClock, targetAmount_clock = stampClock,
                                                 targetDate_clock = stampClock, totalSavedSoFar_clock = stampClock,
                                                 contributionPerPeriod_clock = stampClock, isPaused_clock = stampClock,
-                                                deviceId_clock = stampClock
+                                                deleted_clock = stampClock, deviceId_clock = stampClock
                                             )
                                         }
                                     }
@@ -2759,7 +2802,7 @@ class MainActivity : ComponentActivity() {
                                                 source_clock = stampClock, description_clock = stampClock,
                                                 amount_clock = stampClock,
                                                 totalPeriods_clock = stampClock, startDate_clock = stampClock,
-                                                isPaused_clock = stampClock,
+                                                isPaused_clock = stampClock, deleted_clock = stampClock,
                                                 deviceId_clock = stampClock
                                             )
                                         }
@@ -2774,7 +2817,7 @@ class MainActivity : ComponentActivity() {
                                                 repeatType_clock = stampClock, repeatInterval_clock = stampClock,
                                                 startDate_clock = stampClock, monthDay1_clock = stampClock,
                                                 monthDay2_clock = stampClock,
-                                                deviceId_clock = stampClock
+                                                deleted_clock = stampClock, deviceId_clock = stampClock
                                             )
                                         }
                                     }
@@ -2788,7 +2831,7 @@ class MainActivity : ComponentActivity() {
                                                 repeatType_clock = stampClock, repeatInterval_clock = stampClock,
                                                 startDate_clock = stampClock, monthDay1_clock = stampClock,
                                                 monthDay2_clock = stampClock,
-                                                deviceId_clock = stampClock
+                                                deleted_clock = stampClock, deviceId_clock = stampClock
                                             )
                                         }
                                     }
@@ -2830,7 +2873,8 @@ class MainActivity : ComponentActivity() {
                                                     // customizations in CRDT merge
                                                     iconName_clock = 0L,
                                                     tag_clock = if (c.tag.isNotEmpty()) stampClock else 0L,
-                                                    deviceId_clock = stampClock
+                                                    charted_clock = stampClock, widgetVisible_clock = stampClock,
+                                                    deleted_clock = stampClock, deviceId_clock = stampClock
                                                 )
                                             }
                                         }
@@ -2844,6 +2888,7 @@ class MainActivity : ComponentActivity() {
                                                     date_clock = stampClock, type_clock = stampClock,
                                                     categoryAmounts_clock = stampClock,
                                                     isUserCategorized_clock = stampClock,
+                                                    excludeFromBudget_clock = stampClock,
                                                     isBudgetIncome_clock = stampClock,
                                                     linkedRecurringExpenseId_clock = stampClock,
                                                     linkedAmortizationEntryId_clock = stampClock,
@@ -2865,7 +2910,7 @@ class MainActivity : ComponentActivity() {
                                                     repeatType_clock = stampClock, repeatInterval_clock = stampClock,
                                                     startDate_clock = stampClock, monthDay1_clock = stampClock,
                                                     monthDay2_clock = stampClock,
-                                                    deviceId_clock = stampClock
+                                                    deleted_clock = stampClock, deviceId_clock = stampClock
                                                 )
                                             }
                                         }
@@ -2879,7 +2924,7 @@ class MainActivity : ComponentActivity() {
                                                     repeatType_clock = stampClock, repeatInterval_clock = stampClock,
                                                     startDate_clock = stampClock, monthDay1_clock = stampClock,
                                                     monthDay2_clock = stampClock,
-                                                    deviceId_clock = stampClock
+                                                    deleted_clock = stampClock, deviceId_clock = stampClock
                                                 )
                                             }
                                         }
@@ -2891,7 +2936,7 @@ class MainActivity : ComponentActivity() {
                                                     name_clock = stampClock, targetAmount_clock = stampClock,
                                                     targetDate_clock = stampClock, totalSavedSoFar_clock = stampClock,
                                                     contributionPerPeriod_clock = stampClock, isPaused_clock = stampClock,
-                                                    deviceId_clock = stampClock
+                                                    deleted_clock = stampClock, deviceId_clock = stampClock
                                                 )
                                             }
                                         }
@@ -2903,7 +2948,7 @@ class MainActivity : ComponentActivity() {
                                                     source_clock = stampClock, description_clock = stampClock,
                                                     amount_clock = stampClock,
                                                     totalPeriods_clock = stampClock, startDate_clock = stampClock,
-                                                    isPaused_clock = stampClock,
+                                                    isPaused_clock = stampClock, deleted_clock = stampClock,
                                                     deviceId_clock = stampClock
                                                 )
                                             }

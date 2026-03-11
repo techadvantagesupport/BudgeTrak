@@ -1107,7 +1107,7 @@ private fun AddEditExpenseDialog(
             }
         )
         AdAwareDatePickerDialog(
-            title = "Select Date",
+            title = S.common.selectDate,
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 var okBtnYPx by remember { mutableIntStateOf(0) }

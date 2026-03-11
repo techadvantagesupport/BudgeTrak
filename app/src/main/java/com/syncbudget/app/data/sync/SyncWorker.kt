@@ -222,15 +222,18 @@ class SyncWorker(
                 val maxClk = maxOf(t.source_clock, t.amount_clock, t.date_clock, t.type_clock,
                     t.categoryAmounts_clock, t.isUserCategorized_clock, t.excludeFromBudget_clock, t.isBudgetIncome_clock,
                     t.linkedRecurringExpenseId_clock, t.linkedAmortizationEntryId_clock,
-                    t.linkedIncomeSourceId_clock, t.deviceId_clock, t.deleted_clock,
-                    t.description_clock)
+                    t.linkedIncomeSourceId_clock, t.amortizationAppliedAmount_clock,
+                    t.linkedRecurringExpenseAmount_clock, t.linkedIncomeSourceAmount_clock,
+                    t.deviceId_clock, t.deleted_clock, t.description_clock)
                 if (t.deviceId == deviceId && maxClk in 1 until lpc) {
                     anyRescued = true
                     t.copy(source_clock = rescueClk, description_clock = rescueClk, amount_clock = rescueClk,
                         date_clock = rescueClk, type_clock = rescueClk, categoryAmounts_clock = rescueClk,
                         isUserCategorized_clock = rescueClk, excludeFromBudget_clock = rescueClk, isBudgetIncome_clock = rescueClk,
                         linkedRecurringExpenseId_clock = rescueClk, linkedAmortizationEntryId_clock = rescueClk,
-                        linkedIncomeSourceId_clock = rescueClk, deviceId_clock = rescueClk, deleted_clock = rescueClk)
+                        linkedIncomeSourceId_clock = rescueClk, amortizationAppliedAmount_clock = rescueClk,
+                        linkedRecurringExpenseAmount_clock = rescueClk, linkedIncomeSourceAmount_clock = rescueClk,
+                        deviceId_clock = rescueClk, deleted_clock = rescueClk)
                 } else t
             }
             if (anyRescued) TransactionRepository.save(applicationContext, transactions)
@@ -276,6 +279,27 @@ class SyncWorker(
             }
             if (anyRescued) AmortizationRepository.save(applicationContext, amortizationEntries)
             syncPrefs.edit().putBoolean("rescue_stranded_v2_done", true).apply()
+        }
+
+        // One-time migration: stamp excludeFromBudget_clock and isBudgetIncome_clock
+        // for transactions where the flag is set but the clock is still 0 (set before
+        // clock stamping was added).
+        if (!syncPrefs.getBoolean("migration_stamp_exclude_budget_clocks", false)) {
+            val migClock = lamportClock.tick()
+            var changed = false
+            transactions = transactions.map { t ->
+                val needsExclude = t.excludeFromBudget && t.excludeFromBudget_clock == 0L
+                val needsBudgetIncome = t.isBudgetIncome && t.isBudgetIncome_clock == 0L
+                if (needsExclude || needsBudgetIncome) {
+                    changed = true
+                    t.copy(
+                        excludeFromBudget_clock = if (needsExclude) migClock else t.excludeFromBudget_clock,
+                        isBudgetIncome_clock = if (needsBudgetIncome) migClock else t.isBudgetIncome_clock
+                    )
+                } else t
+            }
+            if (changed) TransactionRepository.save(applicationContext, transactions)
+            syncPrefs.edit().putBoolean("migration_stamp_exclude_budget_clocks", true).apply()
         }
 
         // Load persisted category ID remap
@@ -339,8 +363,15 @@ class SyncWorker(
                 val mergedLedger = result.mergedPeriodLedgerEntries ?: periodLedger
                 val activeTxns = (result.mergedTransactions ?: transactions).filter { !it.deleted }
                 val activeRE = (result.mergedRecurringExpenses ?: recurringExpenses).filter { !it.deleted }
+                val activeIS = (result.mergedIncomeSources ?: incomeSources).filter { !it.deleted }
+                val incomeMode = try {
+                    com.syncbudget.app.data.IncomeMode.valueOf(
+                        appPrefs.getString("incomeMode", null) ?: "FIXED"
+                    )
+                } catch (_: Exception) { com.syncbudget.app.data.IncomeMode.FIXED }
                 val cash = BudgetCalculator.recomputeAvailableCash(
-                    budgetStartDate, mergedLedger, activeTxns, activeRE
+                    budgetStartDate, mergedLedger, activeTxns, activeRE,
+                    incomeMode, activeIS
                 )
                 appPrefs.edit().putString("availableCash", cash.toString()).apply()
             }

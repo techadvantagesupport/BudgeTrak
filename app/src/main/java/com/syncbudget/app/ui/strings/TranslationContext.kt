@@ -84,7 +84,8 @@ object TranslationContext {
         "exampleBiMonthlyDay2" to "Placeholder text for the second day field in a bi-monthly schedule.",
         "language" to "Settings label for the language/locale selection option. Noun meaning spoken/written language.",
         "dateDayTooHigh" to "Validation error message shown when user selects a day of month greater than 28.",
-        "descriptionFieldLabel" to "Form field label for an optional text description/notes field on a transaction or entry."
+        "descriptionFieldLabel" to "Form field label for an optional text description/notes field on a transaction or entry.",
+        "selectDate" to "Date picker dialog title. Imperative phrase asking user to choose a calendar date."
     )
 
     // ── Dashboard Strings ──
@@ -117,7 +118,12 @@ object TranslationContext {
         "superchargeNewPayoff" to "Label showing the new payoff date after supercharging. Lambda: 'date' is a formatted date.",
         "superchargeNewCompletion" to "Label showing when the goal will be completed after supercharging. Lambda: 'date' is a formatted date.",
         "superchargeAutoAdjust" to "Informational note that savings contributions will recalculate automatically after supercharging.",
-        "superchargeTargetDateNote" to "Warning note that supercharging will alter the target completion date of a savings goal."
+        "superchargeTargetDateNote" to "Warning note that supercharging will alter the target completion date of a savings goal.",
+        "superchargeExceedsCash" to "Error message shown when supercharge allocations exceed available cash. Lambda: 'total' is a formatted currency amount.",
+        "upgradeForFullWidget" to "Overlay text drawn on the home screen widget for non-paid users, encouraging them to upgrade for full widget functionality.",
+        "adPlaceholder" to "Short placeholder label shown in a blank ad banner area for non-paid users. Abbreviation of 'advertisement'.",
+        "switchToPieChart" to "Accessibility content description for the chart toggle button when the current view is a bar chart. Describes what tapping will do.",
+        "switchToBarChart" to "Accessibility content description for the chart toggle button when the current view is a pie chart. Describes what tapping will do."
     )
 
     // ── Settings Strings ──
@@ -325,7 +331,17 @@ object TranslationContext {
         "linkedToRecurring" to "Badge/label on a transaction indicating it is linked to a recurring expense. Lambda: 'name' is the recurring expense name.",
         "linkedToAmortization" to "Badge/label on a transaction indicating it is linked to an amortization entry. Lambda: 'name' is the amortization entry name.",
         "linkedToIncome" to "Badge/label on a transaction indicating it is linked to a budget income source. Lambda: 'name' is the income source name.",
-        "unmodifiedBankTransactions" to "Filter/label for transactions imported from a bank that haven't been manually reviewed or modified by the user yet."
+        "unmodifiedBankTransactions" to "Filter/label for transactions imported from a bank that haven't been manually reviewed or modified by the user yet.",
+        "formatGenericCsv" to "Radio button label in the import dialog for a generic CSV parser that auto-detects column layout. Works with any bank's CSV export.",
+        "formatUsBank" to "Radio button label in the import dialog for US Bank's specific CSV format. 'US Bank' is a brand name — do not translate.",
+        "formatBudgeXyncCsv" to "Radio button label in the import dialog for loading a BudgeXync CSV save file. 'BudgeXync' is the app brand name — do not translate.",
+        "formatBudgeXyncEncrypted" to "Radio button label in the import dialog for loading a BudgeXync encrypted save file. 'BudgeXync' is the app brand name — do not translate.",
+        "unknown" to "Fallback label shown when a category name or source cannot be determined. Adjective meaning 'not known'.",
+        "amountExample" to "Placeholder hint text in a monetary amount input field showing an example valid entry like '42.50'.",
+        "moveCategoryBody" to "Dialog body when a category is deselected and its allocated amount must be moved elsewhere. Lambda: 'valueLabel' is a formatted currency amount, 'catName' is the category name being removed.",
+        "sumMismatchBody" to "Dialog body warning that category subtotals don't add up to the transaction total. Lambda: 'catTotal' is the sum of categories, 'txnTotal' is the transaction total. Both are formatted currency.",
+        "selectFieldToAdjust" to "Dialog instruction text asking the user to choose which field (category amount or total) to adjust to resolve a sum mismatch.",
+        "rowsSkippedWarning" to "Informational message shown when CSV parsing skipped some rows. Lambda: 'skipped' is count of failed rows, 'total' is total rows in the file."
     )
 
     // ── Savings Goals (Future Expenditures) Strings ──
@@ -502,7 +518,8 @@ object TranslationContext {
         "dissolveError" to "Error message when the server could not be reached to dissolve the group.",
         "enterNickname" to "Form field label/placeholder for entering the user's display name in the sync group.",
         "createGroupTitle" to "Dialog title for the create-group form.",
-        "renameDevice" to "Button label to change a device's display name in the sync group."
+        "renameDevice" to "Button label to change a device's display name in the sync group.",
+        "copy" to "Button label and accessibility description for copying a pairing code to the clipboard. Action verb meaning to duplicate text — not a physical copy."
     )
 
     // ── Dashboard Help Strings ──

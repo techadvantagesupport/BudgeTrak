@@ -622,7 +622,7 @@ private fun AddEditSavingsGoalDialog(
             initialSelectedDateMillis = targetDate?.atStartOfDay(ZoneId.of("UTC"))?.toInstant()?.toEpochMilli()
         )
         AdAwareDatePickerDialog(
-            title = "Select Date",
+            title = S.common.selectDate,
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 DialogPrimaryButton(onClick = {

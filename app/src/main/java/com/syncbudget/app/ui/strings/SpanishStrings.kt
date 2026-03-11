@@ -70,7 +70,8 @@ object SpanishStrings : AppStrings {
         exampleBiMonthlyDay2 = "ej. 15",
         language = "Idioma",
         dateDayTooHigh = "Selecciona una fecha entre el 1 y el 28 del mes",
-        descriptionFieldLabel = "Descripci\u00f3n"
+        descriptionFieldLabel = "Descripci\u00f3n",
+        selectDate = "Seleccionar fecha"
     )
 
     override val dashboard = DashboardStrings(
@@ -101,7 +102,12 @@ object SpanishStrings : AppStrings {
         superchargeNewPayoff = { date -> "Nueva fecha de pago: $date" },
         superchargeNewCompletion = { date -> "Se completa: $date" },
         superchargeAutoAdjust = "Las contribuciones se ajustan autom\u00e1ticamente",
-        superchargeTargetDateNote = "Esto cambiar\u00e1 tu fecha objetivo"
+        superchargeTargetDateNote = "Esto cambiar\u00e1 tu fecha objetivo",
+        superchargeExceedsCash = { total -> "Total ($total) excede el efectivo disponible" },
+        upgradeForFullWidget = "Actualizar para widget completo",
+        adPlaceholder = "Anuncio",
+        switchToPieChart = "Cambiar a gr\u00e1fico circular",
+        switchToBarChart = "Cambiar a gr\u00e1fico de barras"
     )
 
     override val settings = SettingsStrings(
@@ -275,6 +281,7 @@ object SpanishStrings : AppStrings {
         parseError = "Error de lectura",
         unknownError = "Error desconocido",
         parsedBeforeError = { count: Int -> "$count transacciones le\u00eddas antes del error." },
+        rowsSkippedWarning = { skipped: Int, total: Int -> "$skipped de $total filas en el archivo no se pudieron leer y se omitieron." },
         keep = "Conservar",
         requiredMerchantExample = "Obligatorio, ej. Supermercado",
         moveCategoryValue = "Mover valor de categor\u00eda",
@@ -303,7 +310,16 @@ object SpanishStrings : AppStrings {
         linkedToRecurring = { name -> "Recurrente: $name" },
         linkedToAmortization = { name -> "Amortizaci\u00f3n: $name" },
         linkedToIncome = { name -> "Ingreso: $name" },
-        unmodifiedBankTransactions = "Transacciones no verificadas"
+        unmodifiedBankTransactions = "Transacciones no verificadas",
+        formatGenericCsv = "CSV de cualquier banco",
+        formatUsBank = "US Bank",
+        formatBudgeXyncCsv = "Archivo CSV de BudgeXync",
+        formatBudgeXyncEncrypted = "Archivo cifrado de BudgeXync",
+        unknown = "Desconocido",
+        amountExample = "ej. 42.50",
+        moveCategoryBody = { valueLabel, catName -> "¿Dónde desea colocar $valueLabel de $catName?" },
+        sumMismatchBody = { catTotal, txnTotal -> "Las categorías suman $catTotal pero el total es $txnTotal." },
+        selectFieldToAdjust = "Seleccione el campo a ajustar:"
     )
 
     override val futureExpenditures = FutureExpendituresStrings(
@@ -472,7 +488,8 @@ object SpanishStrings : AppStrings {
         dissolveError = "No se pudo conectar al servidor \u2014 int\u00e9ntalo m\u00e1s tarde",
         enterNickname = "Tu nombre",
         createGroupTitle = "Crear Grupo",
-        renameDevice = "Renombrar Dispositivo"
+        renameDevice = "Renombrar Dispositivo",
+        copy = "Copiar"
     )
 
     // ── Help Screen Strings ──

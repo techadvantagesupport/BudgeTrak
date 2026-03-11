@@ -2,23 +2,29 @@ package com.syncbudget.app.data
 
 import java.io.BufferedReader
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
 enum class BankFormat(val displayName: String) {
+    GENERIC_CSV("Any Bank CSV"),
     US_BANK("US Bank"),
-    SECURESYNC_CSV("SecureSync CSV Save File"),
-    SECURESYNC_ENCRYPTED("SecureSync Encrypted Save File")
+    SECURESYNC_CSV("BudgeXync CSV Save File"),
+    SECURESYNC_ENCRYPTED("BudgeXync Encrypted Save File")
 }
 
 data class CsvParseResult(
     val transactions: List<Transaction>,
-    val error: String?
+    val error: String?,
+    val totalDataRows: Int = 0,
+    val skippedRows: Int = 0
 )
 
 fun parseUsBank(reader: BufferedReader, existingIds: Set<Int>): CsvParseResult {
     val transactions = mutableListOf<Transaction>()
     val usedIds = existingIds.toMutableSet()
     var error: String? = null
+    var totalDataRows = 0
+    var skippedRows = 0
 
     try {
         val header = reader.readLine() ?: return CsvParseResult(emptyList(), "Empty file")
@@ -27,9 +33,11 @@ fun parseUsBank(reader: BufferedReader, existingIds: Set<Int>): CsvParseResult {
         reader.forEachLine { line ->
             lineNumber++
             if (line.isBlank()) return@forEachLine
+            totalDataRows++
             try {
                 val fields = parseCsvLine(line)
                 if (fields.size < 5) {
+                    skippedRows++
                     error = "Line $lineNumber: expected 5 fields, got ${fields.size}"
                     return@forEachLine
                 }
@@ -57,6 +65,7 @@ fun parseUsBank(reader: BufferedReader, existingIds: Set<Int>): CsvParseResult {
                     )
                 )
             } catch (e: Exception) {
+                skippedRows++
                 error = "Line $lineNumber: ${e.message}"
             }
         }
@@ -64,7 +73,12 @@ fun parseUsBank(reader: BufferedReader, existingIds: Set<Int>): CsvParseResult {
         error = "Failed to read file: ${e.message}"
     }
 
-    return CsvParseResult(transactions, error)
+    // If more than half the rows were skipped, escalate to an error
+    if (error == null && totalDataRows > 0 && skippedRows > totalDataRows / 2) {
+        error = "Only $skippedRows of $totalDataRows rows could not be parsed — file may not be a US Bank CSV"
+    }
+
+    return CsvParseResult(transactions, error, totalDataRows, skippedRows)
 }
 
 fun parseCsvLine(line: String): List<String> {
@@ -104,6 +118,576 @@ fun serializeTransactionsCsv(transactions: List<Transaction>): String {
         sb.appendLine("${t.id},${t.type.name},${t.date},$escapedSource,$escapedDescription,${t.amount},\"$categoryAmountsStr\",${t.isUserCategorized},${t.isBudgetIncome},$escapedDeviceId,${t.deleted},${t.source_clock},${t.description_clock},${t.amount_clock},${t.date_clock},${t.type_clock},${t.categoryAmounts_clock},${t.isUserCategorized_clock},${t.isBudgetIncome_clock},${t.deleted_clock},$linkedRecStr,$linkedAmortStr,${t.linkedRecurringExpenseId_clock},${t.linkedAmortizationEntryId_clock},$linkedIncomeStr,${t.linkedIncomeSourceId_clock}")
     }
     return sb.toString()
+}
+
+// ── Generic CSV Parser ──────────────────────────────────────────────
+
+private data class ColumnMapping(
+    val dateCol: Int,
+    val amountCol: Int?,       // single amount column (null if split debit/credit)
+    val debitCol: Int?,        // split debit column
+    val creditCol: Int?,       // split credit column
+    val merchantCol: Int,
+    val typeCol: Int?,         // optional DEBIT/CREDIT type column
+    val dateFormatter: DateTimeFormatter
+)
+
+// Lightweight intermediate — avoids generating transaction IDs until we pick the winning mapping
+private data class ParsedRow(
+    val date: LocalDate,
+    val amount: Double,
+    val type: TransactionType,
+    val merchant: String
+)
+
+private data class MappingAttempt(
+    val rows: List<ParsedRow>,
+    val totalDataRows: Int,
+    val skippedRows: Int
+)
+
+fun parseGenericCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseResult {
+    try {
+        // Read lines with quote-aware joining: if a line has an unclosed quote,
+        // the actual newline is embedded in a field — join with the next line(s).
+        val rawLines = mutableListOf<String>()
+        val allFileLines = reader.readLines().take(50_000)
+        var pending: StringBuilder? = null
+        for (fileLine in allFileLines) {
+            if (pending != null) {
+                pending.append('\n').append(fileLine)
+                if (pending.count { it == '"' } % 2 == 0) {
+                    // Quotes balanced — record the joined line
+                    rawLines.add(pending.toString())
+                    pending = null
+                }
+            } else {
+                if (fileLine.count { it == '"' } % 2 != 0) {
+                    // Odd number of quotes — newline is inside a quoted field
+                    pending = StringBuilder(fileLine)
+                } else {
+                    rawLines.add(fileLine)
+                }
+            }
+        }
+        // If there's still an unclosed quote, add whatever we have
+        if (pending != null) rawLines.add(pending.toString())
+
+        if (rawLines.isEmpty()) return CsvParseResult(emptyList(), "Empty file")
+
+        // Strip BOM
+        val lines = rawLines.toMutableList()
+        if (lines[0].startsWith("\uFEFF")) lines[0] = lines[0].removePrefix("\uFEFF")
+
+        // Detect delimiter (comma vs semicolon vs tab)
+        val delimiter = detectDelimiter(lines.take(10))
+
+        // Parse all lines into fields
+        val allRows = lines.filter { it.isNotBlank() }.map { parseCsvLineWithDelimiter(it, delimiter) }
+        if (allRows.size < 2) return CsvParseResult(emptyList(), "File has fewer than 2 rows")
+
+        // Detect header
+        val hasHeader = isHeaderRow(allRows[0])
+        val header = if (hasHeader) allRows[0] else null
+        val dataRows = if (hasHeader) allRows.drop(1) else allRows
+
+        if (dataRows.isEmpty()) return CsvParseResult(emptyList(), "No data rows found")
+
+        // Generate up to 3 candidate column mappings, ranked by score
+        val candidates = detectColumnCandidates(dataRows, header)
+        if (candidates.isEmpty()) {
+            return CsvParseResult(
+                emptyList(),
+                "Could not detect CSV structure. Need at least a date and amount column.",
+                dataRows.size, dataRows.size
+            )
+        }
+
+        // Try each candidate mapping — accept the first one that parses consistently
+        var bestAttempt: MappingAttempt? = null
+
+        for (mapping in candidates) {
+            val attempt = tryParseWithMapping(dataRows, mapping)
+            if (attempt.rows.isEmpty()) continue
+
+            val isConsistent = attempt.skippedRows <= 2 ||
+                (attempt.totalDataRows > 0 &&
+                 (attempt.totalDataRows - attempt.skippedRows).toDouble() / attempt.totalDataRows >= 0.90)
+
+            if (isConsistent) {
+                bestAttempt = attempt
+                break  // Good enough — use this mapping
+            }
+
+            // Track best attempt so far (fewest skips)
+            if (bestAttempt == null || attempt.skippedRows < bestAttempt.skippedRows) {
+                bestAttempt = attempt
+            }
+        }
+
+        // No candidate produced any rows at all
+        if (bestAttempt == null || bestAttempt.rows.isEmpty()) {
+            return CsvParseResult(
+                emptyList(),
+                "Could not parse any transactions. The file format may not be compatible.",
+                dataRows.size, dataRows.size
+            )
+        }
+
+        // Check if the best attempt is consistent enough to trust
+        val isAcceptable = bestAttempt.skippedRows <= 2 ||
+            (bestAttempt.totalDataRows > 0 &&
+             (bestAttempt.totalDataRows - bestAttempt.skippedRows).toDouble() / bestAttempt.totalDataRows >= 0.90)
+
+        if (!isAcceptable) {
+            val best = bestAttempt.totalDataRows - bestAttempt.skippedRows
+            return CsvParseResult(
+                emptyList(),
+                "File format could not be reliably determined. " +
+                    "Tried ${candidates.size} column arrangement${if (candidates.size > 1) "s" else ""} " +
+                    "but none could consistently parse the data " +
+                    "(best result: $best of ${bestAttempt.totalDataRows} rows). " +
+                    "The file may use an unusual format.",
+                bestAttempt.totalDataRows, bestAttempt.skippedRows
+            )
+        }
+
+        // Convert ParsedRows to Transactions with generated IDs
+        val usedIds = existingIds.toMutableSet()
+        val transactions = bestAttempt.rows.map { row ->
+            val id = generateTransactionId(usedIds)
+            usedIds.add(id)
+            Transaction(
+                id = id,
+                type = row.type,
+                date = row.date,
+                source = row.merchant,
+                categoryAmounts = emptyList(),
+                amount = row.amount,
+                isUserCategorized = false
+            )
+        }
+
+        // Minor skip info (1-2 footer rows) — note but don't block
+        val error = if (bestAttempt.skippedRows > 0) {
+            "${bestAttempt.skippedRows} of ${bestAttempt.totalDataRows} rows could not be parsed and were skipped"
+        } else null
+
+        return CsvParseResult(transactions, error, bestAttempt.totalDataRows, bestAttempt.skippedRows)
+
+    } catch (e: Exception) {
+        return CsvParseResult(emptyList(), "Failed to read file: ${e.message}")
+    }
+}
+
+/** Try parsing all data rows with a given column mapping. Returns lightweight ParsedRows (no IDs). */
+private fun tryParseWithMapping(
+    dataRows: List<List<String>>,
+    mapping: ColumnMapping
+): MappingAttempt {
+    val parsed = mutableListOf<ParsedRow>()
+    var total = 0
+    var skipped = 0
+
+    for (row in dataRows) {
+        if (row.all { it.isBlank() }) continue  // blank rows don't count toward total
+        total++
+
+        try {
+            val dateStr = row.getOrNull(mapping.dateCol)?.trim()
+            if (dateStr.isNullOrBlank()) { skipped++; continue }
+            val date = parseDateFlexible(dateStr, mapping.dateFormatter)
+            if (date == null) { skipped++; continue }
+
+            val amount: Double
+            val isDebit: Boolean?
+            if (mapping.amountCol != null) {
+                val raw = row.getOrNull(mapping.amountCol)?.trim()
+                if (raw.isNullOrBlank()) { skipped++; continue }
+                val p = parseAmount(raw)
+                if (p == null) { skipped++; continue }
+                amount = p
+                isDebit = null
+            } else {
+                val debitRaw = row.getOrNull(mapping.debitCol!!)?.trim() ?: ""
+                val creditRaw = row.getOrNull(mapping.creditCol!!)?.trim() ?: ""
+                val debitAmt = parseAmount(debitRaw)
+                val creditAmt = parseAmount(creditRaw)
+                when {
+                    debitAmt != null && (creditAmt == null || creditAmt == 0.0) -> {
+                        amount = abs(debitAmt); isDebit = true
+                    }
+                    creditAmt != null && (debitAmt == null || debitAmt == 0.0) -> {
+                        amount = abs(creditAmt); isDebit = false
+                    }
+                    else -> { skipped++; continue }
+                }
+            }
+
+            if (amount == 0.0) { skipped++; continue }
+
+            val typeCell = mapping.typeCol?.let { row.getOrNull(it)?.trim() }
+            val type = inferTransactionType(amount, typeCell, isDebit)
+
+            val merchantRaw = row.getOrNull(mapping.merchantCol)?.trim() ?: ""
+            val merchant = cleanMerchantName(merchantRaw)
+            if (merchant.isBlank()) { skipped++; continue }
+
+            parsed.add(ParsedRow(date, abs(amount), type, merchant))
+        } catch (_: Exception) {
+            skipped++
+        }
+    }
+
+    return MappingAttempt(parsed, total, skipped)
+}
+
+private fun parseCsvLineWithDelimiter(line: String, delimiter: Char): List<String> {
+    if (delimiter == ',') return parseCsvLine(line)
+    val fields = mutableListOf<String>()
+    val current = StringBuilder()
+    var inQuotes = false
+    for (ch in line) {
+        when {
+            ch == '"' -> inQuotes = !inQuotes
+            ch == delimiter && !inQuotes -> { fields.add(current.toString()); current.clear() }
+            else -> current.append(ch)
+        }
+    }
+    fields.add(current.toString())
+    return fields
+}
+
+private fun detectDelimiter(firstLines: List<String>): Char {
+    if (firstLines.isEmpty()) return ','
+    var commaCount = 0
+    var semiCount = 0
+    var tabCount = 0
+    for (line in firstLines) {
+        var inQuotes = false
+        for (ch in line) {
+            if (ch == '"') inQuotes = !inQuotes
+            else if (!inQuotes) when (ch) {
+                ',' -> commaCount++
+                ';' -> semiCount++
+                '\t' -> tabCount++
+            }
+        }
+    }
+    val perLine = firstLines.size.coerceAtLeast(1)
+    return when {
+        semiCount / perLine > commaCount / perLine && semiCount / perLine >= 2 -> ';'
+        tabCount / perLine > commaCount / perLine && tabCount / perLine >= 2 -> '\t'
+        else -> ','
+    }
+}
+
+private val HEADER_KEYWORDS = setOf(
+    "date", "transaction", "amount", "description", "name", "memo", "type",
+    "debit", "credit", "balance", "category", "merchant", "payee", "reference",
+    "check", "posted", "details", "particulars", "narration", "value"
+)
+
+private fun isHeaderRow(row: List<String>): Boolean {
+    val matches = row.count { cell ->
+        val lower = cell.trim().lowercase().replace(Regex("[^a-z]"), "")
+        lower in HEADER_KEYWORDS || HEADER_KEYWORDS.any { lower.contains(it) }
+    }
+    return matches >= 2
+}
+
+/**
+ * Generate up to 3 candidate column mappings by varying date and amount column choices.
+ * Banks produce consistent CSVs, so if the top-scoring mapping doesn't parse cleanly,
+ * alternatives let us recover (e.g., balance column mis-scored as amount, two date columns).
+ */
+private fun detectColumnCandidates(dataRows: List<List<String>>, header: List<String>?): List<ColumnMapping> {
+    val numCols = dataRows.maxOf { it.size }
+    if (numCols < 2) return emptyList()
+
+    // Extract column data (padded to uniform width)
+    val columns = (0 until numCols).map { col ->
+        dataRows.map { row -> row.getOrNull(col)?.trim() ?: "" }
+    }
+
+    // Score each column (mutable for header boosting)
+    val dScores = columns.map { scoreDate(it) }.toMutableList()
+    val aScores = columns.map { scoreAmount(it) }.toMutableList()
+    val tScores = columns.map { scoreTransactionType(it) }.toMutableList()
+    val mScores = columns.map { scoreMerchant(it) }.toMutableList()
+
+    // Boost from header keywords
+    val headerLower = header?.map { it.trim().lowercase() }
+    if (headerLower != null) {
+        for (i in 0 until minOf(numCols, headerLower.size)) {
+            val h = headerLower[i]
+            if (h.contains("date") || h.contains("posted") || h.contains("value")) dScores[i] = dScores[i] + 0.15
+            if (h.contains("amount") || h.contains("total") || h.contains("sum")) aScores[i] = aScores[i] + 0.15
+            if (h.contains("debit") || h.contains("withdrawal") || h.contains("payment")) aScores[i] = aScores[i] + 0.1
+            if (h.contains("credit") || h.contains("deposit")) aScores[i] = aScores[i] + 0.1
+            if (h.contains("type") || h.contains("transaction")) tScores[i] = tScores[i] + 0.15
+            if (h.contains("name") || h.contains("description") || h.contains("merchant") ||
+                h.contains("payee") || h.contains("detail") ||
+                h.contains("narration") || h.contains("particular")) mScores[i] = mScores[i] + 0.15
+            // Memo/reference columns often contain codes, not merchant names — slight penalty
+            if (h.contains("memo") || h.contains("reference") || h.contains("ref")) mScores[i] = mScores[i] * 0.5
+        }
+    }
+
+    // Demote balance columns (monotonically increasing or decreasing amounts)
+    for (i in 0 until numCols) {
+        if (aScores[i] > 0.5 && isLikelyBalanceColumn(columns[i])) {
+            aScores[i] = aScores[i] * 0.3
+        }
+    }
+
+    // Viable date columns (score ≥ 0.4), best first
+    val viableDateCols = dScores.indices
+        .filter { dScores[it] >= 0.4 }
+        .sortedByDescending { dScores[it] }
+    if (viableDateCols.isEmpty()) return emptyList()
+
+    val candidates = mutableListOf<ColumnMapping>()
+
+    // Try up to 2 date column choices × up to 2 amount arrangements = up to 4 combos, capped at 3
+    for (dateCol in viableDateCols.take(2)) {
+        val dateFormatter = detectDateFormat(columns[dateCol]) ?: continue
+
+        // Viable amount columns excluding date column
+        val amountCandidates = aScores.indices
+            .filter { it != dateCol && aScores[it] > 0.4 }
+            .sortedByDescending { aScores[it] }
+        if (amountCandidates.isEmpty()) continue
+
+        // Build amount configurations to try: (amountCol, debitCol, creditCol)
+        val amountConfigs = mutableListOf<Triple<Int?, Int?, Int?>>()
+
+        if (amountCandidates.size >= 2) {
+            val c1 = amountCandidates[0]
+            val c2 = amountCandidates[1]
+            if (areSplitDebitCredit(columns[c1], columns[c2])) {
+                // Determine which is debit vs credit
+                val h1 = headerLower?.getOrNull(c1) ?: ""
+                val h2 = headerLower?.getOrNull(c2) ?: ""
+                val (debit, credit) = when {
+                    h1.contains("credit") || h2.contains("debit") -> c2 to c1
+                    h1.contains("debit") || h2.contains("credit") -> c1 to c2
+                    else -> {
+                        val count1 = columns[c1].count { parseAmount(it) != null && parseAmount(it) != 0.0 }
+                        val count2 = columns[c2].count { parseAmount(it) != null && parseAmount(it) != 0.0 }
+                        if (count1 >= count2) c1 to c2 else c2 to c1
+                    }
+                }
+                amountConfigs.add(Triple(null, debit, credit))
+                // Also try single-column as alternative
+                amountConfigs.add(Triple(amountCandidates[0], null, null))
+            } else {
+                amountConfigs.add(Triple(amountCandidates[0], null, null))
+                // Try 2nd best amount as alternative
+                amountConfigs.add(Triple(amountCandidates[1], null, null))
+            }
+        } else {
+            amountConfigs.add(Triple(amountCandidates[0], null, null))
+        }
+
+        for ((amountCol, debitCol, creditCol) in amountConfigs) {
+            val usedCols = setOfNotNull(dateCol, amountCol, debitCol, creditCol)
+
+            val typeCol = tScores.indices
+                .filter { it !in usedCols && tScores[it] > 0.5 }
+                .maxByOrNull { tScores[it] }
+
+            val usedCols2 = usedCols + setOfNotNull(typeCol)
+
+            val merchantCol = mScores.indices
+                .filter { it !in usedCols2 && mScores[it] > 0.0 }
+                .maxByOrNull { mScores[it] }
+                ?: mScores.indices.filter { it !in usedCols2 }.firstOrNull()
+                ?: continue
+
+            val mapping = ColumnMapping(dateCol, amountCol, debitCol, creditCol, merchantCol, typeCol, dateFormatter)
+            if (mapping !in candidates) {
+                candidates.add(mapping)
+            }
+            if (candidates.size >= 3) return candidates
+        }
+    }
+
+    return candidates
+}
+
+private fun scoreDate(column: List<String>): Double {
+    if (column.isEmpty()) return 0.0
+    val nonBlank = column.filter { it.isNotBlank() }
+    if (nonBlank.isEmpty()) return 0.0
+    val parsed = nonBlank.count { detectDateFormat(listOf(it)) != null }
+    return parsed.toDouble() / nonBlank.size
+}
+
+private fun scoreAmount(column: List<String>): Double {
+    if (column.isEmpty()) return 0.0
+    val nonBlank = column.filter { it.isNotBlank() }
+    if (nonBlank.isEmpty()) return 0.0
+    val parsed = nonBlank.count { parseAmount(it) != null }
+    return parsed.toDouble() / nonBlank.size
+}
+
+private fun scoreTransactionType(column: List<String>): Double {
+    val typeWords = setOf(
+        "debit", "credit", "purchase", "payment", "deposit", "withdrawal",
+        "dr", "cr", "d", "c", "pos", "ach", "dbt", "cdt", "transfer"
+    )
+    if (column.isEmpty()) return 0.0
+    val nonBlank = column.filter { it.isNotBlank() }
+    if (nonBlank.isEmpty()) return 0.0
+    val matched = nonBlank.count { cell ->
+        val lower = cell.trim().lowercase()
+        lower in typeWords || typeWords.any { lower.contains(it) }
+    }
+    val score = matched.toDouble() / nonBlank.size
+    // Penalize if values are too long (likely descriptions, not type codes)
+    val avgLen = nonBlank.map { it.trim().length }.average()
+    return if (avgLen > 15) score * 0.3 else score
+}
+
+private fun scoreMerchant(column: List<String>): Double {
+    if (column.isEmpty()) return 0.0
+    val nonBlank = column.filter { it.isNotBlank() }
+    if (nonBlank.isEmpty()) return 0.0
+
+    // Not a merchant if mostly numeric
+    val numericCount = nonBlank.count { parseAmount(it) != null }
+    if (numericCount.toDouble() / nonBlank.size > 0.7) return 0.0
+
+    // Not a merchant if mostly dates
+    val dateCount = nonBlank.count { detectDateFormat(listOf(it)) != null }
+    if (dateCount.toDouble() / nonBlank.size > 0.7) return 0.0
+
+    val avgLen = nonBlank.map { it.trim().length }.average()
+    val uniqueRatio = nonBlank.toSet().size.toDouble() / nonBlank.size
+
+    // Merchant names are human-readable text — penalize columns dominated by
+    // digits, semicolons, or other non-letter characters (reference/memo columns)
+    val avgAlphaRatio = nonBlank.map { cell ->
+        val letters = cell.count { it.isLetter() || it == ' ' }
+        if (cell.isNotEmpty()) letters.toDouble() / cell.length else 0.0
+    }.average()
+
+    // Prefer columns with readable text, moderate length, diverse values
+    val lengthScore = (avgLen / 30.0).coerceAtMost(1.0)
+    val diversityScore = uniqueRatio.coerceAtMost(1.0)
+    val readabilityScore = avgAlphaRatio  // 0.0 = all digits/symbols, 1.0 = all letters
+    return (lengthScore * 0.3 + diversityScore * 0.3 + readabilityScore * 0.4)
+}
+
+private fun isLikelyBalanceColumn(column: List<String>): Boolean {
+    val values = column.mapNotNull { parseAmount(it) }
+    if (values.size < 3) return false
+    // Check if values are mostly non-negative (balances typically are)
+    val nonNeg = values.count { it >= 0 }
+    if (nonNeg.toDouble() / values.size < 0.9) return false
+    // Check monotonicity — balance columns trend in one direction
+    var increases = 0
+    var decreases = 0
+    for (i in 1 until values.size) {
+        if (values[i] > values[i - 1]) increases++
+        else if (values[i] < values[i - 1]) decreases++
+    }
+    val total = (increases + decreases).coerceAtLeast(1)
+    val dominantDirection = maxOf(increases, decreases).toDouble() / total
+    return dominantDirection > 0.75
+}
+
+private fun areSplitDebitCredit(col1: List<String>, col2: List<String>): Boolean {
+    if (col1.size != col2.size) return false
+    var mutuallyExclusive = 0
+    var total = 0
+    for (i in col1.indices) {
+        val has1 = col1[i].isNotBlank() && parseAmount(col1[i]) != null && parseAmount(col1[i]) != 0.0
+        val has2 = col2[i].isNotBlank() && parseAmount(col2[i]) != null && parseAmount(col2[i]) != 0.0
+        if (has1 || has2) {
+            total++
+            if (has1 != has2) mutuallyExclusive++
+        }
+    }
+    return total > 0 && mutuallyExclusive.toDouble() / total > 0.75
+}
+
+private val DATE_FORMATS = listOf(
+    "yyyy-MM-dd" to DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+    "MM/dd/yyyy" to DateTimeFormatter.ofPattern("MM/dd/yyyy"),
+    "M/d/yyyy" to DateTimeFormatter.ofPattern("M/d/yyyy"),
+    "dd/MM/yyyy" to DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+    "MM-dd-yyyy" to DateTimeFormatter.ofPattern("MM-dd-yyyy"),
+    "dd-MM-yyyy" to DateTimeFormatter.ofPattern("dd-MM-yyyy"),
+    "yyyy/MM/dd" to DateTimeFormatter.ofPattern("yyyy/MM/dd"),
+    "MM/dd/yy" to DateTimeFormatter.ofPattern("MM/dd/yy"),
+    "M/d/yy" to DateTimeFormatter.ofPattern("M/d/yy"),
+    "dd/MM/yy" to DateTimeFormatter.ofPattern("dd/MM/yy")
+)
+
+private fun detectDateFormat(samples: List<String>): DateTimeFormatter? {
+    val nonBlank = samples.filter { it.isNotBlank() }.map { it.trim().split(" ")[0].split("T")[0] }
+    if (nonBlank.isEmpty()) return null
+
+    for ((_, fmt) in DATE_FORMATS) {
+        val successCount = nonBlank.count { s ->
+            try {
+                LocalDate.parse(s, fmt)
+                true
+            } catch (_: Exception) { false }
+        }
+        if (successCount.toDouble() / nonBlank.size > 0.8) return fmt
+    }
+    return null
+}
+
+private fun parseDateFlexible(raw: String, primaryFormatter: DateTimeFormatter): LocalDate? {
+    val cleaned = raw.trim().split(" ")[0].split("T")[0]
+    return try {
+        LocalDate.parse(cleaned, primaryFormatter)
+    } catch (_: Exception) {
+        // Fallback: try all formats
+        for ((_, fmt) in DATE_FORMATS) {
+            try { return LocalDate.parse(cleaned, fmt) } catch (_: Exception) { }
+        }
+        null
+    }
+}
+
+private fun parseAmount(raw: String): Double? {
+    var s = raw.trim()
+    if (s.isBlank()) return null
+
+    // Remove currency symbols
+    s = s.replace(Regex("[$€£¥₹]"), "").trim()
+
+    // Parenthesized negatives: (123.45) -> -123.45
+    if (s.startsWith("(") && s.endsWith(")")) {
+        s = "-" + s.substring(1, s.length - 1)
+    }
+
+    // Remove thousands separators (commas in 1,234.56)
+    s = s.replace(",", "")
+
+    return s.toDoubleOrNull()
+}
+
+private fun inferTransactionType(amount: Double, typeCell: String?, isDebit: Boolean?): TransactionType {
+    // If split debit/credit columns, the column tells us
+    if (isDebit != null) return if (isDebit) TransactionType.EXPENSE else TransactionType.INCOME
+
+    // If explicit type column
+    if (typeCell != null) {
+        val upper = typeCell.trim().uppercase()
+        val creditWords = setOf("CREDIT", "CR", "C", "DEPOSIT", "DEP")
+        val debitWords = setOf("DEBIT", "DR", "D", "PURCHASE", "POS", "WITHDRAWAL", "PAYMENT", "ACH", "DBT")
+        if (creditWords.any { upper.contains(it) }) return TransactionType.INCOME
+        if (debitWords.any { upper.contains(it) }) return TransactionType.EXPENSE
+    }
+
+    // Fall back to amount sign
+    return if (amount < 0) TransactionType.EXPENSE else TransactionType.INCOME
 }
 
 fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseResult {

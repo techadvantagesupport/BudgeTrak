@@ -482,6 +482,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                         type_clock = clock,
                                         categoryAmounts_clock = clock,
                                         isUserCategorized_clock = clock,
+                                        excludeFromBudget_clock = clock,
                                         isBudgetIncome_clock = clock,
                                         linkedRecurringExpenseId_clock = clock,
                                         linkedAmortizationEntryId_clock = clock,
@@ -596,7 +597,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                             if (idx >= 0) {
                                                 val lamportClock = LamportClock(context)
                                                 val clk = lamportClock.tick()
-                                                existing[idx] = existing[idx].copy(deleted = true, deviceId_clock = clk)
+                                                existing[idx] = existing[idx].copy(deleted = true, deleted_clock = clk)
                                                 TransactionRepository.save(context, existing)
                                             }
                                             val t = pendingTxn!!
@@ -681,9 +682,12 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     ) { Text(W.recurringNoLink, color = Color(0xFFCCCCCC)) }
                                     Button(
                                         onClick = {
+                                            val linkClk = LamportClock(context).tick()
                                             saveTransaction(context, pendingTxn!!.copy(
                                                 linkedRecurringExpenseId = re.id,
-                                                linkedRecurringExpenseAmount = re.amount
+                                                linkedRecurringExpenseId_clock = linkClk,
+                                                linkedRecurringExpenseAmount = re.amount,
+                                                linkedRecurringExpenseAmount_clock = linkClk
                                             ))
                                             prefs.edit()
                                                 .putString("widgetTxDate", today)
@@ -758,8 +762,10 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     ) { Text(W.amortizationNoLink, color = Color(0xFFCCCCCC)) }
                                     Button(
                                         onClick = {
+                                            val linkClk = LamportClock(context).tick()
                                             saveTransaction(context, pendingTxn!!.copy(
-                                                linkedAmortizationEntryId = am.id
+                                                linkedAmortizationEntryId = am.id,
+                                                linkedAmortizationEntryId_clock = linkClk
                                             ))
                                             prefs.edit()
                                                 .putString("widgetTxDate", today)
@@ -834,17 +840,23 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     ) { Text(W.budgetIncomeNoLink, color = Color(0xFFCCCCCC)) }
                                     Button(
                                         onClick = {
+                                            val linkClk = LamportClock(context).tick()
                                             val recurringIncomeCatId = CategoryRepository.load(context)
                                                 .active.find { it.tag == "recurring_income" }?.id
                                             val baseTxn = pendingTxn!!
                                             val linked = baseTxn.copy(
                                                 isBudgetIncome = true,
+                                                isBudgetIncome_clock = linkClk,
                                                 linkedIncomeSourceId = inc.id,
+                                                linkedIncomeSourceId_clock = linkClk,
                                                 linkedIncomeSourceAmount = inc.amount,
+                                                linkedIncomeSourceAmount_clock = linkClk,
                                                 categoryAmounts = if (recurringIncomeCatId != null)
                                                     listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
                                                 else baseTxn.categoryAmounts,
-                                                isUserCategorized = true
+                                                categoryAmounts_clock = linkClk,
+                                                isUserCategorized = true,
+                                                isUserCategorized_clock = linkClk
                                             )
                                             saveTransaction(context, linked)
                                             prefs.edit()
@@ -881,11 +893,19 @@ class WidgetTransactionActivity : ComponentActivity() {
             IncomeMode.valueOf(prefs.getString("incomeMode", null) ?: "FIXED")
         } catch (_: Exception) { IncomeMode.FIXED }
         val currentCash = prefs.getDoubleCompat("availableCash")
-        val cashDelta = if (txn.type == TransactionType.EXPENSE) {
+        val cashDelta = if (txn.excludeFromBudget) {
+            0.0
+        } else if (txn.type == TransactionType.EXPENSE) {
             when {
                 txn.linkedAmortizationEntryId != null -> 0.0  // fully budget-accounted
+                txn.amortizationAppliedAmount > 0.0 -> {
+                    // Formerly linked to deleted amortization — only deduct unamortized remainder
+                    -(BudgetCalculator.roundCents(txn.amount - txn.amortizationAppliedAmount).coerceAtLeast(0.0))
+                }
                 txn.linkedRecurringExpenseId != null && txn.linkedRecurringExpenseAmount > 0.0 ->
                     txn.linkedRecurringExpenseAmount - txn.amount  // delta from budgeted amount
+                txn.linkedRecurringExpenseAmount > 0.0 ->
+                    txn.linkedRecurringExpenseAmount - txn.amount  // formerly linked to deleted RE
                 else -> -txn.amount
             }
         } else {
@@ -916,6 +936,8 @@ class WidgetTransactionActivity : ComponentActivity() {
                         0.0  // source adjusted, no cash delta
                     }
                 }
+                txn.linkedIncomeSourceAmount > 0.0 ->
+                    txn.amount - txn.linkedIncomeSourceAmount  // formerly linked to deleted income source
                 txn.isBudgetIncome -> 0.0
                 else -> txn.amount
             }

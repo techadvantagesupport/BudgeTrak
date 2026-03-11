@@ -54,7 +54,8 @@ object WidgetRenderer {
         amount: Double,
         currencySymbol: String,
         decimalPlaces: Int,
-        minDigitCount: Int = 3
+        minDigitCount: Int = 3,
+        upgradeText: String = "Upgrade for full widget"
     ): RenderResult {
         val cardBg = if (isDarkMode) DARK_CARD_BG else LIGHT_CARD_BG
         val cardText = if (isDarkMode) DARK_CARD_TEXT else LIGHT_CARD_TEXT
@@ -190,7 +191,7 @@ object WidgetRenderer {
                     rightCardEdge.toFloat(), overlayY + pad),
                 8f, 8f, backdropPaint
             )
-            canvas.drawText("Upgrade for full widget", overlayX, overlayY, overlayPaint)
+            canvas.drawText(upgradeText, overlayX, overlayY, overlayPaint)
         }
 
         return RenderResult(bitmap, leftCardEdge, rightCardEdge, cardBottomY)

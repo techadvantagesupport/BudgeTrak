@@ -90,7 +90,8 @@ data class CommonStrings(
     val exampleBiMonthlyDay2: String,
     val language: String,
     val dateDayTooHigh: String,
-    val descriptionFieldLabel: String
+    val descriptionFieldLabel: String,
+    val selectDate: String
 )
 
 data class DashboardStrings(
@@ -121,7 +122,12 @@ data class DashboardStrings(
     val superchargeNewPayoff: (String) -> String,
     val superchargeNewCompletion: (String) -> String,
     val superchargeAutoAdjust: String,
-    val superchargeTargetDateNote: String
+    val superchargeTargetDateNote: String,
+    val superchargeExceedsCash: (String) -> String,
+    val upgradeForFullWidget: String,
+    val adPlaceholder: String,
+    val switchToPieChart: String,
+    val switchToBarChart: String
 )
 
 data class SettingsStrings(
@@ -295,6 +301,7 @@ data class TransactionsStrings(
     val parseError: String,
     val unknownError: String,
     val parsedBeforeError: (Int) -> String,
+    val rowsSkippedWarning: (Int, Int) -> String,
     val keep: String,
     val requiredMerchantExample: String,
     val moveCategoryValue: String,
@@ -323,7 +330,18 @@ data class TransactionsStrings(
     val linkedToRecurring: (String) -> String,
     val linkedToAmortization: (String) -> String,
     val linkedToIncome: (String) -> String,
-    val unmodifiedBankTransactions: String
+    val unmodifiedBankTransactions: String,
+    // Bank format names
+    val formatGenericCsv: String,
+    val formatUsBank: String,
+    val formatBudgeXyncCsv: String,
+    val formatBudgeXyncEncrypted: String,
+    // Misc untranslated
+    val unknown: String,
+    val amountExample: String,
+    val moveCategoryBody: (String, String) -> String,
+    val sumMismatchBody: (String, String) -> String,
+    val selectFieldToAdjust: String
 )
 
 data class FutureExpendituresStrings(
@@ -497,7 +515,8 @@ data class SyncStrings(
     val dissolveError: String,
     val enterNickname: String,
     val createGroupTitle: String,
-    val renameDevice: String
+    val renameDevice: String,
+    val copy: String
 )
 
 // ── Help Screen Strings ──

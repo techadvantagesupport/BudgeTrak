@@ -379,7 +379,7 @@ fun FamilySyncScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.ContentCopy,
-                                contentDescription = "Copy",
+                                contentDescription = S.sync.copy,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -747,7 +747,7 @@ fun FamilySyncScreen(
                         },
                         modifier = Modifier.onGloballyPositioned { copyDlgBtnYPx = it.positionInWindow().y.toInt() }
                     ) {
-                        Text("Copy")
+                        Text(S.sync.copy)
                     }
                 },
                 dismissButton = {

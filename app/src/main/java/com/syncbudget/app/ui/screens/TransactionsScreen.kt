@@ -65,6 +65,7 @@ import androidx.compose.material3.DatePicker
 import com.syncbudget.app.ui.theme.AdAwareDatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -143,6 +144,7 @@ import com.syncbudget.app.data.generateTransactionId
 import com.syncbudget.app.data.getCategoryIcon
 import com.syncbudget.app.data.isRecurringDateCloseEnough
 import com.syncbudget.app.data.parseSyncBudgetCsv
+import com.syncbudget.app.data.parseGenericCsv
 import com.syncbudget.app.data.parseUsBank
 import com.syncbudget.app.data.FullBackupSerializer
 import com.syncbudget.app.data.serializeTransactionsCsv
@@ -330,7 +332,7 @@ fun TransactionsScreen(
     // CSV Import state
     val context = LocalContext.current
     var showImportFormatDialog by remember { mutableStateOf(false) }
-    var selectedBankFormat by remember { mutableStateOf(BankFormat.US_BANK) }
+    var selectedBankFormat by remember { mutableStateOf(BankFormat.GENERIC_CSV) }
     var importStage by remember { mutableStateOf<ImportStage?>(null) }
     val parsedTransactions = remember { mutableStateListOf<Transaction>() }
     var totalFileTransactions by remember { mutableIntStateOf(0) }
@@ -340,6 +342,8 @@ fun TransactionsScreen(
     var skipDupForIndex by remember { mutableIntStateOf(-1) }  // skip dup check for this index (Keep Both)
     var currentImportDup by remember { mutableStateOf<Transaction?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
+    var importSkippedRows by remember { mutableIntStateOf(0) }
+    var importTotalDataRows by remember { mutableIntStateOf(0) }
     var pendingUri by remember { mutableStateOf<Uri?>(null) }
 
     // Save state
@@ -438,6 +442,18 @@ fun TransactionsScreen(
             val existingIdSet = transactions.map { it.id }.toSet()
 
             val result = when (selectedBankFormat) {
+                BankFormat.GENERIC_CSV -> {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    if (inputStream == null) {
+                        importError = "Could not open file"
+                        importStage = ImportStage.PARSE_ERROR
+                        return@LaunchedEffect
+                    }
+                    val reader = BufferedReader(InputStreamReader(inputStream))
+                    val r = parseGenericCsv(reader, existingIdSet)
+                    reader.close()
+                    r
+                }
                 BankFormat.US_BANK -> {
                     val inputStream = context.contentResolver.openInputStream(uri)
                     if (inputStream == null) {
@@ -511,6 +527,8 @@ fun TransactionsScreen(
 
             parsedTransactions.clear()
             parsedTransactions.addAll(result.transactions)
+            importSkippedRows = result.skippedRows
+            importTotalDataRows = result.totalDataRows
 
             if (result.error != null && result.transactions.isEmpty()) {
                 importError = result.error
@@ -520,7 +538,7 @@ fun TransactionsScreen(
                 importStage = ImportStage.PARSE_ERROR
             } else {
                 // Auto-categorize only for bank imports (they lack categories)
-                val processed = if (selectedBankFormat == BankFormat.US_BANK) {
+                val processed = if (selectedBankFormat == BankFormat.US_BANK || selectedBankFormat == BankFormat.GENERIC_CSV) {
                     parsedTransactions.map { txn -> autoCategorize(txn, transactions, categories) }
                 } else {
                     parsedTransactions.toList()
@@ -557,11 +575,14 @@ fun TransactionsScreen(
             importApproved.clear()
             parsedTransactions.clear()
             importStage = ImportStage.COMPLETE
-            val message = if (count == 0 && totalFileTransactions > 0) {
+            val base = if (count == 0 && totalFileTransactions > 0) {
                 S.transactions.allSkipped(totalFileTransactions)
             } else {
                 S.transactions.loadedSuccessfully(count, totalFileTransactions)
             }
+            val message = if (importSkippedRows > 0 && importTotalDataRows > 0) {
+                "$base\n${S.transactions.rowsSkippedWarning(importSkippedRows, importTotalDataRows)}"
+            } else base
             toastState.show(message)
             importStage = null
             return@LaunchedEffect
@@ -812,7 +833,7 @@ fun TransactionsScreen(
 
             // Category view bar
             if (categoryFilterId != null) {
-                val filterCatName = categoryMap[categoryFilterId]?.name ?: "Unknown"
+                val filterCatName = categoryMap[categoryFilterId]?.name ?: S.transactions.unknown
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1759,7 +1780,6 @@ fun TransactionsScreen(
 
     // Import / Load format selection dialog
     if (showImportFormatDialog) {
-        var formatDropdownExpanded by remember { mutableStateOf(false) }
         AdAwareDialog(
             onDismissRequest = {
                 showImportFormatDialog = false
@@ -1778,7 +1798,7 @@ fun TransactionsScreen(
                     DialogHeader(S.transactions.loadTransactions)
 
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier
                             .weight(1f, fill = false)
                             .verticalScroll(loadScrollState)
@@ -1786,24 +1806,32 @@ fun TransactionsScreen(
                     ) {
                         Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onBackground)
-                        Box {
-                            OutlinedButton(onClick = { formatDropdownExpanded = true }) {
-                                Text(selectedBankFormat.displayName)
-                            }
-                            DropdownMenu(
-                                expanded = formatDropdownExpanded,
-                                onDismissRequest = { formatDropdownExpanded = false }
+                        BankFormat.entries.forEach { format ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        selectedBankFormat = format
+                                        encryptedLoadPassword = ""
+                                    }
+                                    .padding(vertical = 4.dp, horizontal = 4.dp)
                             ) {
-                                BankFormat.entries.forEach { format ->
-                                    DropdownMenuItem(
-                                        text = { Text(format.displayName) },
-                                        onClick = {
-                                            selectedBankFormat = format
-                                            formatDropdownExpanded = false
-                                            encryptedLoadPassword = ""
-                                        }
-                                    )
-                                }
+                                RadioButton(
+                                    selected = selectedBankFormat == format,
+                                    onClick = {
+                                        selectedBankFormat = format
+                                        encryptedLoadPassword = ""
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(when (format) {
+                                    BankFormat.GENERIC_CSV -> S.transactions.formatGenericCsv
+                                    BankFormat.US_BANK -> S.transactions.formatUsBank
+                                    BankFormat.SECURESYNC_CSV -> S.transactions.formatBudgeXyncCsv
+                                    BankFormat.SECURESYNC_ENCRYPTED -> S.transactions.formatBudgeXyncEncrypted
+                                }, style = MaterialTheme.typography.bodyLarge)
                             }
                         }
 
@@ -1878,6 +1906,9 @@ fun TransactionsScreen(
                     Text(importError ?: S.transactions.unknownError)
                     if (parsedTransactions.isNotEmpty()) {
                         Text(S.transactions.parsedBeforeError(parsedTransactions.size))
+                    }
+                    if (importSkippedRows > 0 && importTotalDataRows > 0) {
+                        Text(S.transactions.rowsSkippedWarning(importSkippedRows, importTotalDataRows))
                     }
                 }
             },
@@ -2843,7 +2874,7 @@ private fun TransactionRow(
                         )
                     } else {
                         Text(
-                            text = "Unknown",
+                            text = S.transactions.unknown,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                             modifier = Modifier.weight(1f)
@@ -3297,7 +3328,7 @@ fun TransactionDialog(
                         label = { Text(S.transactions.amount) },
                         isError = singleAmountInvalid,
                         supportingText = if (singleAmountInvalid) ({
-                            Text("e.g. 42.50", color = Color(0xFFF44336))
+                            Text(S.transactions.amountExample, color = Color(0xFFF44336))
                         }) else null,
                         prefix = if (!isCurrencySuffix) ({ Text(currencySymbol) }) else null,
                         suffix = if (isCurrencySuffix) ({ Text(currencySymbol) }) else null,
@@ -3888,7 +3919,7 @@ fun TransactionDialog(
                 .toEpochMilli()
         )
         AdAwareDatePickerDialog(
-            title = "Select Date",
+            title = S.common.selectDate,
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 DialogPrimaryButton(onClick = {
@@ -3943,7 +3974,7 @@ fun TransactionDialog(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Where would you like to place $valueLabel from ${deselectedCat.name}?",
+                        text = S.transactions.moveCategoryBody(valueLabel, deselectedCat.name),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     LazyColumn(modifier = Modifier.height(200.dp)) {
@@ -4046,12 +4077,14 @@ fun TransactionDialog(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Category amounts total $currencySymbol${formatAmount(mismatchCatSum, maxDecimals)}" +
-                            " but Total is $currencySymbol${formatAmount(mismatchTotal, maxDecimals)}.",
+                        text = S.transactions.sumMismatchBody(
+                            "$currencySymbol${formatAmount(mismatchCatSum, maxDecimals)}",
+                            "$currencySymbol${formatAmount(mismatchTotal, maxDecimals)}"
+                        ),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "Select field to adjust:",
+                        text = S.transactions.selectFieldToAdjust,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )
