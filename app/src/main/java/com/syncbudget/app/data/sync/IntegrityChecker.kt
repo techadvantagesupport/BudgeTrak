@@ -60,7 +60,8 @@ object IntegrityChecker {
     fun maxClock(r: RecurringExpense): Long = maxOf(
         r.source_clock, r.description_clock, r.amount_clock,
         r.repeatType_clock, r.repeatInterval_clock, r.startDate_clock,
-        r.monthDay1_clock, r.monthDay2_clock, r.deleted_clock, r.deviceId_clock
+        r.monthDay1_clock, r.monthDay2_clock, r.deleted_clock, r.deviceId_clock,
+        r.setAsideSoFar_clock, r.isAccelerated_clock
     )
 
     fun maxClock(s: IncomeSource): Long = maxOf(

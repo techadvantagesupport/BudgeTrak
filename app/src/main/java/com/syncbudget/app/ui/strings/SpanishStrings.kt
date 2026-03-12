@@ -365,7 +365,12 @@ object SpanishStrings : AppStrings {
         savingsWhyBody = "Este n\u00famero proviene de una simulaci\u00f3n de flujo de efectivo que avanza desde hoy a trav\u00e9s de todos tus pr\u00f3ximos dep\u00f3sitos de ingresos, fechas de vencimiento de gastos y necesidades de gasto del presupuesto.\n\nEncuentra el punto en el futuro donde tu saldo de efectivo bajar\u00eda m\u00e1s \u2014 por ejemplo, justo antes de un gran d\u00eda de pago pero despu\u00e9s de que se vence el alquiler \u2014 y te dice cu\u00e1nto colch\u00f3n necesitas para sobrevivir esa ca\u00edda.\n\nEste n\u00famero cambia diariamente a medida que te acercas a las fechas de ingresos y gastos. Por ejemplo, justo despu\u00e9s del d\u00eda de pago ser\u00e1 el m\u00e1s alto (muchos d\u00edas de gasto por delante), y justo antes del d\u00eda de pago ser\u00e1 el m\u00e1s bajo. Una vez que est\u00e9s al d\u00eda, deber\u00edas mantenerte al d\u00eda si no gastas de m\u00e1s. Si tu cuenta bancaria es menor que este n\u00famero, considera configurar un plan de ahorro en la p\u00e1gina de Ahorros para ponerte al d\u00eda.",
         savingsLowPointToast = { date -> "Punto m\u00e1s bajo del flujo: $date" },
         linkedTransactions = "Transacciones vinculadas",
-        noLinkedTransactions = "No hay transacciones vinculadas"
+        noLinkedTransactions = "No hay transacciones vinculadas",
+        viewSimulationChart = "Toca para ver gr\u00e1fico",
+        simulationGraphTitle = "Simulaci\u00f3n de Flujo",
+        simulationGraphDescription = "Flujo de efectivo proyectado durante el per\u00edodo de simulaci\u00f3n. Ajusta tus ahorros actuales para ver c\u00f3mo afectan tu saldo.",
+        simulationSavingsLabel = "Ahorros Actuales",
+        simulationNoData = "No hay datos de simulaci\u00f3n disponibles"
     )
 
     override val amortization = AmortizationStrings(
@@ -417,7 +422,11 @@ object SpanishStrings : AppStrings {
         everyTwoWeeks = "Cada 2 semanas",
         twicePerMonth = "Dos veces al mes",
         linkedTransactions = "Transacciones vinculadas",
-        noLinkedTransactions = "No hay transacciones vinculadas"
+        noLinkedTransactions = "No hay transacciones vinculadas",
+        acceleratedMode = "Ahorro acelerado",
+        acceleratedModeEnabled = "Modo acelerado activado",
+        acceleratedModeDisabled = "Modo acelerado desactivado",
+        setAsideProgress = { saved, total -> "$saved / $total reservado" }
     )
 
     override val sync = SyncStrings(

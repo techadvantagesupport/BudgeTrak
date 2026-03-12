@@ -98,6 +98,8 @@ object CrdtMerge {
             monthDay2 = if (shouldAcceptRemote(local.monthDay2_clock, remote.monthDay2_clock, localDeviceId, remoteDeviceId)) remote.monthDay2 else local.monthDay2,
             deviceId = if (shouldAcceptRemote(local.deviceId_clock, remote.deviceId_clock, localDeviceId, remoteDeviceId)) remote.deviceId else local.deviceId,
             deleted = mergedDeleted,
+            setAsideSoFar = if (shouldAcceptRemote(local.setAsideSoFar_clock, remote.setAsideSoFar_clock, localDeviceId, remoteDeviceId)) remote.setAsideSoFar else local.setAsideSoFar,
+            isAccelerated = if (shouldAcceptRemote(local.isAccelerated_clock, remote.isAccelerated_clock, localDeviceId, remoteDeviceId)) remote.isAccelerated else local.isAccelerated,
             source_clock = maxOf(local.source_clock, remote.source_clock),
             description_clock = maxOf(local.description_clock, remote.description_clock),
             amount_clock = maxOf(local.amount_clock, remote.amount_clock),
@@ -107,7 +109,9 @@ object CrdtMerge {
             monthDay1_clock = maxOf(local.monthDay1_clock, remote.monthDay1_clock),
             monthDay2_clock = maxOf(local.monthDay2_clock, remote.monthDay2_clock),
             deleted_clock = mergedDeletedClock,
-            deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock)
+            deviceId_clock = maxOf(local.deviceId_clock, remote.deviceId_clock),
+            setAsideSoFar_clock = maxOf(local.setAsideSoFar_clock, remote.setAsideSoFar_clock),
+            isAccelerated_clock = maxOf(local.isAccelerated_clock, remote.isAccelerated_clock)
         )
     }
 

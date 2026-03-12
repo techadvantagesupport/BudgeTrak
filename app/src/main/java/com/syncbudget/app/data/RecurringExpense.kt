@@ -24,7 +24,12 @@ data class RecurringExpense(
     val monthDay1_clock: Long = 0L,
     val monthDay2_clock: Long = 0L,
     val deleted_clock: Long = 0L,
-    val deviceId_clock: Long = 0L
+    val deviceId_clock: Long = 0L,
+    // Set-aside tracking
+    val setAsideSoFar: Double = 0.0,
+    val isAccelerated: Boolean = false,
+    val setAsideSoFar_clock: Long = 0L,
+    val isAccelerated_clock: Long = 0L
 )
 
 fun generateRecurringExpenseId(existingIds: Set<Int>): Int {

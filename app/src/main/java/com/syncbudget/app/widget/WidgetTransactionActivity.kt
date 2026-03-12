@@ -97,6 +97,7 @@ class WidgetTransactionActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setFinishOnTouchOutside(false)
 
         val isExpense = intent?.action == BudgetWidgetProvider.ACTION_ADD_EXPENSE
 

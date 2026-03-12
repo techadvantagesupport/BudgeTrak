@@ -26,6 +26,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.foundation.layout.size
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import com.syncbudget.app.ui.theme.DialogStyle
 import com.syncbudget.app.ui.theme.DialogPrimaryButton
@@ -545,6 +547,24 @@ private fun ExpenseRow(
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                 )
             }
+            Text(
+                    text = S.recurringExpenses.setAsideProgress(
+                        formatCurrency(expense.setAsideSoFar, currencySymbol),
+                        formatCurrency(expense.amount, currencySymbol)
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (expense.isAccelerated) Color(0xFF4CAF50).copy(alpha = 0.7f)
+                           else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                )
+        }
+        if (expense.isAccelerated) {
+            Icon(
+                imageVector = Icons.Filled.Speed,
+                contentDescription = null,
+                tint = Color(0xFF4CAF50),
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(4.dp))
         }
         IconButton(onClick = { onDelete() }) {
             Icon(
@@ -589,7 +609,7 @@ private fun AddEditExpenseDialog(
     var typeExpanded by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showValidation by remember { mutableStateOf(false) }
-
+    var isAccelerated by remember { mutableStateOf(existingExpense?.isAccelerated ?: false) }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -918,11 +938,21 @@ private fun AddEditExpenseDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    IconButton(onClick = { isAccelerated = !isAccelerated }) {
+                        Icon(
+                            imageVector = Icons.Filled.Speed,
+                            contentDescription = S.recurringExpenses.acceleratedMode,
+                            tint = if (isAccelerated) Color(0xFF4CAF50)
+                                   else Color(0xFF4CAF50).copy(alpha = 0.3f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
                     DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
                     Spacer(modifier = Modifier.width(8.dp))
                     DialogPrimaryButton(
                         onClick = {
                             if (isValid) {
+                                val savedSetAside = existingExpense?.setAsideSoFar ?: 0.0
                                 val result = when (repeatType) {
                                     RepeatType.DAYS -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
@@ -933,7 +963,9 @@ private fun AddEditExpenseDialog(
                                         repeatInterval = interval!!,
                                         startDate = startDate,
                                         monthDay1 = null,
-                                        monthDay2 = null
+                                        monthDay2 = null,
+                                        isAccelerated = isAccelerated,
+                                        setAsideSoFar = savedSetAside
                                     )
                                     RepeatType.WEEKS -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
@@ -944,7 +976,9 @@ private fun AddEditExpenseDialog(
                                         repeatInterval = interval!!,
                                         startDate = startDate,
                                         monthDay1 = null,
-                                        monthDay2 = null
+                                        monthDay2 = null,
+                                        isAccelerated = isAccelerated,
+                                        setAsideSoFar = savedSetAside
                                     )
                                     RepeatType.BI_WEEKLY -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
@@ -955,7 +989,9 @@ private fun AddEditExpenseDialog(
                                         repeatInterval = 1,
                                         startDate = startDate,
                                         monthDay1 = null,
-                                        monthDay2 = null
+                                        monthDay2 = null,
+                                        isAccelerated = isAccelerated,
+                                        setAsideSoFar = savedSetAside
                                     )
                                     RepeatType.MONTHS -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
@@ -966,7 +1002,9 @@ private fun AddEditExpenseDialog(
                                         repeatInterval = interval!!,
                                         startDate = startDate,
                                         monthDay1 = startDate!!.dayOfMonth,
-                                        monthDay2 = null
+                                        monthDay2 = null,
+                                        isAccelerated = isAccelerated,
+                                        setAsideSoFar = savedSetAside
                                     )
                                     RepeatType.BI_MONTHLY -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
@@ -977,7 +1015,9 @@ private fun AddEditExpenseDialog(
                                         repeatInterval = 1,
                                         startDate = null,
                                         monthDay1 = monthDay1,
-                                        monthDay2 = monthDay2
+                                        monthDay2 = monthDay2,
+                                        isAccelerated = isAccelerated,
+                                        setAsideSoFar = savedSetAside
                                     )
                                     RepeatType.ANNUAL -> RecurringExpense(
                                         id = existingExpense?.id ?: 0,
@@ -988,7 +1028,9 @@ private fun AddEditExpenseDialog(
                                         repeatInterval = 1,
                                         startDate = startDate,
                                         monthDay1 = null,
-                                        monthDay2 = null
+                                        monthDay2 = null,
+                                        isAccelerated = isAccelerated,
+                                        setAsideSoFar = savedSetAside
                                     )
                                 }
                                 onSave(result)

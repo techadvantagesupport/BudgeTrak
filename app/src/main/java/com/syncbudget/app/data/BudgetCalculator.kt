@@ -304,6 +304,54 @@ object BudgetCalculator {
         return total
     }
 
+    /** Per-period deduction that safeBudgetAmount implicitly reserves for one RE.
+     *  Does NOT roundCents — caller handles rounding to avoid per-RE drift. */
+    fun normalPerPeriodDeduction(
+        re: RecurringExpense, budgetPeriod: BudgetPeriod, today: LocalDate
+    ): Double {
+        val periodsPerYear = countPeriodsCompleted(today, today.plusYears(1), budgetPeriod)
+        if (periodsPerYear <= 0) return 0.0
+        val occurrences = generateOccurrences(
+            re.repeatType, re.repeatInterval, re.startDate,
+            re.monthDay1, re.monthDay2, today, today.plusYears(1)
+        ).size
+        return re.amount * occurrences.toDouble() / periodsPerYear
+    }
+
+    /** Budget periods remaining until the next occurrence of an RE.
+     *  Returns 0 if due today or no future occurrence found.
+     *  Returns max(1, periods) when nextDue is after today (avoids div-by-zero
+     *  when nextDue falls within the current period). */
+    fun periodsUntilNextOccurrence(
+        re: RecurringExpense, budgetPeriod: BudgetPeriod, today: LocalDate
+    ): Int {
+        val nextDue = generateOccurrences(
+            re.repeatType, re.repeatInterval, re.startDate,
+            re.monthDay1, re.monthDay2, today, today.plusYears(2)
+        ).firstOrNull() ?: return 0
+        if (!nextDue.isAfter(today)) return 0
+        return maxOf(1, countPeriodsCompleted(today, nextDue, budgetPeriod))
+    }
+
+    /** Extra per-period deduction for accelerated REs beyond what safeBudgetAmount handles. */
+    fun acceleratedREExtraDeductions(
+        recurringExpenses: List<RecurringExpense>,
+        budgetPeriod: BudgetPeriod,
+        today: LocalDate = LocalDate.now()
+    ): Double {
+        var extra = 0.0
+        for (re in recurringExpenses) {
+            if (!re.isAccelerated || re.deleted) continue
+            val normalRate = normalPerPeriodDeduction(re, budgetPeriod, today)
+            val periodsLeft = periodsUntilNextOccurrence(re, budgetPeriod, today)
+            if (periodsLeft <= 0) continue
+            val remaining = maxOf(0.0, re.amount - re.setAsideSoFar)
+            val acceleratedRate = remaining / periodsLeft
+            extra += maxOf(0.0, acceleratedRate - normalRate)
+        }
+        return roundCents(extra)
+    }
+
     /** Compute the full budgetAmount from synced data. Reusable in SyncWorker. */
     fun computeFullBudgetAmount(
         incomeSources: List<IncomeSource>,
@@ -319,7 +367,8 @@ object BudgetCalculator {
                    else calculateSafeBudgetAmount(incomeSources, recurringExpenses, budgetPeriod, today)
         val amortDed = activeAmortizationDeductions(amortizationEntries, budgetPeriod, today)
         val savingsDed = activeSavingsGoalDeductions(savingsGoals, budgetPeriod, today)
-        return roundCents(maxOf(0.0, base - amortDed - savingsDed))
+        val accelDed = acceleratedREExtraDeductions(recurringExpenses, budgetPeriod, today)
+        return roundCents(maxOf(0.0, base - amortDed - savingsDed - accelDed))
     }
 
     /**

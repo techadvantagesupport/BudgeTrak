@@ -11,33 +11,33 @@ object SavingsSimulator {
         val lowPointDate: LocalDate?
     )
 
+    data class SimulationPoint(val date: LocalDate, val balance: Double)
+
     private data class CashEvent(
         val date: LocalDate,
         val amount: Double,
-        val priority: Int   // 0 = income, 1 = period deduction, 2 = expense
+        val priority: Int,  // 0 = income, 1 = period deduction, 2 = expense
+        val label: String = ""
     )
 
     /**
-     * Forward-looking cash-flow simulation.
-     *
-     * Walks from today to the furthest upcoming income/expense occurrence,
-     * applying actual income deposits, expense withdrawals, and per-period
-     * discretionary spending.  Returns how much savings buffer the user
-     * needs so the simulated balance never goes negative.
+     * Build and sort all simulation events. Returns null if horizon == today
+     * (nothing to simulate).
      */
-    fun calculateSavingsRequired(
+    private fun buildSortedEvents(
         incomeSources: List<IncomeSource>,
         recurringExpenses: List<RecurringExpense>,
         budgetPeriod: BudgetPeriod,
-        budgetAmount: Double,
+        baseBudget: Double,
+        amortizationEntries: List<AmortizationEntry>,
+        savingsGoals: List<SavingsGoal>,
         availableCash: Double,
         resetDayOfWeek: Int,
         resetDayOfMonth: Int,
-        today: LocalDate = LocalDate.now()
-    ): SimResult {
+        today: LocalDate
+    ): MutableList<CashEvent>? {
         val twoYearsAhead = today.plusYears(2)
 
-        // --- 1. Determine horizon (furthest next occurrence) ---
         var horizon = today
         for (src in incomeSources) {
             val occ = BudgetCalculator.generateOccurrences(
@@ -53,16 +53,11 @@ object SavingsSimulator {
             ).firstOrNull()
             if (occ != null && occ.isAfter(horizon)) horizon = occ
         }
-        // Nothing upcoming beyond today — just need availableCash for today
-        if (horizon == today) return SimResult(BudgetCalculator.roundCents(maxOf(0.0, availableCash)), today)
+        if (horizon == today) return null
 
-        // --- 2. Build events ---
         val events = mutableListOf<CashEvent>()
-
-        // Day-0: user needs availableCash for today's spending
         events.add(CashEvent(today, -availableCash, priority = 1))
 
-        // Income occurrences
         for (src in incomeSources) {
             for (date in BudgetCalculator.generateOccurrences(
                 src.repeatType, src.repeatInterval, src.startDate,
@@ -72,7 +67,6 @@ object SavingsSimulator {
             }
         }
 
-        // Expense occurrences
         for (exp in recurringExpenses) {
             for (date in BudgetCalculator.generateOccurrences(
                 exp.repeatType, exp.repeatInterval, exp.startDate,
@@ -82,15 +76,32 @@ object SavingsSimulator {
             }
         }
 
-        // Period-boundary deductions (after today)
-        for (date in generatePeriodBoundaries(today, horizon, budgetPeriod, resetDayOfWeek, resetDayOfMonth)) {
-            events.add(CashEvent(date, -budgetAmount, priority = 1))
-        }
+        val boundaries = generatePeriodBoundaries(today, horizon, budgetPeriod, resetDayOfWeek, resetDayOfMonth)
+        addDynamicBudgetEvents(events, boundaries, baseBudget, budgetPeriod,
+            amortizationEntries, savingsGoals, recurringExpenses, today)
 
-        // --- 3. Sort: by date, then priority (income first) ---
         events.sortWith(compareBy<CashEvent> { it.date }.thenBy { it.priority })
+        return events
+    }
 
-        // --- 4. Walk timeline, track minimum balance ---
+    fun calculateSavingsRequired(
+        incomeSources: List<IncomeSource>,
+        recurringExpenses: List<RecurringExpense>,
+        budgetPeriod: BudgetPeriod,
+        baseBudget: Double,
+        amortizationEntries: List<AmortizationEntry>,
+        savingsGoals: List<SavingsGoal>,
+        availableCash: Double,
+        resetDayOfWeek: Int,
+        resetDayOfMonth: Int,
+        today: LocalDate = LocalDate.now()
+    ): SimResult {
+        val events = buildSortedEvents(
+            incomeSources, recurringExpenses, budgetPeriod, baseBudget,
+            amortizationEntries, savingsGoals, availableCash,
+            resetDayOfWeek, resetDayOfMonth, today
+        ) ?: return SimResult(BudgetCalculator.roundCents(maxOf(0.0, availableCash)), today)
+
         var balance = 0.0
         var minBalance = 0.0
         var minDate: LocalDate = today
@@ -102,14 +113,129 @@ object SavingsSimulator {
             }
         }
 
-        // --- 5. Savings required = depth of the trough ---
         val required = BudgetCalculator.roundCents(maxOf(0.0, -minBalance))
         return SimResult(required, if (required > 0.0) minDate else null)
     }
 
     /**
-     * Generate period-start dates strictly after [after] up to [horizon].
+     * Run the simulation and return both the result and a timeline of
+     * (date, balance) points for graphing.
      */
+    fun simulateTimeline(
+        incomeSources: List<IncomeSource>,
+        recurringExpenses: List<RecurringExpense>,
+        budgetPeriod: BudgetPeriod,
+        baseBudget: Double,
+        amortizationEntries: List<AmortizationEntry>,
+        savingsGoals: List<SavingsGoal>,
+        availableCash: Double,
+        resetDayOfWeek: Int,
+        resetDayOfMonth: Int,
+        today: LocalDate = LocalDate.now()
+    ): Pair<SimResult, List<SimulationPoint>> {
+        val events = buildSortedEvents(
+            incomeSources, recurringExpenses, budgetPeriod, baseBudget,
+            amortizationEntries, savingsGoals, availableCash,
+            resetDayOfWeek, resetDayOfMonth, today
+        ) ?: return SimResult(BudgetCalculator.roundCents(maxOf(0.0, availableCash)), today) to
+                listOf(SimulationPoint(today, 0.0))
+
+        val timeline = mutableListOf(SimulationPoint(today, 0.0))
+        var balance = 0.0
+        var minBalance = 0.0
+        var minDate: LocalDate = today
+        for (event in events) {
+            balance += event.amount
+            if (balance < minBalance) {
+                minBalance = balance
+                minDate = event.date
+            }
+            timeline.add(SimulationPoint(event.date, balance))
+        }
+
+        val required = BudgetCalculator.roundCents(maxOf(0.0, -minBalance))
+        return SimResult(required, if (required > 0.0) minDate else null) to timeline
+    }
+
+    private fun addDynamicBudgetEvents(
+        events: MutableList<CashEvent>,
+        boundaries: List<LocalDate>,
+        baseBudget: Double,
+        budgetPeriod: BudgetPeriod,
+        amortizationEntries: List<AmortizationEntry>,
+        savingsGoals: List<SavingsGoal>,
+        recurringExpenses: List<RecurringExpense>,
+        today: LocalDate
+    ) {
+        if (boundaries.isEmpty()) return
+
+        val simGoalSaved = savingsGoals.map { it.totalSavedSoFar }.toDoubleArray()
+        val simRESetAside = recurringExpenses.map { it.setAsideSoFar }.toDoubleArray()
+        val simREAccelerated = recurringExpenses.map { it.isAccelerated }.toBooleanArray()
+
+        var prevDate = today
+        for (boundary in boundaries) {
+            recurringExpenses.forEachIndexed { i, re ->
+                if (re.deleted) return@forEachIndexed
+                val dueDates = BudgetCalculator.generateOccurrences(
+                    re.repeatType, re.repeatInterval, re.startDate,
+                    re.monthDay1, re.monthDay2,
+                    prevDate.plusDays(1), boundary
+                )
+                if (dueDates.isNotEmpty()) {
+                    simRESetAside[i] = 0.0
+                    simREAccelerated[i] = false
+                }
+            }
+
+            val amortDed = BudgetCalculator.activeAmortizationDeductions(
+                amortizationEntries, budgetPeriod, boundary
+            )
+
+            var savingsDed = 0.0
+            savingsGoals.forEachIndexed { i, goal ->
+                if (goal.isPaused) return@forEachIndexed
+                val remaining = goal.targetAmount - simGoalSaved[i]
+                if (remaining <= 0) return@forEachIndexed
+                val ded = if (goal.targetDate != null) {
+                    if (!boundary.isBefore(goal.targetDate)) return@forEachIndexed
+                    val periods = BudgetCalculator.countPeriodsCompleted(boundary, goal.targetDate, budgetPeriod)
+                    if (periods <= 0) return@forEachIndexed
+                    BudgetCalculator.roundCents(remaining / periods.toDouble())
+                } else {
+                    minOf(goal.contributionPerPeriod, remaining)
+                }
+                savingsDed += ded
+                simGoalSaved[i] = minOf(simGoalSaved[i] + ded, goal.targetAmount)
+            }
+
+            var accelDed = 0.0
+            recurringExpenses.forEachIndexed { i, re ->
+                if (!simREAccelerated[i] || re.deleted) return@forEachIndexed
+                val normalRate = BudgetCalculator.normalPerPeriodDeduction(re, budgetPeriod, boundary)
+                val nextDue = BudgetCalculator.generateOccurrences(
+                    re.repeatType, re.repeatInterval, re.startDate,
+                    re.monthDay1, re.monthDay2, boundary, boundary.plusYears(2)
+                ).firstOrNull()
+                if (nextDue == null || !nextDue.isAfter(boundary)) return@forEachIndexed
+                val periodsLeft = maxOf(1, BudgetCalculator.countPeriodsCompleted(boundary, nextDue, budgetPeriod))
+                val remaining = maxOf(0.0, re.amount - simRESetAside[i])
+                val acceleratedRate = remaining / periodsLeft
+                val extra = maxOf(0.0, acceleratedRate - normalRate)
+                accelDed += extra
+                simRESetAside[i] = minOf(simRESetAside[i] + acceleratedRate, re.amount)
+            }
+            accelDed = BudgetCalculator.roundCents(accelDed)
+
+            val effectiveBudget = BudgetCalculator.roundCents(
+                maxOf(0.0, baseBudget - amortDed - savingsDed - accelDed)
+            )
+            events.add(CashEvent(boundary, -effectiveBudget, priority = 1))
+
+            prevDate = boundary
+        }
+    }
+
     private fun generatePeriodBoundaries(
         after: LocalDate,
         horizon: LocalDate,
@@ -148,14 +274,13 @@ object SavingsSimulator {
         return boundaries
     }
 
-    /**
-     * Produces a human-readable trace of the simulation for debugging.
-     */
     fun traceSimulation(
         incomeSources: List<IncomeSource>,
         recurringExpenses: List<RecurringExpense>,
         budgetPeriod: BudgetPeriod,
-        budgetAmount: Double,
+        baseBudget: Double,
+        amortizationEntries: List<AmortizationEntry>,
+        savingsGoals: List<SavingsGoal>,
         availableCash: Double,
         resetDayOfWeek: Int,
         resetDayOfMonth: Int,
@@ -169,10 +294,9 @@ object SavingsSimulator {
         sb.appendLine("Run date: $today")
         sb.appendLine()
 
-        // --- Inputs ---
         sb.appendLine("── INPUTS ──")
         sb.appendLine("Budget period:     $budgetPeriod")
-        sb.appendLine("Budget amount:     ${currencySymbol}${fmt(budgetAmount)} per period")
+        sb.appendLine("Base budget:       ${currencySymbol}${fmt(baseBudget)} per period (before deductions)")
         sb.appendLine("Available cash:    ${currencySymbol}${fmt(availableCash)} (today's remaining)")
         sb.appendLine("Reset day (week):  $resetDayOfWeek")
         sb.appendLine("Reset day (month): $resetDayOfMonth")
@@ -188,11 +312,28 @@ object SavingsSimulator {
         sb.appendLine("Recurring Expenses (${recurringExpenses.size}):")
         if (recurringExpenses.isEmpty()) sb.appendLine("  (none)")
         recurringExpenses.forEach { exp ->
-            sb.appendLine("  • ${exp.source}: ${currencySymbol}${fmt(exp.amount)}  repeat=${exp.repeatType}/${exp.repeatInterval}  start=${exp.startDate}  m1=${exp.monthDay1} m2=${exp.monthDay2}")
+            val accelTag = if (exp.isAccelerated) "  [ACCEL setAside=${fmt(exp.setAsideSoFar)}]" else ""
+            sb.appendLine("  • ${exp.source}: ${currencySymbol}${fmt(exp.amount)}  repeat=${exp.repeatType}/${exp.repeatInterval}  start=${exp.startDate}  m1=${exp.monthDay1} m2=${exp.monthDay2}$accelTag")
         }
         sb.appendLine()
 
-        // --- Horizon ---
+        sb.appendLine("Amortization Entries (${amortizationEntries.size}):")
+        if (amortizationEntries.isEmpty()) sb.appendLine("  (none)")
+        amortizationEntries.forEach { ae ->
+            val pauseTag = if (ae.isPaused) " [PAUSED]" else ""
+            sb.appendLine("  • ${ae.source}: ${currencySymbol}${fmt(ae.amount)}  periods=${ae.totalPeriods}  start=${ae.startDate}$pauseTag")
+        }
+        sb.appendLine()
+
+        sb.appendLine("Savings Goals (${savingsGoals.size}):")
+        if (savingsGoals.isEmpty()) sb.appendLine("  (none)")
+        savingsGoals.forEach { goal ->
+            val pauseTag = if (goal.isPaused) " [PAUSED]" else ""
+            val typeTag = if (goal.targetDate != null) "by ${goal.targetDate}" else "${currencySymbol}${fmt(goal.contributionPerPeriod)}/period"
+            sb.appendLine("  • ${goal.name}: ${currencySymbol}${fmt(goal.targetAmount)} ($typeTag)  saved=${currencySymbol}${fmt(goal.totalSavedSoFar)}$pauseTag")
+        }
+        sb.appendLine()
+
         val twoYearsAhead = today.plusYears(2)
         var horizon = today
         for (src in incomeSources) {
@@ -218,16 +359,15 @@ object SavingsSimulator {
         }
         sb.appendLine()
 
-        // --- Build events ---
         val events = mutableListOf<CashEvent>()
-        events.add(CashEvent(today, -availableCash, priority = 1))
+        events.add(CashEvent(today, -availableCash, priority = 1, label = "Today's spending"))
 
         for (src in incomeSources) {
             for (date in BudgetCalculator.generateOccurrences(
                 src.repeatType, src.repeatInterval, src.startDate,
                 src.monthDay1, src.monthDay2, today, horizon
             )) {
-                events.add(CashEvent(date, +src.amount, priority = 0))
+                events.add(CashEvent(date, +src.amount, priority = 0, label = src.source))
             }
         }
         for (exp in recurringExpenses) {
@@ -235,22 +375,23 @@ object SavingsSimulator {
                 exp.repeatType, exp.repeatInterval, exp.startDate,
                 exp.monthDay1, exp.monthDay2, today, horizon
             )) {
-                events.add(CashEvent(date, -exp.amount, priority = 2))
+                events.add(CashEvent(date, -exp.amount, priority = 2, label = exp.source))
             }
         }
-        for (date in generatePeriodBoundaries(today, horizon, budgetPeriod, resetDayOfWeek, resetDayOfMonth)) {
-            events.add(CashEvent(date, -budgetAmount, priority = 1))
-        }
+
+        val boundaries = generatePeriodBoundaries(today, horizon, budgetPeriod, resetDayOfWeek, resetDayOfMonth)
+        val budgetBreakdowns = addDynamicBudgetEventsWithTrace(
+            events, boundaries, baseBudget, budgetPeriod,
+            amortizationEntries, savingsGoals, recurringExpenses, today
+        )
 
         sb.appendLine("── EVENTS (${events.size} total) ──")
         sb.appendLine()
 
-        // --- Sort ---
         events.sortWith(compareBy<CashEvent> { it.date }.thenBy { it.priority })
 
-        // --- Walk timeline ---
         sb.appendLine(String.format("%-12s  %-8s  %14s  %14s  %s", "Date", "Type", "Amount", "Balance", "Description"))
-        sb.appendLine("-".repeat(80))
+        sb.appendLine("-".repeat(100))
 
         var balance = 0.0
         var minBalance = 0.0
@@ -269,13 +410,17 @@ object SavingsSimulator {
                 else -> "?"
             }
             val sign = if (event.amount >= 0) "+" else ""
-            val marker = if (balance == minBalance && minBalance < 0) " ◄ LOW" else ""
+            val marker = if (balance == minBalance && minBalance < 0) " << LOW" else ""
+            val desc = if (event.label.isNotEmpty()) "  ${event.label}" else ""
+            val breakdown = if (event.priority == 1 && event.label.isEmpty()) {
+                budgetBreakdowns[event.date]?.let { "  $it" } ?: ""
+            } else desc
             sb.appendLine(String.format(
-                "%-12s  %-8s  %14s  %14s%s",
+                "%-12s  %-8s  %14s  %14s%s%s",
                 event.date, typeLabel,
                 "$sign${currencySymbol}${fmt(event.amount)}",
                 "${currencySymbol}${fmt(balance)}",
-                marker
+                marker, breakdown
             ))
         }
 
@@ -289,5 +434,94 @@ object SavingsSimulator {
         }
 
         return sb.toString()
+    }
+
+    private fun addDynamicBudgetEventsWithTrace(
+        events: MutableList<CashEvent>,
+        boundaries: List<LocalDate>,
+        baseBudget: Double,
+        budgetPeriod: BudgetPeriod,
+        amortizationEntries: List<AmortizationEntry>,
+        savingsGoals: List<SavingsGoal>,
+        recurringExpenses: List<RecurringExpense>,
+        today: LocalDate
+    ): Map<LocalDate, String> {
+        val breakdowns = mutableMapOf<LocalDate, String>()
+        if (boundaries.isEmpty()) return breakdowns
+
+        val fmt = { v: Double -> "%,.2f".format(v) }
+        val simGoalSaved = savingsGoals.map { it.totalSavedSoFar }.toDoubleArray()
+        val simRESetAside = recurringExpenses.map { it.setAsideSoFar }.toDoubleArray()
+        val simREAccelerated = recurringExpenses.map { it.isAccelerated }.toBooleanArray()
+
+        var prevDate = today
+        for (boundary in boundaries) {
+            recurringExpenses.forEachIndexed { i, re ->
+                if (re.deleted) return@forEachIndexed
+                val dueDates = BudgetCalculator.generateOccurrences(
+                    re.repeatType, re.repeatInterval, re.startDate,
+                    re.monthDay1, re.monthDay2,
+                    prevDate.plusDays(1), boundary
+                )
+                if (dueDates.isNotEmpty()) {
+                    simRESetAside[i] = 0.0
+                    simREAccelerated[i] = false
+                }
+            }
+
+            val amortDed = BudgetCalculator.activeAmortizationDeductions(
+                amortizationEntries, budgetPeriod, boundary
+            )
+
+            var savingsDed = 0.0
+            savingsGoals.forEachIndexed { i, goal ->
+                if (goal.isPaused) return@forEachIndexed
+                val remaining = goal.targetAmount - simGoalSaved[i]
+                if (remaining <= 0) return@forEachIndexed
+                val ded = if (goal.targetDate != null) {
+                    if (!boundary.isBefore(goal.targetDate)) return@forEachIndexed
+                    val periods = BudgetCalculator.countPeriodsCompleted(boundary, goal.targetDate, budgetPeriod)
+                    if (periods <= 0) return@forEachIndexed
+                    BudgetCalculator.roundCents(remaining / periods.toDouble())
+                } else {
+                    minOf(goal.contributionPerPeriod, remaining)
+                }
+                savingsDed += ded
+                simGoalSaved[i] = minOf(simGoalSaved[i] + ded, goal.targetAmount)
+            }
+
+            var accelDed = 0.0
+            recurringExpenses.forEachIndexed { i, re ->
+                if (!simREAccelerated[i] || re.deleted) return@forEachIndexed
+                val normalRate = BudgetCalculator.normalPerPeriodDeduction(re, budgetPeriod, boundary)
+                val nextDue = BudgetCalculator.generateOccurrences(
+                    re.repeatType, re.repeatInterval, re.startDate,
+                    re.monthDay1, re.monthDay2, boundary, boundary.plusYears(2)
+                ).firstOrNull()
+                if (nextDue == null || !nextDue.isAfter(boundary)) return@forEachIndexed
+                val periodsLeft = maxOf(1, BudgetCalculator.countPeriodsCompleted(boundary, nextDue, budgetPeriod))
+                val remaining = maxOf(0.0, re.amount - simRESetAside[i])
+                val acceleratedRate = remaining / periodsLeft
+                val extra = maxOf(0.0, acceleratedRate - normalRate)
+                accelDed += extra
+                simRESetAside[i] = minOf(simRESetAside[i] + acceleratedRate, re.amount)
+            }
+            accelDed = BudgetCalculator.roundCents(accelDed)
+
+            val effectiveBudget = BudgetCalculator.roundCents(
+                maxOf(0.0, baseBudget - amortDed - savingsDed - accelDed)
+            )
+            events.add(CashEvent(boundary, -effectiveBudget, priority = 1))
+
+            val parts = mutableListOf<String>()
+            parts.add("base=${fmt(baseBudget)}")
+            if (amortDed > 0) parts.add("amort=-${fmt(amortDed)}")
+            if (savingsDed > 0) parts.add("savings=-${fmt(savingsDed)}")
+            if (accelDed > 0) parts.add("accel=-${fmt(accelDed)}")
+            breakdowns[boundary] = "[${parts.joinToString(" ")}]"
+
+            prevDate = boundary
+        }
+        return breakdowns
     }
 }

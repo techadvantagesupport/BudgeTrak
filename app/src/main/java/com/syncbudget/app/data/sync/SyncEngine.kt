@@ -1073,7 +1073,11 @@ class SyncEngine(
             monthDay1_clock = f["monthDay1"]?.clock ?: 0L,
             monthDay2_clock = f["monthDay2"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L,
-            deviceId_clock = f["deviceId"]?.clock ?: 0L
+            deviceId_clock = f["deviceId"]?.clock ?: 0L,
+            setAsideSoFar = (f["setAsideSoFar"]?.value as? Number)?.toDouble() ?: 0.0,
+            isAccelerated = f["isAccelerated"]?.value as? Boolean ?: false,
+            setAsideSoFar_clock = f["setAsideSoFar"]?.clock ?: 0L,
+            isAccelerated_clock = f["isAccelerated"]?.clock ?: 0L
         )
     }
 

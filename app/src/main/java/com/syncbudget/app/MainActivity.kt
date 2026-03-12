@@ -39,6 +39,7 @@ import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.IncomeSourceRepository
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.RecurringExpenseRepository
+import com.syncbudget.app.data.RepeatType
 import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.TransactionRepository
 import com.syncbudget.app.data.TransactionType
@@ -83,6 +84,7 @@ import com.syncbudget.app.ui.screens.RecurringExpenseConfirmDialog
 import com.syncbudget.app.ui.screens.RecurringExpensesHelpScreen
 import com.syncbudget.app.ui.screens.RecurringExpensesScreen
 import com.syncbudget.app.ui.screens.SettingsHelpScreen
+import com.syncbudget.app.ui.screens.SimulationGraphScreen
 import com.syncbudget.app.ui.screens.SettingsScreen
 import com.syncbudget.app.ui.screens.TransactionDialog
 import com.syncbudget.app.ui.screens.TransactionsHelpScreen
@@ -332,7 +334,10 @@ class MainActivity : ComponentActivity() {
                     val savingsDeductions = BudgetCalculator.activeSavingsGoalDeductions(
                         savingsGoals.toList().active, budgetPeriod
                     )
-                    BudgetCalculator.roundCents(maxOf(0.0, base - amortDeductions - savingsDeductions))
+                    val acceleratedDeductions = BudgetCalculator.acceleratedREExtraDeductions(
+                        recurringExpenses.toList().active, budgetPeriod
+                    )
+                    BudgetCalculator.roundCents(maxOf(0.0, base - amortDeductions - savingsDeductions - acceleratedDeductions))
                 }
             }
 
@@ -587,6 +592,51 @@ class MainActivity : ComponentActivity() {
                     }
                     if (changed) saveCategories()
                     syncPrefs.edit().putBoolean("migration_reset_nonadmin_icon_clock", true).apply()
+                }
+
+                // Backfill setAsideSoFar for existing REs based on accrued cycle position
+                if (!prefs.getBoolean("migration_add_re_setaside_fields", false)) {
+                    val migToday = LocalDate.now()
+                    val twoYearsAhead = migToday.plusYears(2)
+                    var reChanged = false
+                    recurringExpenses.forEachIndexed { idx, re ->
+                        if (re.deleted || re.setAsideSoFar > 0.0) return@forEachIndexed
+                        val occurrences = BudgetCalculator.generateOccurrences(
+                            re.repeatType, re.repeatInterval, re.startDate,
+                            re.monthDay1, re.monthDay2, migToday, twoYearsAhead
+                        )
+                        val nextOcc = occurrences.firstOrNull() ?: return@forEachIndexed
+                        if (nextOcc == migToday) return@forEachIndexed
+                        val prevOcc: LocalDate = when (re.repeatType) {
+                            RepeatType.DAYS -> nextOcc.minusDays(re.repeatInterval.toLong())
+                            RepeatType.WEEKS -> nextOcc.minusDays((re.repeatInterval * 7).toLong())
+                            RepeatType.BI_WEEKLY -> nextOcc.minusDays(14)
+                            RepeatType.MONTHS -> nextOcc.minusMonths(re.repeatInterval.toLong())
+                            RepeatType.BI_MONTHLY -> {
+                                val d1 = re.monthDay1 ?: 1; val d2 = re.monthDay2 ?: 15
+                                val cd1 = d1.coerceAtMost(nextOcc.lengthOfMonth())
+                                if (nextOcc.dayOfMonth == cd1) {
+                                    val pm = nextOcc.minusMonths(1)
+                                    pm.withDayOfMonth(d2.coerceAtMost(pm.lengthOfMonth()))
+                                } else nextOcc.withDayOfMonth(cd1)
+                            }
+                            RepeatType.ANNUAL -> nextOcc.minusYears(1)
+                        }
+                        val daysSince = ChronoUnit.DAYS.between(prevOcc, migToday).toDouble()
+                        val totalDays = ChronoUnit.DAYS.between(prevOcc, nextOcc).toDouble()
+                        if (totalDays > 0) {
+                            val accrued = BudgetCalculator.roundCents((daysSince / totalDays) * re.amount)
+                            if (accrued > 0.0) {
+                                val clk = lamportClock.tick()
+                                recurringExpenses[idx] = re.copy(
+                                    setAsideSoFar = accrued, setAsideSoFar_clock = clk
+                                )
+                                reChanged = true
+                            }
+                        }
+                    }
+                    if (reChanged) saveRecurringExpenses()
+                    prefs.edit().putBoolean("migration_add_re_setaside_fields", true).apply()
                 }
 
                 while (true) {
@@ -1159,7 +1209,7 @@ class MainActivity : ComponentActivity() {
 
             // Linking chain: recurring/amortization/income match (no duplicate check)
             fun runLinkingChain(txn: Transaction) {
-                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null
+                val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
                 if (!alreadyLinked) {
                     val activeRecurring = recurringExpenses.toList().active
                     val activeAmort = amortizationEntries.toList().active
@@ -1217,7 +1267,9 @@ class MainActivity : ComponentActivity() {
                         incomeSources = incomeSources.toList().active,
                         recurringExpenses = recurringExpenses.toList().active,
                         budgetPeriod = budgetPeriod,
-                        budgetAmount = budgetAmount,
+                        baseBudget = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount,
+                        amortizationEntries = amortizationEntries.toList().active,
+                        savingsGoals = savingsGoals.toList().active,
                         availableCash = availableCash,
                         resetDayOfWeek = resetDayOfWeek,
                         resetDayOfMonth = resetDayOfMonth,
@@ -1320,6 +1372,57 @@ class MainActivity : ComponentActivity() {
                             }
                             saveSavingsGoals()
 
+                            // Update RE set-aside tracking for each catch-up period
+                            val reClk = lamportClock.tick()
+                            var reChanged = false
+                            for (period in 0 until missedPeriods) {
+                                val periodsBack = (missedPeriods - 1 - period).toLong()
+                                val periodDate = when (budgetPeriod) {
+                                    BudgetPeriod.DAILY -> today.minusDays(periodsBack)
+                                    BudgetPeriod.WEEKLY -> today.minusWeeks(periodsBack)
+                                    BudgetPeriod.MONTHLY -> today.minusMonths(periodsBack)
+                                }
+                                val periodEnd = when (budgetPeriod) {
+                                    BudgetPeriod.DAILY -> periodDate.plusDays(1)
+                                    BudgetPeriod.WEEKLY -> periodDate.plusWeeks(1)
+                                    BudgetPeriod.MONTHLY -> periodDate.plusMonths(1)
+                                }
+                                recurringExpenses.forEachIndexed { idx, re ->
+                                    if (re.deleted) return@forEachIndexed
+                                    val occurrences = BudgetCalculator.generateOccurrences(
+                                        re.repeatType, re.repeatInterval, re.startDate,
+                                        re.monthDay1, re.monthDay2, periodDate, periodEnd.minusDays(1)
+                                    )
+                                    if (occurrences.isNotEmpty()) {
+                                        // Due date reached: reset set-aside, deactivate accelerated
+                                        recurringExpenses[idx] = re.copy(
+                                            setAsideSoFar = 0.0,
+                                            setAsideSoFar_clock = reClk,
+                                            isAccelerated = if (re.isAccelerated) false else re.isAccelerated,
+                                            isAccelerated_clock = if (re.isAccelerated) reClk else re.isAccelerated_clock
+                                        )
+                                        reChanged = true
+                                    } else {
+                                        val increment = if (re.isAccelerated) {
+                                            val periodsLeft = BudgetCalculator.periodsUntilNextOccurrence(re, budgetPeriod, periodDate)
+                                            if (periodsLeft > 0) BudgetCalculator.roundCents(
+                                                (re.amount - re.setAsideSoFar) / periodsLeft
+                                            ) else 0.0
+                                        } else {
+                                            BudgetCalculator.normalPerPeriodDeduction(re, budgetPeriod, periodDate)
+                                        }
+                                        if (increment > 0) {
+                                            recurringExpenses[idx] = re.copy(
+                                                setAsideSoFar = minOf(re.setAsideSoFar + increment, re.amount),
+                                                setAsideSoFar_clock = reClk
+                                            )
+                                            reChanged = true
+                                        }
+                                    }
+                                }
+                            }
+                            if (reChanged) saveRecurringExpenses()
+
                             recomputeCash()
                             prefs.edit()
                                 .putString("lastRefreshDate", lastRefreshDate.toString())
@@ -1371,6 +1474,12 @@ class MainActivity : ComponentActivity() {
                     val categoryMap = categories.associateBy { it.id }
                     for (cat in categories.sortedBy { it.id }) {
                         dump.appendLine("  id=${cat.id} '${cat.name}' tag=${cat.tag} icon=${cat.iconName} dev=${cat.deviceId.take(8)}… del=${cat.deleted} nClk=${cat.name_clock} tClk=${cat.tag_clock} dIdClk=${cat.deviceId_clock}")
+                    }
+                    dump.appendLine()
+
+                    dump.appendLine("── Recurring Expenses ──")
+                    for (re in recurringExpenses.sortedBy { it.source }) {
+                        dump.appendLine("  id=${re.id} '${re.source}' amt=${re.amount} ${re.repeatType}/${re.repeatInterval} dev=${re.deviceId.take(8)}… del=${re.deleted} setAside=${re.setAsideSoFar} accel=${re.isAccelerated}")
                     }
                     dump.appendLine()
 
@@ -1473,6 +1582,7 @@ class MainActivity : ComponentActivity() {
                             "amortization_help" -> "amortization"
                             "recurring_expenses_help" -> "recurring_expenses"
                             "budget_config_help" -> "budget_config"
+                            "simulation_graph" -> "future_expenditures"
                             "budget_config" -> "settings"
                             "family_sync" -> "settings"
                             "family_sync_help" -> "family_sync"
@@ -2326,7 +2436,8 @@ class MainActivity : ComponentActivity() {
                         dateFormatPattern = dateFormatPattern,
                         recurringExpenses = recurringExpenses.toList().active,
                         incomeSources = incomeSources.toList().active,
-                        budgetAmount = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount,
+                        amortizationEntries = amortizationEntries.toList().active,
+                        baseBudget = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount,
                         availableCash = availableCash,
                         resetDayOfWeek = resetDayOfWeek,
                         resetDayOfMonth = resetDayOfMonth,
@@ -2390,7 +2501,21 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onBack = { currentScreen = "main" },
-                        onHelpClick = { currentScreen = "future_expenditures_help" }
+                        onHelpClick = { currentScreen = "future_expenditures_help" },
+                        onViewChart = { currentScreen = "simulation_graph" }
+                    )
+                    "simulation_graph" -> SimulationGraphScreen(
+                        incomeSources = incomeSources.toList().active,
+                        recurringExpenses = recurringExpenses.toList().active,
+                        budgetPeriod = budgetPeriod,
+                        baseBudget = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount,
+                        amortizationEntries = amortizationEntries.toList().active,
+                        savingsGoals = savingsGoals.toList().active,
+                        availableCash = availableCash,
+                        resetDayOfWeek = resetDayOfWeek,
+                        resetDayOfMonth = resetDayOfMonth,
+                        currencySymbol = currencySymbol,
+                        onBack = { currentScreen = "future_expenditures" }
                     )
                     "amortization" -> AmortizationScreen(
                         amortizationEntries = amortizationEntries.toList().active,
@@ -2482,7 +2607,9 @@ class MainActivity : ComponentActivity() {
                                 startDate_clock = clock,
                                 monthDay1_clock = clock,
                                 monthDay2_clock = clock,
-                                deviceId_clock = clock
+                                deviceId_clock = clock,
+                                setAsideSoFar_clock = if (expense.setAsideSoFar > 0.0) clock else 0L,
+                                isAccelerated_clock = if (expense.isAccelerated) clock else 0L
                             ))
                             saveRecurringExpenses()
                         },
@@ -2507,7 +2634,9 @@ class MainActivity : ComponentActivity() {
                                     repeatInterval_clock = if (updated.repeatInterval != old.repeatInterval) clock else old.repeatInterval_clock,
                                     startDate_clock = if (updated.startDate != old.startDate) clock else old.startDate_clock,
                                     monthDay1_clock = if (updated.monthDay1 != old.monthDay1) clock else old.monthDay1_clock,
-                                    monthDay2_clock = if (updated.monthDay2 != old.monthDay2) clock else old.monthDay2_clock
+                                    monthDay2_clock = if (updated.monthDay2 != old.monthDay2) clock else old.monthDay2_clock,
+                                    setAsideSoFar_clock = if (updated.setAsideSoFar != old.setAsideSoFar) clock else old.setAsideSoFar_clock,
+                                    isAccelerated_clock = if (updated.isAccelerated != old.isAccelerated) clock else old.isAccelerated_clock
                                 )
                                 saveRecurringExpenses()
                                 if (hasLinkedTxns) {
@@ -3265,6 +3394,10 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         dateFormatter = dateFormatter,
                         chartPalette = chartPalette,
+                        recurringExpenses = recurringExpenses.toList().active,
+                        amortizationEntries = amortizationEntries.toList().active,
+                        incomeSources = incomeSources.toList().active,
+                        savingsGoals = savingsGoals.toList().active,
                         onDismiss = { dashboardShowAddIncome = false },
                         onSave = { txn ->
                             runMatchingChain(txn)
@@ -3283,6 +3416,10 @@ class MainActivity : ComponentActivity() {
                         dateFormatter = dateFormatter,
                         isExpense = true,
                         chartPalette = chartPalette,
+                        recurringExpenses = recurringExpenses.toList().active,
+                        amortizationEntries = amortizationEntries.toList().active,
+                        incomeSources = incomeSources.toList().active,
+                        savingsGoals = savingsGoals.toList().active,
                         onDismiss = { dashboardShowAddExpense = false },
                         onSave = { txn ->
                             runMatchingChain(txn)

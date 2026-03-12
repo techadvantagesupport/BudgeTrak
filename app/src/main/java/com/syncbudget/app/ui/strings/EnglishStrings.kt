@@ -365,7 +365,12 @@ object EnglishStrings : AppStrings {
         savingsWhyBody = "This number comes from a cash flow simulation that walks forward from today through all your upcoming income deposits, expense due dates, and budget spending needs.\n\nIt finds the point in the future where your cash balance would dip the lowest — for example, right before a big paycheck arrives but after rent is due — and tells you how much buffer you need to survive that dip!\n\nThis number changes daily as you move closer to income and expense dates. For example, right after payday it will be highest (many spending days ahead), and right before payday it will be lowest. Once you are caught up, you should stay caught up if you don't overspend. If your bank account is lower than this number, consider setting up a savings plan on the Savings page to catch up.",
         savingsLowPointToast = { date -> "Cash flow low point: $date" },
         linkedTransactions = "Linked Transactions",
-        noLinkedTransactions = "No linked transactions"
+        noLinkedTransactions = "No linked transactions",
+        viewSimulationChart = "Tap to view chart",
+        simulationGraphTitle = "Cash Flow Simulation",
+        simulationGraphDescription = "Projected cash flow over the simulation period. Adjust your current savings to see how different levels affect your balance.",
+        simulationSavingsLabel = "Current Savings",
+        simulationNoData = "No simulation data available"
     )
 
     override val amortization = AmortizationStrings(
@@ -417,7 +422,11 @@ object EnglishStrings : AppStrings {
         everyTwoWeeks = "Every 2 weeks",
         twicePerMonth = "Twice per month",
         linkedTransactions = "Linked Transactions",
-        noLinkedTransactions = "No linked transactions"
+        noLinkedTransactions = "No linked transactions",
+        acceleratedMode = "Accelerated Set-aside",
+        acceleratedModeEnabled = "Accelerated mode enabled",
+        acceleratedModeDisabled = "Accelerated mode disabled",
+        setAsideProgress = { saved, total -> "$saved / $total set aside" }
     )
 
     override val sync = SyncStrings(

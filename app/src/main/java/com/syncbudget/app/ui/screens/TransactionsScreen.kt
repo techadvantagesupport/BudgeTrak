@@ -2685,17 +2685,14 @@ private fun TransactionRow(
                 // Category icon
                 if (transaction.categoryAmounts.isNotEmpty()) {
                     if (hasMultipleCategories) {
-                        IconButton(
-                            onClick = onToggleExpand,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.List,
-                                contentDescription = S.transactions.category,
-                                tint = categoryIconTint,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.List,
+                            contentDescription = S.transactions.category,
+                            tint = categoryIconTint,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clickable { onToggleExpand() }
+                        )
                     } else if (singleCategory != null) {
                         Icon(
                             imageVector = getCategoryIcon(singleCategory.iconName),
@@ -3730,42 +3727,42 @@ fun TransactionDialog(
                                     tint = Color(0xFFF44336)
                                 )
                             }
-                            var thumbYPx by remember { mutableIntStateOf(0) }
-                            IconButton(
-                                onClick = {
-                                    verified = !verified
-                                    val msg = if (verified) S.transactions.verifiedToast else S.transactions.unverifiedToast
-                                    toastState.show(msg, thumbYPx)
-                                },
-                                modifier = Modifier.onGloballyPositioned { coords ->
-                                    thumbYPx = coords.positionInWindow().y.toInt()
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = if (verified) Icons.Filled.ThumbUpAlt else Icons.Filled.QuestionMark,
-                                    contentDescription = S.transactions.verifiedToast,
-                                    tint = if (verified) Color(0xFF2E7D32) else Color(0xFFF44336)
-                                )
-                            }
-                            var excludeYPx by remember { mutableIntStateOf(0) }
-                            IconButton(
-                                onClick = {
-                                    excludeFromBudget = !excludeFromBudget
-                                    val msg = if (excludeFromBudget) S.transactions.excludedToast else S.transactions.includedToast
-                                    toastState.show(msg, excludeYPx)
-                                },
-                                modifier = Modifier.onGloballyPositioned { coords ->
-                                    excludeYPx = coords.positionInWindow().y.toInt()
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = if (excludeFromBudget) Icons.Filled.Block else Icons.Filled.Check,
-                                    contentDescription = S.transactions.excludedToast,
-                                    tint = if (excludeFromBudget) Color(0xFFF44336) else Color(0xFF2E7D32)
-                                )
-                            }
-                            Spacer(modifier = Modifier.weight(1f))
                         }
+                        var thumbYPx by remember { mutableIntStateOf(0) }
+                        IconButton(
+                            onClick = {
+                                verified = !verified
+                                val msg = if (verified) S.transactions.verifiedToast else S.transactions.unverifiedToast
+                                toastState.show(msg, thumbYPx)
+                            },
+                            modifier = Modifier.onGloballyPositioned { coords ->
+                                thumbYPx = coords.positionInWindow().y.toInt()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (verified) Icons.Filled.ThumbUpAlt else Icons.Filled.QuestionMark,
+                                contentDescription = S.transactions.verifiedToast,
+                                tint = if (verified) Color(0xFF2E7D32) else Color(0xFFF44336)
+                            )
+                        }
+                        var excludeYPx by remember { mutableIntStateOf(0) }
+                        IconButton(
+                            onClick = {
+                                excludeFromBudget = !excludeFromBudget
+                                val msg = if (excludeFromBudget) S.transactions.excludedToast else S.transactions.includedToast
+                                toastState.show(msg, excludeYPx)
+                            },
+                            modifier = Modifier.onGloballyPositioned { coords ->
+                                excludeYPx = coords.positionInWindow().y.toInt()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (excludeFromBudget) Icons.Filled.Block else Icons.Filled.Check,
+                                contentDescription = S.transactions.excludedToast,
+                                tint = if (excludeFromBudget) Color(0xFFF44336) else Color(0xFF2E7D32)
+                            )
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
                         DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
                         Spacer(modifier = Modifier.width(8.dp))
                         DialogPrimaryButton(

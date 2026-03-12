@@ -387,7 +387,12 @@ data class FutureExpendituresStrings(
     val savingsWhyBody: String,
     val savingsLowPointToast: (String) -> String,
     val linkedTransactions: String,
-    val noLinkedTransactions: String
+    val noLinkedTransactions: String,
+    val viewSimulationChart: String,
+    val simulationGraphTitle: String,
+    val simulationGraphDescription: String,
+    val simulationSavingsLabel: String,
+    val simulationNoData: String
 )
 
 data class AmortizationStrings(
@@ -439,7 +444,11 @@ data class RecurringExpensesStrings(
     val everyTwoWeeks: String,
     val twicePerMonth: String,
     val linkedTransactions: String,
-    val noLinkedTransactions: String
+    val noLinkedTransactions: String,
+    val acceleratedMode: String,
+    val acceleratedModeEnabled: String,
+    val acceleratedModeDisabled: String,
+    val setAsideProgress: (String, String) -> String
 )
 
 data class SyncStrings(

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import com.syncbudget.app.ui.theme.DialogStyle
 import com.syncbudget.app.ui.theme.DialogPrimaryButton
@@ -69,6 +70,7 @@ import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.ui.theme.PulsingScrollArrow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.BudgetPeriod
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.RecurringExpense
@@ -102,7 +104,8 @@ fun FutureExpendituresScreen(
     dateFormatPattern: String = "yyyy-MM-dd",
     recurringExpenses: List<RecurringExpense> = emptyList(),
     incomeSources: List<IncomeSource> = emptyList(),
-    budgetAmount: Double = 0.0,
+    amortizationEntries: List<AmortizationEntry> = emptyList(),
+    baseBudget: Double = 0.0,
     availableCash: Double = 0.0,
     resetDayOfWeek: Int = 7,
     resetDayOfMonth: Int = 1,
@@ -112,7 +115,8 @@ fun FutureExpendituresScreen(
     onUpdateGoal: (SavingsGoal) -> Unit,
     onDeleteGoal: (SavingsGoal) -> Unit,
     onBack: () -> Unit,
-    onHelpClick: () -> Unit = {}
+    onHelpClick: () -> Unit = {},
+    onViewChart: () -> Unit = {}
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -204,13 +208,16 @@ fun FutureExpendituresScreen(
                 if (!isManualOverBudget) {
                     val simResult = remember(
                         recurringExpenses, incomeSources, budgetPeriod,
-                        budgetAmount, availableCash, resetDayOfWeek, resetDayOfMonth
+                        baseBudget, amortizationEntries, savingsGoals,
+                        availableCash, resetDayOfWeek, resetDayOfMonth
                     ) {
                         SavingsSimulator.calculateSavingsRequired(
                             incomeSources = incomeSources,
                             recurringExpenses = recurringExpenses,
                             budgetPeriod = budgetPeriod,
-                            budgetAmount = budgetAmount,
+                            baseBudget = baseBudget,
+                            amortizationEntries = amortizationEntries,
+                            savingsGoals = savingsGoals,
                             availableCash = availableCash,
                             resetDayOfWeek = resetDayOfWeek,
                             resetDayOfMonth = resetDayOfMonth
@@ -259,8 +266,28 @@ fun FutureExpendituresScreen(
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
+                    Row(
+                        modifier = Modifier
+                            .clickable { onViewChart() }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ShowChart,
+                            contentDescription = null,
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = S.futureExpenditures.viewSimulationChart,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
                 OutlinedButton(
                     onClick = { showAddDialog = true },
