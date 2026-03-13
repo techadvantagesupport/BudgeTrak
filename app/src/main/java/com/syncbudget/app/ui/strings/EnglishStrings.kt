@@ -102,12 +102,12 @@ object EnglishStrings : AppStrings {
         superchargeNewPayoff = { date -> "New payoff: $date" },
         superchargeNewCompletion = { date -> "Completes: $date" },
         superchargeAutoAdjust = "Contributions adjust automatically",
-        superchargeTargetDateNote = "This will change your target date",
         superchargeExceedsCash = { total -> "Total ($total) exceeds available cash" },
         upgradeForFullWidget = "Upgrade for full widget",
         adPlaceholder = "Ad",
         switchToPieChart = "Switch to pie chart",
-        switchToBarChart = "Switch to bar chart"
+        switchToBarChart = "Switch to bar chart",
+        budgetCalendar = "Budget Calendar"
     )
 
     override val settings = SettingsStrings(
@@ -218,13 +218,14 @@ object EnglishStrings : AppStrings {
         saveTransactions = "Save Transactions",
         loadTransactions = "Import / Load",
         csv = "CSV",
+        xls = "Excel (.xlsx)",
         encrypted = "Encrypted",
         password = "Password",
         confirmPassword = "Confirm Password",
         selectFile = "Select File",
         usBank = "US Bank",
-        secureSyncCsv = "SecureSync CSV Save File",
-        secureSyncEncrypted = "SecureSync Encrypted Save File",
+        secureSyncCsv = "BudgeXync CSV Save File",
+        secureSyncEncrypted = "BudgeXync Encrypted Save File",
         duplicateDetected = "Possible Duplicate",
         duplicateExisting = "Existing:",
         duplicateNew = "New:",
@@ -332,11 +333,8 @@ object EnglishStrings : AppStrings {
         name = "Description",
         targetAmount = "Target Amount",
         startingSavedAmount = "Starting Saved Amount",
-        targetDate = "Target Date",
-        fixedContribution = "Fixed Contribution",
         contributionPerPeriod = "Contribution per Period",
-        selectTargetDate = "Select Target Date",
-        targetDateLabel = { date -> "Target Date: $date" },
+        calculateWithTargetDate = "Calculate with Target Date",
         goalReached = "Goal reached!",
         paused = "Paused",
         budgetReduction = { amount, period -> "-$amount/$period" },
@@ -350,7 +348,6 @@ object EnglishStrings : AppStrings {
         resumeAll = "Resume All",
         pause = "Pause",
         resume = "Resume",
-        selectAFutureDate = "Select a future date",
         requiredNameExample = "Required, e.g. New Tires",
         exampleTargetAmount = "e.g. 1000.00",
         exampleContribution = "e.g. 5.00",
@@ -511,8 +508,8 @@ object EnglishStrings : AppStrings {
 
     override val dashboardHelp = DashboardHelpStrings(
         title = "Dashboard Help",
-        welcomeTitle = "Welcome to SecureSync Daily Budget",
-        welcomeBody = "SecureSync Daily Budget is a privacy-first budgeting app designed to give you " +
+        welcomeTitle = "Welcome to BudgeXync",
+        welcomeBody = "BudgeXync is a privacy-first budgeting app designed to give you " +
             "a clear, real-time picture of how much money you can safely spend right now. " +
             "Unlike traditional budget trackers that only show you where your money went, " +
             "this app tells you where your money can go \u2014 calculated from your actual " +
@@ -619,7 +616,7 @@ object EnglishStrings : AppStrings {
         step6Title = "Start Tracking",
         step6Desc = "Return to the dashboard. Your Solari display now shows your available cash. Record expenses as you spend and watch your number update in real time.",
         habitsTitle = "Building Better Financial Habits",
-        habitsBody = "SecureSync Daily Budget is more than a tracker \u2014 it's a tool for building " +
+        habitsBody = "BudgeXync is more than a tracker \u2014 it's a tool for building " +
             "lasting financial awareness. Here's how to get the most out of it:",
         tipKnowTitle = "Know Your Number",
         tipKnowBody = "Check the Solari display at least once a day. The simple act of knowing " +
@@ -664,7 +661,7 @@ object EnglishStrings : AppStrings {
         syncArrowsBullet = "Sync arrows \u2014 show cloud connectivity status (green = connected, yellow = syncing, orange = stale, red = error)",
         syncDotsBullet = "Colored dots \u2014 one per family member device (up to 4), showing how recently each device synced: green (< 5 min), yellow (< 2 hrs), orange (< 24 hrs), red (> 24 hrs), gray (never)",
         privacyTitle = "Privacy & Security",
-        privacyBody = "Your financial data stays on your device by default. SecureSync Daily Budget does not collect analytics " +
+        privacyBody = "Your financial data stays on your device by default. BudgeXync does not collect analytics " +
             "and does not share your data with anyone. When you export your transactions, you can choose encrypted " +
             "format (ChaCha20-Poly1305 with PBKDF2 key derivation) for maximum security. " +
             "If you enable Family Sync, data is shared between your devices using end-to-end encryption \u2014 " +
@@ -898,11 +895,11 @@ object EnglishStrings : AppStrings {
         savingTitle = "Saving Transactions",
         savingBody = "Tap the Save icon in the header to export all transactions to a file. Two formats are available:",
         csvFormatTitle = "CSV Format",
-        csvFormatBody = "Saves your transactions as a plain-text CSV file (syncbudget_transactions.csv). " +
+        csvFormatBody = "Saves your transactions as a plain-text CSV file (budgexync_transactions.csv). " +
             "This file preserves all data including categories and can be loaded back into the app. " +
             "It can also be opened in spreadsheet software like Excel or Google Sheets for review.",
         encryptedFormatTitle = "Encrypted Format",
-        encryptedFormatBody = "Saves your transactions in an encrypted file (syncbudget_transactions.enc) " +
+        encryptedFormatBody = "Saves your transactions in an encrypted file (budgexync_transactions.enc) " +
             "protected with a password you choose. This is the recommended format for backups " +
             "and transferring data between devices, as it keeps your financial information private.",
         encryptionDetailsTitle = "Encryption Details",
@@ -954,10 +951,10 @@ object EnglishStrings : AppStrings {
         loadUsBank = "US Bank",
         loadUsBankDesc = "Import transactions from a US Bank CSV export file. " +
             "Transactions are automatically categorized based on your existing merchant history.",
-        loadCsv = "SecureSync CSV Save File",
+        loadCsv = "BudgeXync CSV Save File",
         loadCsvDesc = "Load a CSV file previously saved from this app. " +
             "All categories and data are preserved exactly as they were.",
-        loadEncrypted = "SecureSync Encrypted Save File",
+        loadEncrypted = "BudgeXync Encrypted Save File",
         loadEncryptedDesc = "Load a previously encrypted save file. " +
             "You must enter the password used when the file was saved.",
         loadPasswordNote = "For encrypted files, the password field appears automatically when you select the " +
@@ -1491,6 +1488,39 @@ object EnglishStrings : AppStrings {
         tip2 = "Use the +/\u2013 buttons to adjust the zoom level in steps.",
         tip3 = "Try a small per-period savings amount first, then increase it to find a comfortable balance between saving and spending.",
         tip4 = "If your \"Saved per Period\" exceeds your budget, the chart will show a message \u2014 this means your savings goal isn't sustainable with your current income."
+    )
+
+    override val budgetCalendar = BudgetCalendarStrings(
+        title = "Budget Calendar",
+        income = "Income",
+        expenses = "Expenses",
+        dayDetails = "Day Details",
+        noEvents = "No recurring items on this day",
+        totalIncome = { amount -> "Total income: $amount" },
+        totalExpenses = { amount -> "Total expenses: $amount" },
+        sun = "Sun", mon = "Mon", tue = "Tue", wed = "Wed", thu = "Thu", fri = "Fri", sat = "Sat"
+    )
+
+    override val budgetCalendarHelp = BudgetCalendarHelpStrings(
+        title = "Budget Calendar Help",
+        overviewTitle = "What is the Budget Calendar?",
+        overviewBody = "The Budget Calendar shows when your recurring income and expenses are " +
+            "scheduled throughout the month. It gives you a visual overview of your financial " +
+            "commitments so you can see at a glance which days have payments coming in or going out.",
+        colorsTitle = "Color Legend",
+        colorsBody = "Each day on the calendar is color-coded based on what events fall on that day:",
+        greenDesc = "Green — Income is scheduled on this day",
+        redDesc = "Red — An expense is due on this day",
+        splitDesc = "Split (green and red) — Both income and expenses fall on the same day",
+        navigationTitle = "Navigating Months",
+        navigationBody = "Use the left and right arrows at the top of the calendar to move between " +
+            "months. The calendar defaults to the current month when you open it.",
+        detailsTitle = "Viewing Details",
+        detailsBody = "Tap any highlighted day to see a breakdown of all income sources and " +
+            "recurring expenses scheduled for that day, including the source name and amount.",
+        tipsTitle = "Tips",
+        tip1 = "Use the calendar to spot heavy expense days and plan your spending around them.",
+        tip2 = "If you see many red days clustered together, consider adjusting due dates or payment schedules where possible."
     )
 
     override val widgetTransaction = WidgetTransactionStrings(

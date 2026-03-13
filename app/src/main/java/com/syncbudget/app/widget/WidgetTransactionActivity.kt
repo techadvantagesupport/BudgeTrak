@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -117,6 +118,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                 }
 
                 val categories = remember { CategoryRepository.load(context).active.filter { it.widgetVisible } }
+                val pastSources = remember { TransactionRepository.load(context).active.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key } }
                 val selectedCategoryIds = remember { mutableStateMapOf<Int, Boolean>() }
                 val categoryAmounts = remember { mutableStateMapOf<Int, String>() }
                 var amount by remember { mutableStateOf("") }
@@ -292,14 +294,51 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     .padding(bottom = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                // Source / Merchant
-                                OutlinedTextField(
-                                    value = source,
-                                    onValueChange = { source = it.take(50) },
-                                    label = { Text(if (isExpense) W.merchantService else W.source) },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                // Source / Merchant with autocomplete
+                                var sourceHasFocus by remember { mutableStateOf(false) }
+                                val sourceSuggestions = remember(source, pastSources, sourceHasFocus) {
+                                    if (!sourceHasFocus || source.length < 2) emptyList()
+                                    else {
+                                        val query = source.lowercase()
+                                        pastSources.filter { it.lowercase().contains(query) && it != source }
+                                            .take(3)
+                                    }
+                                }
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = source,
+                                        onValueChange = { source = it.take(50) },
+                                        label = { Text(if (isExpense) W.merchantService else W.source) },
+                                        singleLine = true,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .onFocusChanged { sourceHasFocus = it.isFocused }
+                                    )
+                                    if (sourceSuggestions.isNotEmpty()) {
+                                        Surface(
+                                            shape = RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp),
+                                            tonalElevation = 3.dp,
+                                            shadowElevation = 2.dp,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column {
+                                                sourceSuggestions.forEach { suggestion ->
+                                                    Text(
+                                                        text = suggestion,
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clickable {
+                                                                source = suggestion
+                                                                sourceHasFocus = false
+                                                            }
+                                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                        style = MaterialTheme.typography.bodyMedium
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
 
                                 // Description
                                 OutlinedTextField(

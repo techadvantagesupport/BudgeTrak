@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -42,7 +43,6 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
 import com.syncbudget.app.ui.theme.AdAwareDatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,6 +63,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
@@ -223,8 +224,8 @@ fun FutureExpendituresScreen(
                             resetDayOfMonth = resetDayOfMonth
                         )
                     }
-                    if (simResult.savingsRequired > 0.0) {
-                        val formattedAmount = formatCurrency(simResult.savingsRequired, currencySymbol)
+                    run {
+                        val formattedAmount = formatCurrency(maxOf(0.0, simResult.savingsRequired), currencySymbol)
                         val periodText = budgetPeriodLabel
                         val lowPointDateStr = simResult.lowPointDate?.format(
                             DateTimeFormatter.ofPattern(dateFormatPattern)
@@ -268,37 +269,44 @@ fun FutureExpendituresScreen(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                    Row(
-                        modifier = Modifier
-                            .clickable { onViewChart() }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                }
+                val buttonFontSize = with(LocalDensity.current) { 14.dp.toSp() }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showAddDialog = true },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp).padding(end = 2.dp)
+                        )
+                        Text(
+                            S.futureExpenditures.addSavingsGoal,
+                            fontSize = buttonFontSize,
+                            maxLines = 1
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { onViewChart() },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ShowChart,
                             contentDescription = null,
-                            tint = Color(0xFF4CAF50),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(16.dp).padding(end = 2.dp)
                         )
-                        Spacer(Modifier.width(8.dp))
                         Text(
-                            text = S.futureExpenditures.viewSimulationChart,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF4CAF50)
+                            S.futureExpenditures.viewSimulationChart,
+                            fontSize = buttonFontSize,
+                            maxLines = 1
                         )
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-                OutlinedButton(
-                    onClick = { showAddDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text(S.futureExpenditures.addSavingsGoal)
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
@@ -450,21 +458,19 @@ fun FutureExpendituresScreen(
             initialName = "",
             initialTargetAmount = "",
             initialStartingSaved = "",
-            initialTargetDate = null,
             initialContribution = "",
-            initialIsTargetDate = true,
             isAddMode = true,
+            budgetPeriod = budgetPeriod,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onDismiss = { showAddDialog = false },
-            onSave = { name, targetAmount, startingSaved, targetDate, contribution ->
+            onSave = { name, targetAmount, startingSaved, contribution ->
                 val id = generateSavingsGoalId(savingsGoals.map { it.id }.toSet())
                 onAddGoal(
                     SavingsGoal(
                         id = id,
                         name = name,
                         targetAmount = targetAmount,
-                        targetDate = targetDate,
                         totalSavedSoFar = startingSaved,
                         contributionPerPeriod = contribution
                     )
@@ -475,24 +481,28 @@ fun FutureExpendituresScreen(
     }
 
     editingGoal?.let { goal ->
+        // For existing target-date goals, pre-calculate the current per-period deduction
+        val currentContribution = if (goal.targetDate != null) {
+            calculatePerPeriodDeduction(goal, budgetPeriod)
+        } else goal.contributionPerPeriod
         AddEditSavingsGoalDialog(
             title = S.futureExpenditures.editSavingsGoal,
             initialName = goal.name,
             initialTargetAmount = "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(goal.targetAmount),
             initialStartingSaved = "",
-            initialTargetDate = goal.targetDate,
-            initialContribution = if (goal.targetDate == null) "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(goal.contributionPerPeriod) else "",
-            initialIsTargetDate = goal.targetDate != null,
+            initialContribution = "%.${CURRENCY_DECIMALS[currencySymbol] ?: 2}f".format(currentContribution),
             isAddMode = false,
+            existingSaved = goal.totalSavedSoFar,
+            budgetPeriod = budgetPeriod,
             currencySymbol = currencySymbol,
             dateFormatter = dateFormatter,
             onDismiss = { editingGoal = null },
-            onSave = { name, targetAmount, _, targetDate, contribution ->
+            onSave = { name, targetAmount, _, contribution ->
                 onUpdateGoal(
                     goal.copy(
                         name = name,
                         targetAmount = targetAmount,
-                        targetDate = targetDate,
+                        targetDate = null,
                         contributionPerPeriod = contribution
                     )
                 )
@@ -586,14 +596,14 @@ private fun AddEditSavingsGoalDialog(
     initialName: String,
     initialTargetAmount: String,
     initialStartingSaved: String,
-    initialTargetDate: LocalDate?,
     initialContribution: String,
-    initialIsTargetDate: Boolean,
     isAddMode: Boolean,
+    existingSaved: Double = 0.0,
+    budgetPeriod: BudgetPeriod,
     currencySymbol: String,
     dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd"),
     onDismiss: () -> Unit,
-    onSave: (String, Double, Double, LocalDate?, Double) -> Unit
+    onSave: (String, Double, Double, Double) -> Unit
 ) {
     val S = LocalStrings.current
     val maxDecimalPlaces = CURRENCY_DECIMALS[currencySymbol] ?: 2
@@ -601,8 +611,6 @@ private fun AddEditSavingsGoalDialog(
     var name by remember { mutableStateOf(initialName) }
     var targetAmountText by remember { mutableStateOf(initialTargetAmount) }
     var startingSavedText by remember { mutableStateOf(initialStartingSaved) }
-    var isTargetDateType by remember { mutableStateOf(initialIsTargetDate) }
-    var targetDate by remember { mutableStateOf(initialTargetDate) }
     var contributionText by remember { mutableStateOf(initialContribution) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showValidation by remember { mutableStateOf(false) }
@@ -614,7 +622,6 @@ private fun AddEditSavingsGoalDialog(
     val isTargetAmountValid = targetAmount != null && targetAmount > 0
     val isStartingSavedValid = startingSavedText.isEmpty() || (startingSaved >= 0 && (targetAmount == null || startingSaved < targetAmount))
     val isContributionValid = contribution != null && contribution > 0
-    val isTargetDateValid = targetDate != null && targetDate!!.isAfter(LocalDate.now())
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -701,67 +708,32 @@ private fun AddEditSavingsGoalDialog(
                         )
                     }
 
-                    // Goal type toggle
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    OutlinedTextField(
+                        value = contributionText,
+                        onValueChange = { newVal ->
+                            if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
+                                val dotIdx = newVal.indexOf('.')
+                                val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
+                                if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
+                                else if (decs <= maxDecimalPlaces) { contributionText = newVal }
+                            }
+                        },
+                        label = { Text(S.futureExpenditures.contributionPerPeriod) },
+                        singleLine = true,
+                        isError = showValidation && !isContributionValid,
+                        supportingText = if (showValidation && !isContributionValid) ({
+                            Text(S.futureExpenditures.exampleContribution, color = Color(0xFFF44336))
+                        }) else null,
+                        keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
+                        colors = textFieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    // Helper: calculate contribution from a target date
+                    OutlinedButton(
+                        onClick = { showDatePicker = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        FilterChip(
-                            selected = isTargetDateType,
-                            onClick = { isTargetDateType = true },
-                            label = { Text(S.futureExpenditures.targetDate) }
-                        )
-                        FilterChip(
-                            selected = !isTargetDateType,
-                            onClick = { isTargetDateType = false },
-                            label = { Text(S.futureExpenditures.fixedContribution) }
-                        )
-                    }
-
-                    if (isTargetDateType) {
-                        Box(
-                            modifier = if (showValidation && !isTargetDateValid)
-                                Modifier.border(1.dp, Color(0xFFF44336), RoundedCornerShape(4.dp))
-                            else Modifier
-                        ) {
-                            OutlinedButton(
-                                onClick = { showDatePicker = true },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    if (targetDate != null) S.futureExpenditures.targetDateLabel(targetDate!!.format(dateFormatter))
-                                    else S.futureExpenditures.selectTargetDate
-                                )
-                            }
-                        }
-                        if (showValidation && !isTargetDateValid) {
-                            Text(
-                                text = S.futureExpenditures.selectAFutureDate,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFF44336)
-                            )
-                        }
-                    } else {
-                        OutlinedTextField(
-                            value = contributionText,
-                            onValueChange = { newVal ->
-                                if (newVal.isEmpty() || newVal == "." || newVal.toDoubleOrNull() != null) {
-                                    val dotIdx = newVal.indexOf('.')
-                                    val decs = if (dotIdx >= 0) newVal.length - dotIdx - 1 else 0
-                                    if (maxDecimalPlaces == 0 && dotIdx >= 0) { /* block */ }
-                                    else if (decs <= maxDecimalPlaces) { contributionText = newVal }
-                                }
-                            },
-                            label = { Text(S.futureExpenditures.contributionPerPeriod) },
-                            singleLine = true,
-                            isError = showValidation && !isContributionValid,
-                            supportingText = if (showValidation && !isContributionValid) ({
-                                Text(S.futureExpenditures.exampleContribution, color = Color(0xFFF44336))
-                            }) else null,
-                            keyboardOptions = KeyboardOptions(keyboardType = if (maxDecimalPlaces > 0) KeyboardType.Decimal else KeyboardType.Number),
-                            colors = textFieldColors,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Text(S.futureExpenditures.calculateWithTargetDate)
                     }
                 }
 
@@ -774,16 +746,9 @@ private fun AddEditSavingsGoalDialog(
                     DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel, maxLines = 1) }
                     Spacer(modifier = Modifier.width(8.dp))
                     DialogPrimaryButton(onClick = {
-                            val isTypeValid = if (isTargetDateType) isTargetDateValid else isContributionValid
-                            val isValid = isNameValid && isTargetAmountValid && isStartingSavedValid && isTypeValid
+                            val isValid = isNameValid && isTargetAmountValid && isStartingSavedValid && isContributionValid
                             if (isValid) {
-                                val amount = targetAmount!!
-                                val saved = startingSavedText.toDoubleOrNull() ?: 0.0
-                                if (isTargetDateType) {
-                                    onSave(name.trim(), amount, saved, targetDate, 0.0)
-                                } else {
-                                    onSave(name.trim(), amount, saved, null, contribution!!)
-                                }
+                                onSave(name.trim(), targetAmount!!, startingSavedText.toDoubleOrNull() ?: 0.0, contribution!!)
                             } else {
                                 showValidation = true
                             }
@@ -802,16 +767,32 @@ private fun AddEditSavingsGoalDialog(
     }
 
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = targetDate?.atStartOfDay(ZoneId.of("UTC"))?.toInstant()?.toEpochMilli()
-        )
+        val datePickerState = rememberDatePickerState()
         AdAwareDatePickerDialog(
             title = S.common.selectDate,
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 DialogPrimaryButton(onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
-                            targetDate = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                            val selectedDate = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                            val today = LocalDate.now()
+                            if (selectedDate.isAfter(today)) {
+                                val saved = if (isAddMode) (startingSavedText.toDoubleOrNull() ?: 0.0) else existingSaved
+                                val remaining = (targetAmountText.toDoubleOrNull() ?: 0.0) - saved
+                                if (remaining > 0) {
+                                    val periods = when (budgetPeriod) {
+                                        BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(today, selectedDate)
+                                        BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(today, selectedDate)
+                                        BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(today, selectedDate)
+                                    }
+                                    if (periods > 0) {
+                                        val calc = remaining / periods.toDouble()
+                                        contributionText = "%.${maxDecimalPlaces}f".format(
+                                            com.syncbudget.app.data.BudgetCalculator.roundCents(calc)
+                                        )
+                                    }
+                                }
+                            }
                         }
                         showDatePicker = false
                     }) { Text(S.common.ok) }

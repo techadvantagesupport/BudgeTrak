@@ -32,6 +32,8 @@ interface AppStrings {
     val recurringExpensesHelp: RecurringExpensesHelpStrings
     val familySyncHelp: FamilySyncHelpStrings
     val simulationGraphHelp: SimulationGraphHelpStrings
+    val budgetCalendar: BudgetCalendarStrings
+    val budgetCalendarHelp: BudgetCalendarHelpStrings
     val widgetTransaction: WidgetTransactionStrings
 }
 
@@ -123,12 +125,12 @@ data class DashboardStrings(
     val superchargeNewPayoff: (String) -> String,
     val superchargeNewCompletion: (String) -> String,
     val superchargeAutoAdjust: String,
-    val superchargeTargetDateNote: String,
     val superchargeExceedsCash: (String) -> String,
     val upgradeForFullWidget: String,
     val adPlaceholder: String,
     val switchToPieChart: String,
-    val switchToBarChart: String
+    val switchToBarChart: String,
+    val budgetCalendar: String
 )
 
 data class SettingsStrings(
@@ -239,6 +241,7 @@ data class TransactionsStrings(
     val saveTransactions: String,
     val loadTransactions: String,
     val csv: String,
+    val xls: String,
     val encrypted: String,
     val password: String,
     val confirmPassword: String,
@@ -355,11 +358,8 @@ data class FutureExpendituresStrings(
     val name: String,
     val targetAmount: String,
     val startingSavedAmount: String,
-    val targetDate: String,
-    val fixedContribution: String,
     val contributionPerPeriod: String,
-    val selectTargetDate: String,
-    val targetDateLabel: (String) -> String,
+    val calculateWithTargetDate: String,
     val goalReached: String,
     val paused: String,
     val budgetReduction: (String, String) -> String,
@@ -373,7 +373,6 @@ data class FutureExpendituresStrings(
     val resumeAll: String,
     val pause: String,
     val resume: String,
-    val selectAFutureDate: String,
     val requiredNameExample: String,
     val exampleTargetAmount: String,
     val exampleContribution: String,
@@ -1232,4 +1231,39 @@ data class SimulationGraphHelpStrings(
     val tip2: String,
     val tip3: String,
     val tip4: String
+)
+
+data class BudgetCalendarStrings(
+    val title: String,
+    val income: String,
+    val expenses: String,
+    val dayDetails: String,
+    val noEvents: String,
+    val totalIncome: (String) -> String,
+    val totalExpenses: (String) -> String,
+    val sun: String,
+    val mon: String,
+    val tue: String,
+    val wed: String,
+    val thu: String,
+    val fri: String,
+    val sat: String
+)
+
+data class BudgetCalendarHelpStrings(
+    val title: String,
+    val overviewTitle: String,
+    val overviewBody: String,
+    val colorsTitle: String,
+    val colorsBody: String,
+    val greenDesc: String,
+    val redDesc: String,
+    val splitDesc: String,
+    val navigationTitle: String,
+    val navigationBody: String,
+    val detailsTitle: String,
+    val detailsBody: String,
+    val tipsTitle: String,
+    val tip1: String,
+    val tip2: String
 )

@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.res.painterResource
 import com.syncbudget.app.R
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PieChart
@@ -110,7 +111,7 @@ import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
+
 import java.time.temporal.TemporalAdjusters
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -639,6 +640,9 @@ fun MainScreen(
                     IconButton(onClick = { onNavigate("recurring_expenses") }, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Filled.Sync, S.dashboard.recurringExpenses, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
                     }
+                    IconButton(onClick = { onNavigate("budget_calendar") }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.DateRange, S.dashboard.budgetCalendar, tint = customColors.accentTint, modifier = Modifier.size(32.dp))
+                    }
                 }
             }
         }
@@ -965,9 +969,7 @@ private fun SavingsSuperchargeDialog(
     // Initialize default modes
     eligibleGoals.forEach { goal ->
         if (goal.id !in modes) {
-            modes[goal.id] = if (goal.targetDate != null)
-                SuperchargeMode.REDUCE_CONTRIBUTIONS
-            else SuperchargeMode.ACHIEVE_SOONER
+            modes[goal.id] = SuperchargeMode.ACHIEVE_SOONER
         }
     }
 
@@ -1089,21 +1091,14 @@ private fun SavingsSuperchargeDialog(
                                     }
                                 }
                                 Text(
-                                    text = if (goal.targetDate != null) {
-                                        S.futureExpenditures.targetAmountBy(
-                                            formatCurrency(goal.targetAmount, currencySymbol),
-                                            goal.targetDate.format(dateFormatter)
-                                        )
-                                    } else {
-                                        S.futureExpenditures.targetLabel(
-                                            formatCurrency(goal.targetAmount, currencySymbol)
-                                        )
-                                    },
+                                    text = S.futureExpenditures.targetLabel(
+                                        formatCurrency(goal.targetAmount, currencySymbol)
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f * contentAlpha)
                                 )
-                                // Show current payoff date for fixed-contribution goals
-                                if (goal.targetDate == null && goal.contributionPerPeriod > 0 && remaining > 0) {
+                                // Show current payoff date
+                                if (goal.contributionPerPeriod > 0 && remaining > 0) {
                                     val periodsToPayoff = ceil(remaining / goal.contributionPerPeriod).toLong()
                                     val today = LocalDate.now()
                                     val payoffDate = when (budgetPeriod) {
@@ -1177,15 +1172,6 @@ private fun SavingsSuperchargeDialog(
                                         }
                                         .padding(horizontal = 10.dp, vertical = 6.dp)
                                 )
-                                if (goal.targetDate != null && mode == SuperchargeMode.ACHIEVE_SOONER) {
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = S.dashboard.superchargeTargetDateNote,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFFF9A825)
-                                    )
-                                }
-
                                 Spacer(modifier = Modifier.height(6.dp))
                                 val enteredAmount = (amounts[goal.id] ?: "").toDoubleOrNull() ?: 0.0
                                 val exceedsGoal = enteredAmount > remaining
@@ -1203,51 +1189,8 @@ private fun SavingsSuperchargeDialog(
                                 // Live preview (above text field so it stays visible when keyboard is open)
                                 if (enteredAmount > 0 && !exceedsGoal) {
                                     val newRemaining = remaining - enteredAmount
-                                    if (goal.targetDate != null && mode == SuperchargeMode.REDUCE_CONTRIBUTIONS) {
-                                        // Target-date goal, Reduce mode: show new lower contribution
-                                        val today = LocalDate.now()
-                                        val newDeduction = if (!today.isBefore(goal.targetDate)) 0.0
-                                        else {
-                                            val periods = when (budgetPeriod) {
-                                                BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(today, goal.targetDate)
-                                                BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(today, goal.targetDate)
-                                                BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(today, goal.targetDate)
-                                            }
-                                            if (periods <= 0) 0.0 else newRemaining / periods.toDouble()
-                                        }
-                                        Text(
-                                            text = S.dashboard.superchargeNewContribution(
-                                                formatCurrency(newDeduction, currencySymbol),
-                                                budgetPeriodLabel
-                                            ),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = previewPulseColor
-                                        )
-                                    } else if (goal.targetDate != null && mode == SuperchargeMode.ACHIEVE_SOONER) {
-                                        // Target-date goal, Achieve Sooner mode: show new earlier target date
-                                        val today = LocalDate.now()
-                                        val currentContribution = calculatePerPeriodDeduction(goal, budgetPeriod)
-                                        if (currentContribution > 0 && newRemaining > 0) {
-                                            val periodsNeeded = ceil(newRemaining / currentContribution).toLong()
-                                            val newTargetDate = when (budgetPeriod) {
-                                                BudgetPeriod.DAILY -> today.plusDays(periodsNeeded)
-                                                BudgetPeriod.WEEKLY -> today.plusWeeks(periodsNeeded)
-                                                BudgetPeriod.MONTHLY -> today.plusMonths(periodsNeeded)
-                                            }
-                                            Text(
-                                                text = S.dashboard.superchargeNewPayoff(newTargetDate.format(dateFormatter)),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = previewPulseColor
-                                            )
-                                        } else if (newRemaining <= 0) {
-                                            Text(
-                                                text = S.futureExpenditures.goalReached,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = previewPulseColor
-                                            )
-                                        }
-                                    } else if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS) {
-                                        // Fixed-contribution, Reduce mode: show new lower per-period amount
+                                    if (mode == SuperchargeMode.REDUCE_CONTRIBUTIONS) {
+                                        // Reduce mode: show new lower per-period amount
                                         if (goal.contributionPerPeriod > 0 && remaining > 0) {
                                             val currentPeriodsRemaining = ceil(remaining / goal.contributionPerPeriod).toLong()
                                             val newDeduction = if (currentPeriodsRemaining > 0) newRemaining / currentPeriodsRemaining.toDouble() else 0.0
@@ -1261,7 +1204,7 @@ private fun SavingsSuperchargeDialog(
                                             )
                                         }
                                     } else {
-                                        // Fixed-contribution, Achieve Sooner mode: show new payoff date
+                                        // Achieve Sooner mode: show new payoff date
                                         val today = LocalDate.now()
                                         if (goal.contributionPerPeriod > 0 && newRemaining > 0) {
                                             val periodsRemaining = ceil(newRemaining / goal.contributionPerPeriod).toLong()

@@ -633,6 +633,28 @@ class SyncEngine(
                 }
             }
 
+            // Advance lastPushedClock past the max clock in received remote
+            // deltas.  The merged data (with remote clocks via maxOf) gets
+            // saved to the repo by SyncWorker.  Without this, those merged
+            // clocks appear "dirty" on the next cycle and get needlessly
+            // re-pushed back to the sender (echo problem).
+            if (packets.isNotEmpty()) {
+                var maxReceivedClock = 0L
+                for (packet in packets) {
+                    for (change in packet.changes) {
+                        for ((_, field) in change.fields) {
+                            if (field.clock > maxReceivedClock) maxReceivedClock = field.clock
+                        }
+                    }
+                }
+                if (maxReceivedClock > lastPushedClock) {
+                    lastPushedClock = maxReceivedClock
+                    if (maxReceivedClock > lamportClock.value) {
+                        lamportClock.merge(maxReceivedClock)
+                    }
+                }
+            }
+
             // Step 7: Update metadata (with optional integrity fingerprint)
             val newSyncVersion = if (remoteDeltas.isNotEmpty()) {
                 remoteDeltas.maxOf { it.version }

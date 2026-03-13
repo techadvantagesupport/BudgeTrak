@@ -5,6 +5,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeout
 
 data class FirestoreDelta(
     val version: Long,
@@ -48,12 +49,16 @@ object FirestoreService {
 
     private val db: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
 
-    suspend fun getGroupNextVersion(groupId: String): Long {
+    /** Timeout for individual Firestore operations (ms).  Prevents indefinite
+     *  hangs on flaky networks — the sync engine retries on the next cycle. */
+    private const val OP_TIMEOUT_MS = 30_000L
+
+    suspend fun getGroupNextVersion(groupId: String): Long = withTimeout(OP_TIMEOUT_MS) {
         val doc = db.collection("groups")
             .document(groupId)
             .get()
             .await()
-        return doc.getLong("nextDeltaVersion") ?: 1L
+        doc.getLong("nextDeltaVersion") ?: 1L
     }
 
     suspend fun fetchDeltas(groupId: String, lastSyncVersion: Long, pageSize: Int = 200): List<FirestoreDelta> {
@@ -61,14 +66,16 @@ object FirestoreService {
         var cursor = lastSyncVersion
 
         while (true) {
-            val snapshot = db.collection("groups")
-                .document(groupId)
-                .collection("deltas")
-                .whereGreaterThan("version", cursor)
-                .orderBy("version", Query.Direction.ASCENDING)
-                .limit(pageSize.toLong())
-                .get()
-                .await()
+            val snapshot = withTimeout(OP_TIMEOUT_MS) {
+                db.collection("groups")
+                    .document(groupId)
+                    .collection("deltas")
+                    .whereGreaterThan("version", cursor)
+                    .orderBy("version", Query.Direction.ASCENDING)
+                    .limit(pageSize.toLong())
+                    .get()
+                    .await()
+            }
 
             val page = snapshot.documents.map { doc ->
                 FirestoreDelta(
@@ -92,7 +99,7 @@ object FirestoreService {
         deviceId: String,
         syncVersion: Long,
         fingerprintJson: String? = null
-    ) {
+    ) = withTimeout(OP_TIMEOUT_MS) {
         val data = mutableMapOf<String, Any>(
             "lastSyncVersion" to syncVersion,
             "lastSeen" to System.currentTimeMillis()
@@ -109,7 +116,7 @@ object FirestoreService {
             .await()
     }
 
-    suspend fun getDeviceRecord(groupId: String, deviceId: String): DeviceRecord? {
+    suspend fun getDeviceRecord(groupId: String, deviceId: String): DeviceRecord? = withTimeout(OP_TIMEOUT_MS) {
         val doc = db.collection("groups")
             .document(groupId)
             .collection("devices")
@@ -117,8 +124,8 @@ object FirestoreService {
             .get()
             .await()
 
-        if (!doc.exists()) return null
-        return DeviceRecord(
+        if (!doc.exists()) null
+        else DeviceRecord(
             deviceId = doc.getString("deviceId") ?: deviceId,
             deviceName = doc.getString("deviceName") ?: "",
             isAdmin = doc.getBoolean("isAdmin") ?: false,
@@ -127,7 +134,7 @@ object FirestoreService {
         )
     }
 
-    suspend fun getSnapshot(groupId: String): SnapshotRecord? {
+    suspend fun getSnapshot(groupId: String): SnapshotRecord? = withTimeout(OP_TIMEOUT_MS) {
         val doc = db.collection("groups")
             .document(groupId)
             .collection("snapshots")
@@ -135,8 +142,8 @@ object FirestoreService {
             .get()
             .await()
 
-        if (!doc.exists()) return null
-        return SnapshotRecord(
+        if (!doc.exists()) null
+        else SnapshotRecord(
             snapshotVersion = doc.getLong("snapshotVersion") ?: 0L,
             createdBy = doc.getString("createdBy") ?: "",
             encryptedData = doc.getString("encryptedData") ?: "",
@@ -149,7 +156,7 @@ object FirestoreService {
         snapshotVersion: Long,
         createdBy: String,
         encryptedData: String
-    ) {
+    ) = withTimeout(OP_TIMEOUT_MS) {
         val data = mapOf(
             "snapshotVersion" to snapshotVersion,
             "createdBy" to createdBy,
@@ -177,27 +184,29 @@ object FirestoreService {
         require(groupId.isNotBlank()) { "Group ID required" }
         require(sourceDeviceId.isNotBlank()) { "Device ID required" }
         val groupRef = db.collection("groups").document(groupId)
-        return db.runTransaction { transaction ->
-            val snapshot = transaction.get(groupRef)
-            val version = snapshot.getLong("nextDeltaVersion") ?: 1L
-            // Increment version counter
-            transaction.set(groupRef, mapOf(
-                "nextDeltaVersion" to version + 1,
-                "lastActivity" to FieldValue.serverTimestamp()
-            ), SetOptions.merge())
-            // Write the delta document in the same transaction
-            val deltaRef = groupRef.collection("deltas").document("v$version")
-            transaction.set(deltaRef, mapOf(
-                "version" to version,
-                "sourceDeviceId" to sourceDeviceId,
-                "encryptedPayload" to encryptedPayload,
-                "timestamp" to System.currentTimeMillis()
-            ))
-            version
-        }.await()
+        return withTimeout(OP_TIMEOUT_MS) {
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(groupRef)
+                val version = snapshot.getLong("nextDeltaVersion") ?: 1L
+                // Increment version counter
+                transaction.set(groupRef, mapOf(
+                    "nextDeltaVersion" to version + 1,
+                    "lastActivity" to FieldValue.serverTimestamp()
+                ), SetOptions.merge())
+                // Write the delta document in the same transaction
+                val deltaRef = groupRef.collection("deltas").document("v$version")
+                transaction.set(deltaRef, mapOf(
+                    "version" to version,
+                    "sourceDeviceId" to sourceDeviceId,
+                    "encryptedPayload" to encryptedPayload,
+                    "timestamp" to System.currentTimeMillis()
+                ))
+                version
+            }.await()
+        }
     }
 
-    suspend fun updateGroupActivity(groupId: String) {
+    suspend fun updateGroupActivity(groupId: String) = withTimeout(OP_TIMEOUT_MS) {
         db.collection("groups").document(groupId)
             .set(mapOf("lastActivity" to FieldValue.serverTimestamp()), SetOptions.merge())
             .await()
@@ -242,14 +251,14 @@ object FirestoreService {
         return PairingData(groupId, key)
     }
 
-    suspend fun getDevices(groupId: String): List<DeviceRecord> {
+    suspend fun getDevices(groupId: String): List<DeviceRecord> = withTimeout(OP_TIMEOUT_MS) {
         val snapshot = db.collection("groups")
             .document(groupId)
             .collection("devices")
             .get()
             .await()
 
-        return snapshot.documents.map { doc ->
+        snapshot.documents.map { doc ->
             DeviceRecord(
                 deviceId = doc.getString("deviceId") ?: doc.id,
                 deviceName = doc.getString("deviceName") ?: "",
@@ -357,7 +366,7 @@ object FirestoreService {
             .await()
     }
 
-    suspend fun getAdminClaim(groupId: String): AdminClaim? {
+    suspend fun getAdminClaim(groupId: String): AdminClaim? = withTimeout(OP_TIMEOUT_MS) {
         val doc = db.collection("groups")
             .document(groupId)
             .collection("adminClaim")
@@ -365,8 +374,8 @@ object FirestoreService {
             .get()
             .await()
 
-        if (!doc.exists()) return null
-        return AdminClaim(
+        if (!doc.exists()) null
+        else AdminClaim(
             claimantDeviceId = doc.getString("claimantDeviceId") ?: "",
             claimantName = doc.getString("claimantName") ?: "",
             claimedAt = doc.getLong("claimedAt") ?: 0L,

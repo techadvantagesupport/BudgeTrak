@@ -1,8 +1,11 @@
 package com.syncbudget.app.data
 
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlin.math.abs
 
 enum class BankFormat(val displayName: String) {
@@ -102,6 +105,147 @@ fun parseCsvLine(line: String): List<String> {
 
 private fun cleanMerchantName(raw: String): String {
     return raw.trim().replace(Regex("\\s+"), " ")
+}
+
+fun serializeTransactionsXlsx(
+    transactions: List<Transaction>,
+    categories: List<Category>,
+    currencySymbol: String = "$"
+): ByteArray {
+    val catMap = categories.associateBy { it.id }
+    val esc = { s: String -> s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;") }
+
+    // Shared strings table — collect all unique strings
+    val sharedStrings = mutableListOf<String>()
+    val ssIndex = mutableMapOf<String, Int>()
+    fun ssId(s: String): Int = ssIndex.getOrPut(s) { sharedStrings.size.also { sharedStrings.add(s) } }
+
+    val headers = listOf("Date", "Type", "Source", "Description", "Amount", "Category")
+    headers.forEach { ssId(it) }
+
+    // Pre-build row data
+    data class RowData(val dateSerial: Int, val typeIdx: Int, val sourceIdx: Int, val descIdx: Int, val amount: Double, val catIdx: Int)
+    val rows = transactions.map { t ->
+        val typeStr = if (t.type == TransactionType.EXPENSE) "Expense" else "Income"
+        val catNames = t.categoryAmounts.mapNotNull { ca -> catMap[ca.categoryId]?.name }.joinToString(", ").ifEmpty { "" }
+        // Excel date serial: days since 1899-12-30 (with the Lotus 1-2-3 leap year bug)
+        val epoch = LocalDate.of(1899, 12, 30)
+        val dateSerial = java.time.temporal.ChronoUnit.DAYS.between(epoch, t.date).toInt()
+        RowData(dateSerial, ssId(typeStr), ssId(t.source), ssId(t.description), t.amount, ssId(catNames))
+    }
+
+    // Build sheet XML
+    val sheet = StringBuilder()
+    sheet.appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+    sheet.appendLine("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">")
+    sheet.appendLine("<cols>")
+    sheet.appendLine("  <col min=\"1\" max=\"1\" width=\"12\" bestFit=\"1\" customWidth=\"1\"/>")
+    sheet.appendLine("  <col min=\"2\" max=\"2\" width=\"10\" bestFit=\"1\" customWidth=\"1\"/>")
+    sheet.appendLine("  <col min=\"3\" max=\"3\" width=\"22\" bestFit=\"1\" customWidth=\"1\"/>")
+    sheet.appendLine("  <col min=\"4\" max=\"4\" width=\"26\" bestFit=\"1\" customWidth=\"1\"/>")
+    sheet.appendLine("  <col min=\"5\" max=\"5\" width=\"12\" bestFit=\"1\" customWidth=\"1\"/>")
+    sheet.appendLine("  <col min=\"6\" max=\"6\" width=\"22\" bestFit=\"1\" customWidth=\"1\"/>")
+    sheet.appendLine("</cols>")
+    sheet.appendLine("<sheetData>")
+    // Header row — style 1 (bold)
+    sheet.append("<row r=\"1\">")
+    for ((ci, h) in headers.withIndex()) {
+        val col = ('A' + ci)
+        sheet.append("<c r=\"${col}1\" t=\"s\" s=\"1\"><v>${ssId(h)}</v></c>")
+    }
+    sheet.appendLine("</row>")
+    // Data rows
+    for ((ri, rd) in rows.withIndex()) {
+        val r = ri + 2
+        sheet.append("<row r=\"$r\">")
+        sheet.append("<c r=\"A$r\" s=\"2\"><v>${rd.dateSerial}</v></c>")  // date format
+        sheet.append("<c r=\"B$r\" t=\"s\"><v>${rd.typeIdx}</v></c>")
+        sheet.append("<c r=\"C$r\" t=\"s\"><v>${rd.sourceIdx}</v></c>")
+        sheet.append("<c r=\"D$r\" t=\"s\"><v>${rd.descIdx}</v></c>")
+        sheet.append("<c r=\"E$r\" s=\"3\"><v>${rd.amount}</v></c>")      // currency format
+        sheet.append("<c r=\"F$r\" t=\"s\"><v>${rd.catIdx}</v></c>")
+        sheet.appendLine("</row>")
+    }
+    sheet.appendLine("</sheetData>")
+    sheet.appendLine("</worksheet>")
+
+    // Styles XML
+    val fmtId = 164  // custom format IDs start at 164
+    val fmtIdMoney = 165
+    val styles = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="2">
+  <numFmt numFmtId="$fmtId" formatCode="yyyy\-mm\-dd"/>
+  <numFmt numFmtId="$fmtIdMoney" formatCode="${esc(currencySymbol)}#,##0.00"/>
+</numFmts>
+<fonts count="2">
+  <font><sz val="11"/><name val="Calibri"/></font>
+  <font><b/><sz val="11"/><name val="Calibri"/></font>
+</fonts>
+<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="4">
+  <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+  <xf numFmtId="0" fontId="1" fillId="0" borderId="0" applyFont="1"/>
+  <xf numFmtId="$fmtId" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/>
+  <xf numFmtId="$fmtIdMoney" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/>
+</cellXfs>
+</styleSheet>"""
+
+    // Shared strings XML
+    val ss = StringBuilder()
+    ss.appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+    ss.appendLine("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"${sharedStrings.size}\" uniqueCount=\"${sharedStrings.size}\">")
+    for (s in sharedStrings) {
+        ss.appendLine("<si><t>${esc(s)}</t></si>")
+    }
+    ss.appendLine("</sst>")
+
+    val workbook = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Transactions" sheetId="1" r:id="rId1"/></sheets>
+</workbook>"""
+
+    val workbookRels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+</Relationships>"""
+
+    val rootRels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"""
+
+    val contentTypes = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+</Types>"""
+
+    // Pack into ZIP
+    val baos = ByteArrayOutputStream()
+    ZipOutputStream(baos).use { zip ->
+        fun addEntry(name: String, content: String) {
+            zip.putNextEntry(ZipEntry(name))
+            zip.write(content.toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+        }
+        addEntry("[Content_Types].xml", contentTypes)
+        addEntry("_rels/.rels", rootRels)
+        addEntry("xl/workbook.xml", workbook)
+        addEntry("xl/_rels/workbook.xml.rels", workbookRels)
+        addEntry("xl/worksheets/sheet1.xml", sheet.toString())
+        addEntry("xl/styles.xml", styles)
+        addEntry("xl/sharedStrings.xml", ss.toString())
+    }
+    return baos.toByteArray()
 }
 
 fun serializeTransactionsCsv(transactions: List<Transaction>): String {
@@ -698,7 +842,7 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
     try {
         val header = reader.readLine() ?: return CsvParseResult(emptyList(), "Empty file")
         if (!header.startsWith("id,type,date,")) {
-            return CsvParseResult(emptyList(), "Not a SecureSync CSV file (invalid header)")
+            return CsvParseResult(emptyList(), "Not a BudgeXync CSV file (invalid header)")
         }
 
         var lineNumber = 1

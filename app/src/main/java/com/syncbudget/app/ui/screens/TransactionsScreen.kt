@@ -95,6 +95,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -152,6 +153,7 @@ import com.syncbudget.app.data.parseGenericCsv
 import com.syncbudget.app.data.parseUsBank
 import com.syncbudget.app.data.FullBackupSerializer
 import com.syncbudget.app.data.serializeTransactionsCsv
+import com.syncbudget.app.data.serializeTransactionsXlsx
 import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -176,6 +178,7 @@ import kotlinx.coroutines.launch
 
 private enum class SaveFormat(val label: String) {
     CSV("CSV"),
+    XLS("Excel (.xlsx)"),
     ENCRYPTED("Encrypted")
 }
 
@@ -253,6 +256,11 @@ fun TransactionsScreen(
 
     // Convert user-facing percent (e.g. 1.0 = 1%) to fraction (0.01)
     val percentTolerance = matchPercent / 100.0
+
+    val pastSources = remember(transactions) {
+        transactions.groupingBy { it.source }.eachCount()
+            .entries.sortedByDescending { it.value }.map { it.key }
+    }
 
     val toastState = LocalAppToast.current
     var viewFilter by remember { mutableStateOf(ViewFilter.ALL) }
@@ -383,6 +391,24 @@ fun TransactionsScreen(
             val csvContent = serializeTransactionsCsv(toSave)
             context.contentResolver.openOutputStream(uri)?.use { os ->
                 os.write(csvContent.toByteArray())
+            }
+            toastState.show(S.transactions.savedSuccessfully(toSave.size))
+        } catch (e: Exception) {
+            toastState.show("Save failed: ${e.message}")
+        }
+    }
+
+    val xlsSaveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val toSave = if (selectionMode && selectedIds.any { it.value }) {
+                transactions.filter { selectedIds[it.id] == true }
+            } else { transactions }
+            val xlsxBytes = serializeTransactionsXlsx(toSave, categories, currencySymbol)
+            context.contentResolver.openOutputStream(uri)?.use { os ->
+                os.write(xlsxBytes)
             }
             toastState.show(S.transactions.savedSuccessfully(toSave.size))
         } catch (e: Exception) {
@@ -1049,6 +1075,7 @@ fun TransactionsScreen(
             amortizationEntries = amortizationEntries,
             incomeSources = incomeSources,
             savingsGoals = savingsGoals,
+            pastSources = pastSources,
             onDismiss = { showAddIncome = false },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
@@ -1107,6 +1134,7 @@ fun TransactionsScreen(
             amortizationEntries = amortizationEntries,
             incomeSources = incomeSources,
             savingsGoals = savingsGoals,
+            pastSources = pastSources,
             onDismiss = { showAddExpense = false },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
@@ -1158,6 +1186,7 @@ fun TransactionsScreen(
             amortizationEntries = amortizationEntries,
             incomeSources = incomeSources,
             savingsGoals = savingsGoals,
+            pastSources = pastSources,
             onDismiss = { editingTransaction = null },
             onSave = { updated ->
                 // Only run duplicate/matching checks if merchant, date, or amount changed
@@ -1545,44 +1574,61 @@ fun TransactionsScreen(
                     ) {
                         Text(S.transactions.format, style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onBackground)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SaveFormat.entries.forEach { format ->
-                                OutlinedButton(
-                                    onClick = {
+                        SaveFormat.entries.forEach { format ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
                                         selectedSaveFormat = format
+                                        if (format == SaveFormat.XLS) includeAllData = false
                                         savePassword = ""
                                         savePasswordConfirm = ""
                                         saveError = null
-                                    },
-                                    colors = if (selectedSaveFormat == format)
-                                        ButtonDefaults.outlinedButtonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                        )
-                                    else ButtonDefaults.outlinedButtonColors()
-                                ) {
-                                    if (format == SaveFormat.ENCRYPTED) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Lock,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
                                     }
-                                    Text(when (format) {
-                                        SaveFormat.CSV -> S.transactions.csv
-                                        SaveFormat.ENCRYPTED -> S.transactions.encrypted
-                                    })
+                                    .padding(vertical = 4.dp, horizontal = 4.dp)
+                            ) {
+                                RadioButton(
+                                    selected = selectedSaveFormat == format,
+                                    onClick = {
+                                        selectedSaveFormat = format
+                                        if (format == SaveFormat.XLS) includeAllData = false
+                                        savePassword = ""
+                                        savePasswordConfirm = ""
+                                        saveError = null
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                if (format == SaveFormat.ENCRYPTED) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Lock,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
                                 }
+                                Text(when (format) {
+                                    SaveFormat.CSV -> S.transactions.csv
+                                    SaveFormat.XLS -> S.transactions.xls
+                                    SaveFormat.ENCRYPTED -> S.transactions.encrypted
+                                }, style = MaterialTheme.typography.bodyLarge)
                             }
                         }
 
+                        val backupEnabled = selectedSaveFormat != SaveFormat.XLS
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { includeAllData = !includeAllData }
+                                .then(if (backupEnabled) Modifier.clickable { includeAllData = !includeAllData } else Modifier)
+                                .let { if (!backupEnabled) it.alpha(0.4f) else it }
                         ) {
-                            Checkbox(checked = includeAllData, onCheckedChange = { includeAllData = it })
+                            Checkbox(
+                                checked = includeAllData,
+                                onCheckedChange = if (backupEnabled) ({ includeAllData = it }) else null,
+                                enabled = backupEnabled
+                            )
                             Spacer(Modifier.width(8.dp))
                             Text(S.transactions.includeAllData, style = MaterialTheme.typography.bodyMedium)
                         }
@@ -1654,7 +1700,7 @@ fun TransactionsScreen(
                                 when {
                                     includeAllData && selectedSaveFormat == SaveFormat.CSV -> {
                                         showSaveDialog = false
-                                        jsonSaveLauncher.launch("syncbudget_backup.json")
+                                        jsonSaveLauncher.launch("budgexync_backup.json")
                                     }
                                     includeAllData && selectedSaveFormat == SaveFormat.ENCRYPTED -> {
                                         when {
@@ -1666,13 +1712,17 @@ fun TransactionsScreen(
                                             }
                                             else -> {
                                                 showSaveDialog = false
-                                                encryptedSaveLauncher.launch("syncbudget_backup.enc")
+                                                encryptedSaveLauncher.launch("budgexync_backup.enc")
                                             }
                                         }
                                     }
                                     selectedSaveFormat == SaveFormat.CSV -> {
                                         showSaveDialog = false
-                                        csvSaveLauncher.launch("syncbudget_transactions.csv")
+                                        csvSaveLauncher.launch("budgexync_transactions.csv")
+                                    }
+                                    selectedSaveFormat == SaveFormat.XLS -> {
+                                        showSaveDialog = false
+                                        xlsSaveLauncher.launch("budgexync_transactions.xlsx")
                                     }
                                     selectedSaveFormat == SaveFormat.ENCRYPTED -> {
                                         when {
@@ -1684,7 +1734,7 @@ fun TransactionsScreen(
                                             }
                                             else -> {
                                                 showSaveDialog = false
-                                                encryptedSaveLauncher.launch("syncbudget_transactions.enc")
+                                                encryptedSaveLauncher.launch("budgexync_transactions.enc")
                                             }
                                         }
                                     }
@@ -2932,6 +2982,7 @@ fun TransactionDialog(
     amortizationEntries: List<AmortizationEntry> = emptyList(),
     incomeSources: List<IncomeSource> = emptyList(),
     savingsGoals: List<SavingsGoal> = emptyList(),
+    pastSources: List<String> = emptyList(),
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
     onDelete: (() -> Unit)? = null
@@ -3177,19 +3228,56 @@ fun TransactionDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    // Source/Merchant field
-                    OutlinedTextField(
-                        value = source,
-                        onValueChange = { source = it },
-                        label = { Text(sourceLabel) },
-                        isError = showValidation && source.isBlank(),
-                        supportingText = if (showValidation && source.isBlank()) ({
-                            Text(S.transactions.requiredMerchantExample, color = Color(0xFFF44336))
-                        }) else null,
-                        colors = textFieldColors,
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    // Source/Merchant field with autocomplete
+                    var sourceHasFocus by remember { mutableStateOf(false) }
+                    val sourceSuggestions = remember(source, pastSources, sourceHasFocus) {
+                        if (!sourceHasFocus || source.length < 2) emptyList()
+                        else {
+                            val query = source.lowercase()
+                            pastSources.filter { it.lowercase().contains(query) && it != source }
+                                .take(3)
+                        }
+                    }
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = source,
+                            onValueChange = { source = it },
+                            label = { Text(sourceLabel) },
+                            isError = showValidation && source.isBlank(),
+                            supportingText = if (showValidation && source.isBlank()) ({
+                                Text(S.transactions.requiredMerchantExample, color = Color(0xFFF44336))
+                            }) else null,
+                            colors = textFieldColors,
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onFocusChanged { sourceHasFocus = it.isFocused }
+                        )
+                        if (sourceSuggestions.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp),
+                                tonalElevation = 3.dp,
+                                shadowElevation = 2.dp,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column {
+                                    sourceSuggestions.forEach { suggestion ->
+                                        Text(
+                                            text = suggestion,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    source = suggestion
+                                                    sourceHasFocus = false
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Description field
                     OutlinedTextField(
@@ -4384,7 +4472,10 @@ fun TransactionDialog(
             title = { Text(S.transactions.linkToSavingsGoal) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    savingsGoals.sortedBy { it.name }.forEach { goal ->
+                    // Only fixed-contribution goals can be linked to transactions.
+                    // Target-date goals are excluded because withdrawals would cause
+                    // unpredictable per-period deduction spikes near the deadline.
+                    savingsGoals.filter { it.targetDate == null }.sortedBy { it.name }.forEach { goal ->
                         val remaining = goal.targetAmount - goal.totalSavedSoFar
                         Row(
                             modifier = Modifier

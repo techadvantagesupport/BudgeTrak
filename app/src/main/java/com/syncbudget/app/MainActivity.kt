@@ -33,7 +33,7 @@ import com.syncbudget.app.data.getDefaultCategoryName
 import com.syncbudget.app.data.AmortizationRepository
 import com.syncbudget.app.data.SavingsGoalRepository
 import com.syncbudget.app.data.SuperchargeMode
-import com.syncbudget.app.data.calculatePerPeriodDeduction
+
 import kotlin.math.ceil
 import com.syncbudget.app.data.IncomeSource
 import com.syncbudget.app.data.IncomeSourceRepository
@@ -84,6 +84,8 @@ import com.syncbudget.app.ui.screens.RecurringExpenseConfirmDialog
 import com.syncbudget.app.ui.screens.RecurringExpensesHelpScreen
 import com.syncbudget.app.ui.screens.RecurringExpensesScreen
 import com.syncbudget.app.ui.screens.SettingsHelpScreen
+import com.syncbudget.app.ui.screens.BudgetCalendarScreen
+import com.syncbudget.app.ui.screens.BudgetCalendarHelpScreen
 import com.syncbudget.app.ui.screens.SimulationGraphHelpScreen
 import com.syncbudget.app.ui.screens.SimulationGraphScreen
 import com.syncbudget.app.ui.screens.SettingsScreen
@@ -1586,6 +1588,7 @@ class MainActivity : ComponentActivity() {
                             "simulation_graph_help" -> "simulation_graph"
                             "simulation_graph" -> "future_expenditures"
                             "budget_config" -> "settings"
+                            "budget_calendar_help" -> "budget_calendar"
                             "family_sync" -> "settings"
                             "family_sync_help" -> "family_sync"
                             else -> "main"
@@ -1841,30 +1844,6 @@ class MainActivity : ComponentActivity() {
                                         val newRemaining = remaining - capped
                                         val mode = modes[goalId]
                                         val updatedGoal = if (
-                                            goal.targetDate != null &&
-                                            mode == SuperchargeMode.ACHIEVE_SOONER
-                                        ) {
-                                            val currentContribution = calculatePerPeriodDeduction(goal, budgetPeriod)
-                                            if (currentContribution > 0 && newRemaining > 0) {
-                                                val periodsNeeded = ceil(newRemaining / currentContribution).toLong()
-                                                val today = LocalDate.now()
-                                                val newTargetDate = when (budgetPeriod) {
-                                                    BudgetPeriod.DAILY -> today.plusDays(periodsNeeded)
-                                                    BudgetPeriod.WEEKLY -> today.plusWeeks(periodsNeeded)
-                                                    BudgetPeriod.MONTHLY -> today.plusMonths(periodsNeeded)
-                                                }
-                                                goal.copy(
-                                                    totalSavedSoFar = goal.totalSavedSoFar + capped,
-                                                    totalSavedSoFar_clock = superClk,
-                                                    targetDate = newTargetDate,
-                                                    targetDate_clock = superClk
-                                                )
-                                            } else {
-                                                goal.copy(totalSavedSoFar = goal.totalSavedSoFar + capped,
-                                                    totalSavedSoFar_clock = superClk)
-                                            }
-                                        } else if (
-                                            goal.targetDate == null &&
                                             goal.contributionPerPeriod > 0 &&
                                             mode == SuperchargeMode.REDUCE_CONTRIBUTIONS
                                         ) {
@@ -3388,6 +3367,17 @@ class MainActivity : ComponentActivity() {
                     "simulation_graph_help" -> SimulationGraphHelpScreen(
                         onBack = { currentScreen = "simulation_graph" }
                     )
+                    "budget_calendar" -> BudgetCalendarScreen(
+                        recurringExpenses = recurringExpenses.toList().active,
+                        incomeSources = incomeSources.toList().active,
+                        currencySymbol = currencySymbol,
+                        weekStartSunday = weekStartSunday,
+                        onBack = { currentScreen = "main" },
+                        onHelpClick = { currentScreen = "budget_calendar_help" }
+                    )
+                    "budget_calendar_help" -> BudgetCalendarHelpScreen(
+                        onBack = { currentScreen = "budget_calendar" }
+                    )
                 }
 
                 // Dashboard quick-add dialogs (rendered over any screen)
@@ -3404,6 +3394,7 @@ class MainActivity : ComponentActivity() {
                         amortizationEntries = amortizationEntries.toList().active,
                         incomeSources = incomeSources.toList().active,
                         savingsGoals = savingsGoals.toList().active,
+                        pastSources = transactions.toList().active.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
                         onDismiss = { dashboardShowAddIncome = false },
                         onSave = { txn ->
                             runMatchingChain(txn)
@@ -3426,6 +3417,7 @@ class MainActivity : ComponentActivity() {
                         amortizationEntries = amortizationEntries.toList().active,
                         incomeSources = incomeSources.toList().active,
                         savingsGoals = savingsGoals.toList().active,
+                        pastSources = transactions.toList().active.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
                         onDismiss = { dashboardShowAddExpense = false },
                         onSave = { txn ->
                             runMatchingChain(txn)

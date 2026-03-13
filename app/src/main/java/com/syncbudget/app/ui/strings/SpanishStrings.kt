@@ -102,12 +102,12 @@ object SpanishStrings : AppStrings {
         superchargeNewPayoff = { date -> "Nueva fecha de pago: $date" },
         superchargeNewCompletion = { date -> "Se completa: $date" },
         superchargeAutoAdjust = "Las contribuciones se ajustan autom\u00e1ticamente",
-        superchargeTargetDateNote = "Esto cambiar\u00e1 tu fecha objetivo",
         superchargeExceedsCash = { total -> "Total ($total) excede el efectivo disponible" },
         upgradeForFullWidget = "Actualizar para widget completo",
         adPlaceholder = "Anuncio",
         switchToPieChart = "Cambiar a gr\u00e1fico circular",
-        switchToBarChart = "Cambiar a gr\u00e1fico de barras"
+        switchToBarChart = "Cambiar a gr\u00e1fico de barras",
+        budgetCalendar = "Calendario"
     )
 
     override val settings = SettingsStrings(
@@ -218,13 +218,14 @@ object SpanishStrings : AppStrings {
         saveTransactions = "Guardar transacciones",
         loadTransactions = "Importar / Cargar",
         csv = "CSV",
+        xls = "Excel (.xlsx)",
         encrypted = "Cifrado",
         password = "Contrase\u00f1a",
         confirmPassword = "Confirmar contrase\u00f1a",
         selectFile = "Seleccionar archivo",
         usBank = "US Bank",
-        secureSyncCsv = "Archivo CSV de SecureSync",
-        secureSyncEncrypted = "Archivo cifrado de SecureSync",
+        secureSyncCsv = "Archivo CSV de BudgeXync",
+        secureSyncEncrypted = "Archivo cifrado de BudgeXync",
         duplicateDetected = "Posible duplicado",
         duplicateExisting = "Existente:",
         duplicateNew = "Nuevo:",
@@ -332,11 +333,8 @@ object SpanishStrings : AppStrings {
         name = "Descripci\u00f3n",
         targetAmount = "Monto objetivo",
         startingSavedAmount = "Monto ya ahorrado",
-        targetDate = "Fecha objetivo",
-        fixedContribution = "Contribuci\u00f3n fija",
         contributionPerPeriod = "Contribuci\u00f3n por per\u00edodo",
-        selectTargetDate = "Seleccionar fecha objetivo",
-        targetDateLabel = { date -> "Fecha objetivo: $date" },
+        calculateWithTargetDate = "Calcular con fecha objetivo",
         goalReached = "\u00a1Meta alcanzada!",
         paused = "Pausada",
         budgetReduction = { amount, period -> "-$amount/$period" },
@@ -350,7 +348,6 @@ object SpanishStrings : AppStrings {
         resumeAll = "Reanudar todas",
         pause = "Pausar",
         resume = "Reanudar",
-        selectAFutureDate = "Selecciona una fecha futura",
         requiredNameExample = "Obligatorio, ej. Llantas nuevas",
         exampleTargetAmount = "ej. 1000.00",
         exampleContribution = "ej. 5.00",
@@ -511,8 +508,8 @@ object SpanishStrings : AppStrings {
 
     override val dashboardHelp = DashboardHelpStrings(
         title = "Ayuda del panel principal",
-        welcomeTitle = "Bienvenido a SecureSync Presupuesto Diario",
-        welcomeBody = "SecureSync Presupuesto Diario es una app de presupuesto que prioriza tu privacidad, " +
+        welcomeTitle = "Bienvenido a BudgeXync",
+        welcomeBody = "BudgeXync es una app de presupuesto que prioriza tu privacidad, " +
             "dise\u00f1ada para darte una imagen clara y en tiempo real de cu\u00e1nto puedes gastar " +
             "con tranquilidad en este momento. A diferencia de los rastreadores tradicionales que solo " +
             "te muestran en qu\u00e9 gastaste, esta app te dice en qu\u00e9 puedes gastar \u2014 " +
@@ -618,7 +615,7 @@ object SpanishStrings : AppStrings {
         step6Title = "Empieza a registrar",
         step6Desc = "Vuelve al panel principal. Tu pantalla Solari ahora muestra tu efectivo disponible. Registra gastos a medida que gastas y observa c\u00f3mo se actualiza el n\u00famero en tiempo real.",
         habitsTitle = "Construyendo mejores h\u00e1bitos financieros",
-        habitsBody = "SecureSync Presupuesto Diario es m\u00e1s que un rastreador \u2014 es una herramienta para crear " +
+        habitsBody = "BudgeXync es m\u00e1s que un rastreador \u2014 es una herramienta para crear " +
             "conciencia financiera duradera. As\u00ed puedes sacarle el m\u00e1ximo provecho:",
         tipKnowTitle = "Conoce tu n\u00famero",
         tipKnowBody = "Revisa la pantalla Solari al menos una vez al d\u00eda. El simple hecho de saber " +
@@ -663,7 +660,7 @@ object SpanishStrings : AppStrings {
         syncArrowsBullet = "Flechas de sincronizaci\u00f3n \u2014 muestran el estado de conexi\u00f3n con la nube (verde = conectado, amarillo = sincronizando, naranja = obsoleto, rojo = error)",
         syncDotsBullet = "Puntos de colores \u2014 uno por dispositivo familiar (hasta 4), mostrando cu\u00e1ndo sincroniz\u00f3 cada dispositivo: verde (< 5 min), amarillo (< 2 hrs), naranja (< 24 hrs), rojo (> 24 hrs), gris (nunca)",
         privacyTitle = "Privacidad y seguridad",
-        privacyBody = "Tus datos financieros permanecen en tu dispositivo por defecto. SecureSync Presupuesto Diario no " +
+        privacyBody = "Tus datos financieros permanecen en tu dispositivo por defecto. BudgeXync no " +
             "recopila an\u00e1lisis y no comparte tus datos con nadie. Al exportar tus transacciones, puedes elegir formato cifrado " +
             "(ChaCha20-Poly1305 con derivaci\u00f3n de clave PBKDF2) para m\u00e1xima seguridad. " +
             "Si activas la Sincronizaci\u00f3n Familiar, los datos se comparten entre tus dispositivos con cifrado de extremo a extremo \u2014 " +
@@ -897,11 +894,11 @@ object SpanishStrings : AppStrings {
         savingTitle = "Guardar transacciones",
         savingBody = "Toca el icono de Guardar en la barra superior para exportar todas las transacciones a un archivo. Dos formatos est\u00e1n disponibles:",
         csvFormatTitle = "Formato CSV",
-        csvFormatBody = "Guarda tus transacciones como un archivo CSV de texto plano (syncbudget_transactions.csv). " +
+        csvFormatBody = "Guarda tus transacciones como un archivo CSV de texto plano (budgexync_transactions.csv). " +
             "Este archivo conserva todos los datos incluyendo categor\u00edas y puede cargarse de nuevo en la app. " +
             "Tambi\u00e9n se puede abrir en hojas de c\u00e1lculo como Excel o Google Sheets para su revisi\u00f3n.",
         encryptedFormatTitle = "Formato cifrado",
-        encryptedFormatBody = "Guarda tus transacciones en un archivo cifrado (syncbudget_transactions.enc) " +
+        encryptedFormatBody = "Guarda tus transacciones en un archivo cifrado (budgexync_transactions.enc) " +
             "protegido con una contrase\u00f1a que t\u00fa eliges. Este es el formato recomendado para respaldos " +
             "y transferencia de datos entre dispositivos, ya que mantiene tu informaci\u00f3n financiera privada.",
         encryptionDetailsTitle = "Detalles del cifrado",
@@ -953,10 +950,10 @@ object SpanishStrings : AppStrings {
         loadUsBank = "US Bank",
         loadUsBankDesc = "Importa transacciones desde un archivo CSV de US Bank. " +
             "Las transacciones se categorizan autom\u00e1ticamente seg\u00fan tu historial de comercios.",
-        loadCsv = "Archivo CSV de SecureSync",
+        loadCsv = "Archivo CSV de BudgeXync",
         loadCsvDesc = "Carga un archivo CSV guardado previamente desde esta app. " +
             "Todas las categor\u00edas y datos se conservan exactamente como estaban.",
-        loadEncrypted = "Archivo cifrado de SecureSync",
+        loadEncrypted = "Archivo cifrado de BudgeXync",
         loadEncryptedDesc = "Carga un archivo cifrado guardado previamente. " +
             "Debes ingresar la contrase\u00f1a usada al guardar el archivo.",
         loadPasswordNote = "Para archivos cifrados, el campo de contrase\u00f1a aparece autom\u00e1ticamente al seleccionar el " +
@@ -1487,6 +1484,39 @@ object SpanishStrings : AppStrings {
         tip2 = "Usa los botones +/\u2013 para ajustar el zoom por pasos.",
         tip3 = "Prueba primero un monto peque\u00f1o de ahorro por per\u00edodo, luego aum\u00e9ntalo para encontrar un equilibrio c\u00f3modo entre ahorrar y gastar.",
         tip4 = "Si tu \"Ahorro por Per\u00edodo\" excede tu presupuesto, el gr\u00e1fico mostrar\u00e1 un mensaje \u2014 esto significa que tu meta de ahorro no es sostenible con tus ingresos actuales."
+    )
+
+    override val budgetCalendar = BudgetCalendarStrings(
+        title = "Calendario",
+        income = "Ingresos",
+        expenses = "Gastos",
+        dayDetails = "Detalles del D\u00eda",
+        noEvents = "No hay elementos recurrentes en este d\u00eda",
+        totalIncome = { amount -> "Total ingresos: $amount" },
+        totalExpenses = { amount -> "Total gastos: $amount" },
+        sun = "Dom", mon = "Lun", tue = "Mar", wed = "Mié", thu = "Jue", fri = "Vie", sat = "Sáb"
+    )
+
+    override val budgetCalendarHelp = BudgetCalendarHelpStrings(
+        title = "Ayuda del Calendario",
+        overviewTitle = "\u00bfQu\u00e9 es el Calendario de Presupuesto?",
+        overviewBody = "El Calendario de Presupuesto muestra cu\u00e1ndo est\u00e1n programados tus ingresos y gastos " +
+            "recurrentes durante el mes. Te da una vista general de tus compromisos financieros " +
+            "para que puedas ver de un vistazo qu\u00e9 d\u00edas tienen pagos entrando o saliendo.",
+        colorsTitle = "Leyenda de Colores",
+        colorsBody = "Cada d\u00eda del calendario est\u00e1 codificado por color seg\u00fan los eventos de ese d\u00eda:",
+        greenDesc = "Verde \u2014 Hay ingresos programados para este d\u00eda",
+        redDesc = "Rojo \u2014 Hay un gasto programado para este d\u00eda",
+        splitDesc = "Dividido (verde y rojo) \u2014 Tanto ingresos como gastos caen en el mismo d\u00eda",
+        navigationTitle = "Navegaci\u00f3n por Meses",
+        navigationBody = "Usa las flechas izquierda y derecha en la parte superior del calendario para " +
+            "moverte entre meses. El calendario muestra el mes actual al abrirlo.",
+        detailsTitle = "Ver Detalles",
+        detailsBody = "Toca cualquier d\u00eda resaltado para ver un desglose de todas las fuentes de ingreso y " +
+            "gastos recurrentes programados para ese d\u00eda, incluyendo el nombre y el monto.",
+        tipsTitle = "Consejos",
+        tip1 = "Usa el calendario para detectar d\u00edas con muchos gastos y planifica tus compras alrededor de ellos.",
+        tip2 = "Si ves muchos d\u00edas rojos juntos, considera ajustar las fechas de vencimiento cuando sea posible."
     )
 
     override val widgetTransaction = WidgetTransactionStrings(

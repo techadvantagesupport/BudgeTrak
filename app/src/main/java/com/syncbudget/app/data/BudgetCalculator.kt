@@ -187,33 +187,34 @@ object BudgetCalculator {
         budgetPeriod: BudgetPeriod,
         today: LocalDate = LocalDate.now()
     ): Double {
-        val oneYearAhead = today.plusYears(1)
+        // Use theoretical rates to avoid alignment artifacts
+        // (e.g. biweekly income hitting 27 vs 26 paychecks in a 1-year window)
+        val periodsPerYear = when (budgetPeriod) {
+            BudgetPeriod.DAILY -> 365.25
+            BudgetPeriod.WEEKLY -> 365.25 / 7.0
+            BudgetPeriod.MONTHLY -> 12.0
+        }
 
-        val periodsPerYear = countPeriodsCompleted(today, oneYearAhead, budgetPeriod)
-        if (periodsPerYear <= 0) return 0.0
-
-        // Total income over the next year
-        var totalIncome = 0.0
+        var totalAnnualIncome = 0.0
         for (src in incomeSources) {
-            val occurrences = generateOccurrences(
-                src.repeatType, src.repeatInterval, src.startDate,
-                src.monthDay1, src.monthDay2, today, oneYearAhead
-            )
-            totalIncome += src.amount * occurrences.size
+            totalAnnualIncome += src.amount * theoreticalAnnualOccurrences(src.repeatType, src.repeatInterval)
         }
 
-        // Total recurring expenses over the next year
-        var totalExpenses = 0.0
+        var totalAnnualExpenses = 0.0
         for (exp in recurringExpenses) {
-            val occurrences = generateOccurrences(
-                exp.repeatType, exp.repeatInterval, exp.startDate,
-                exp.monthDay1, exp.monthDay2, today, oneYearAhead
-            )
-            totalExpenses += exp.amount * occurrences.size
+            totalAnnualExpenses += exp.amount * theoreticalAnnualOccurrences(exp.repeatType, exp.repeatInterval)
         }
 
-        // Discretionary budget per period = surplus spread evenly
-        return roundCents(maxOf(0.0, (totalIncome - totalExpenses) / periodsPerYear))
+        return roundCents(maxOf(0.0, (totalAnnualIncome - totalAnnualExpenses) / periodsPerYear))
+    }
+
+    fun theoreticalAnnualOccurrences(repeatType: RepeatType, repeatInterval: Int): Double = when (repeatType) {
+        RepeatType.DAYS -> 365.25 / repeatInterval
+        RepeatType.WEEKS -> 365.25 / (repeatInterval * 7)
+        RepeatType.BI_WEEKLY -> 365.25 / 14
+        RepeatType.MONTHS -> 12.0 / repeatInterval
+        RepeatType.BI_MONTHLY -> 24.0
+        RepeatType.ANNUAL -> 1.0
     }
 
     fun countPeriodsCompleted(from: LocalDate, to: LocalDate, budgetPeriod: BudgetPeriod): Int {

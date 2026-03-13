@@ -118,12 +118,12 @@ object TranslationContext {
         "superchargeNewPayoff" to "Label showing the new payoff date after supercharging. Lambda: 'date' is a formatted date.",
         "superchargeNewCompletion" to "Label showing when the goal will be completed after supercharging. Lambda: 'date' is a formatted date.",
         "superchargeAutoAdjust" to "Informational note that savings contributions will recalculate automatically after supercharging.",
-        "superchargeTargetDateNote" to "Warning note that supercharging will alter the target completion date of a savings goal.",
         "superchargeExceedsCash" to "Error message shown when supercharge allocations exceed available cash. Lambda: 'total' is a formatted currency amount.",
         "upgradeForFullWidget" to "Overlay text drawn on the home screen widget for non-paid users, encouraging them to upgrade for full widget functionality.",
         "adPlaceholder" to "Short placeholder label shown in a blank ad banner area for non-paid users. Abbreviation of 'advertisement'.",
         "switchToPieChart" to "Accessibility content description for the chart toggle button when the current view is a bar chart. Describes what tapping will do.",
-        "switchToBarChart" to "Accessibility content description for the chart toggle button when the current view is a pie chart. Describes what tapping will do."
+        "switchToBarChart" to "Accessibility content description for the chart toggle button when the current view is a pie chart. Describes what tapping will do.",
+        "budgetCalendar" to "Navigation button label to open a monthly calendar view of recurring income and expenses."
     )
 
     // ── Settings Strings ──
@@ -240,6 +240,7 @@ object TranslationContext {
         "saveTransactions" to "Dialog title when exporting transactions to a file.",
         "loadTransactions" to "Dialog title when importing transactions from a file. Combined label: Import / Load.",
         "csv" to "File format label for comma-separated values. Technical abbreviation, keep as 'CSV'.",
+        "xls" to "File format label for Excel spreadsheet export. Technical abbreviation, keep as 'XLS'.",
         "encrypted" to "File format label for password-protected encrypted files. Adjective meaning data is cryptographically secured.",
         "password" to "Form field label for entering a password to encrypt/decrypt a file. Noun.",
         "confirmPassword" to "Form field label for re-entering a password to verify it matches.",
@@ -372,7 +373,6 @@ object TranslationContext {
         "resumeAll" to "Button label to restart deductions for all savings goals. 'Resume' means to continue after a pause — not a CV/résumé document.",
         "pause" to "Button label to temporarily stop deductions for a single savings goal. Action verb.",
         "resume" to "Button label to restart deductions for a single paused savings goal. 'Resume' means to continue after a pause — not a CV/résumé document.",
-        "selectAFutureDate" to "Validation hint shown when the user needs to pick a date in the future.",
         "requiredNameExample" to "Placeholder text in the goal name field showing an example (e.g., 'New Tires').",
         "exampleTargetAmount" to "Placeholder text in the target amount field showing an example value.",
         "exampleContribution" to "Placeholder text in the fixed contribution field showing an example value.",
@@ -441,7 +441,14 @@ object TranslationContext {
         "savingsWhyLink" to "Tappable link text asking 'Why?' — opens an explanation of why savings are needed.",
         "savingsWhyTitle" to "Dialog title explaining why a certain savings amount is needed.",
         "savingsWhyBody" to "Long explanatory text about cash flow simulation: the app projects future income and expenses to find the lowest cash point and tells you how much buffer you need. Contains line breaks.",
-        "savingsLowPointToast" to "Toast notification showing the date of the projected lowest cash balance point. Lambda: 'date' is a formatted date."
+        "savingsLowPointToast" to "Toast notification showing the date of the projected lowest cash balance point. Lambda: 'date' is a formatted date.",
+        "viewSimulationChart" to "Button label to open the Cash Flow Simulation chart screen. Shows projected cash balance over time.",
+        "simulationGraphTitle" to "Screen title for the Cash Flow Simulation chart page.",
+        "simulationGraphDescription" to "Instructional text at the top of the simulation chart screen explaining what it shows and how to use the inputs.",
+        "simulationSavingsLabel" to "Text field label for the current savings input on the simulation chart. The amount of money the user currently has saved.",
+        "simulationSavedPerLabel" to "Text field label for additional per-period savings on the simulation chart. Lambda: 'period' is the budget period name (day/week/month).",
+        "simulationSavingsExceedBudget" to "Warning message shown when the user's per-period savings amount exceeds their budget — the savings rate is unsustainable.",
+        "simulationNoData" to "Message shown on the simulation chart when there is no data to display (no income or expenses configured)."
     )
 
     // ── Sync (Family Sync) Strings ──
@@ -527,7 +534,7 @@ object TranslationContext {
     val dashboardHelp = mapOf(
         "title" to "Help page title for the Dashboard screen.",
         "welcomeTitle" to "Help section title: welcome message introducing the app.",
-        "welcomeBody" to "Help text introducing SecureSync Daily Budget as a privacy-first budgeting app that shows how much you can safely spend.",
+        "welcomeBody" to "Help text introducing BudgeXync as a privacy-first budgeting app that shows how much you can safely spend.",
         "dailyBudgetNumberTitle" to "Help section title explaining the large number on the main display.",
         "dailyBudgetNumberBody" to "Help text explaining that the large number is Available Cash — the amount you can spend without jeopardizing bills or goals.",
         "solariDisplayTitle" to "Help section title for the Solari-style flip display (inspired by train station departure boards).",
@@ -845,9 +852,9 @@ object TranslationContext {
         "loadingBody" to "Help text: tap Load icon to import; three formats supported.",
         "loadUsBank" to "Help text: US Bank import format label.",
         "loadUsBankDesc" to "Help text: import from US Bank CSV with auto-categorization.",
-        "loadCsv" to "Help text: SecureSync CSV import format label.",
+        "loadCsv" to "Help text: BudgeXync CSV import format label.",
         "loadCsvDesc" to "Help text: load a CSV previously saved from this app, categories preserved.",
-        "loadEncrypted" to "Help text: SecureSync encrypted import format label.",
+        "loadEncrypted" to "Help text: BudgeXync encrypted import format label.",
         "loadEncryptedDesc" to "Help text: load encrypted file with the password used during save.",
         "loadPasswordNote" to "Help note: password field appears when encrypted format is selected; file picker disabled until 8+ chars entered.",
         "fullRestoreNote" to "Help note about full backup restore options: 'Load All Data' replaces everything, 'Load Transactions Only' is safer.",
@@ -1215,5 +1222,65 @@ object TranslationContext {
         "budgetIncomeBody" to "Widget dialog body for budget income match. Lambda: 'source' is the income source name.",
         "budgetIncomeLink" to "Widget button to confirm the income is the expected budget income (already budgeted).",
         "budgetIncomeNoLink" to "Widget button to indicate the income is extra/unexpected (not already budgeted)."
+    )
+
+    // ── Simulation Graph Help Strings ──
+
+    val simulationGraphHelp = mapOf(
+        "title" to "Screen title for the Cash Flow Simulation help page.",
+        "overviewTitle" to "Help section heading introducing what the simulation chart is.",
+        "overviewBody" to "Help text explaining the simulation projects cash balance over 18 months based on income, expenses, and savings.",
+        "howItWorksTitle" to "Help section heading explaining the simulation methodology.",
+        "howItWorksBody" to "Help text describing how the chart calculates daily cash flow from income, expenses, and budget deductions.",
+        "currentSavingsTitle" to "Help section heading for the Current Savings input field.",
+        "currentSavingsBody" to "Help text explaining the Current Savings input: sets the starting balance for the chart. Default keeps the line above zero.",
+        "savedPerPeriodTitle" to "Help section heading for the Saved per Period input field.",
+        "savedPerPeriodBody" to "Help text explaining the Saved per Period input: additional money set aside beyond configured Savings Goals.",
+        "insightsTitle" to "Help section heading for interpreting chart patterns.",
+        "insightsBody" to "Help text describing how to read the chart: rising means surplus, falling means deficit, dips below zero mean shortfall.",
+        "tipsTitle" to "Help section heading for usage tips.",
+        "tip1" to "Help tip: pinch to zoom and swipe to scroll the chart timeline.",
+        "tip2" to "Help tip: use +/- buttons for step-based zoom control.",
+        "tip3" to "Help tip: start with a small savings amount and increase it gradually.",
+        "tip4" to "Help tip: if savings exceeds budget, the chart shows an unsustainable savings warning."
+    )
+
+    // ── Budget Calendar Strings ──
+
+    val budgetCalendar = mapOf(
+        "title" to "Screen title for the Budget Calendar page showing a monthly view of recurring financial events.",
+        "income" to "Section header in the day-detail popup listing income sources scheduled on that day.",
+        "expenses" to "Section header in the day-detail popup listing recurring expenses due on that day.",
+        "dayDetails" to "Popup dialog title prefix when tapping a calendar day to see its details.",
+        "noEvents" to "Empty state message in the day-detail popup when no income or expenses are scheduled on that day.",
+        "totalIncome" to "Summary line in the day-detail popup showing combined income total. Lambda: 'amount' is formatted currency.",
+        "totalExpenses" to "Summary line in the day-detail popup showing combined expense total. Lambda: 'amount' is formatted currency.",
+        "sun" to "Three-letter weekday abbreviation for Sunday. Used as a calendar column header.",
+        "mon" to "Three-letter weekday abbreviation for Monday. Used as a calendar column header.",
+        "tue" to "Three-letter weekday abbreviation for Tuesday. Used as a calendar column header.",
+        "wed" to "Three-letter weekday abbreviation for Wednesday. Used as a calendar column header.",
+        "thu" to "Three-letter weekday abbreviation for Thursday. Used as a calendar column header.",
+        "fri" to "Three-letter weekday abbreviation for Friday. Used as a calendar column header.",
+        "sat" to "Three-letter weekday abbreviation for Saturday. Used as a calendar column header."
+    )
+
+    // ── Budget Calendar Help Strings ──
+
+    val budgetCalendarHelp = mapOf(
+        "title" to "Screen title for the Budget Calendar help page.",
+        "overviewTitle" to "Help section heading introducing what the Budget Calendar is.",
+        "overviewBody" to "Help text explaining the calendar shows when recurring income and expenses are scheduled throughout the month.",
+        "colorsTitle" to "Help section heading explaining the color coding system.",
+        "colorsBody" to "Help text introducing the color legend for calendar day highlights.",
+        "greenDesc" to "Color legend item: green background means income is scheduled on that day.",
+        "redDesc" to "Color legend item: red background means an expense is due on that day.",
+        "splitDesc" to "Color legend item: split green/red background means both income and expenses fall on the same day.",
+        "navigationTitle" to "Help section heading explaining how to navigate between months.",
+        "navigationBody" to "Help text explaining the left/right arrows to change months.",
+        "detailsTitle" to "Help section heading explaining how to view day details.",
+        "detailsBody" to "Help text explaining that tapping a highlighted day shows a breakdown of income and expenses.",
+        "tipsTitle" to "Help section heading for usage tips.",
+        "tip1" to "Help tip: use the calendar to spot heavy expense days and plan spending around them.",
+        "tip2" to "Help tip: if many red days are clustered, consider adjusting payment schedules."
     )
 }
