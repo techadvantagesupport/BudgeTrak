@@ -10,3 +10,7 @@
 
 # Keep CryptoHelper (JCE reflection)
 -keep class com.syncbudget.app.data.CryptoHelper { *; }
+
+# AndroidX Security (EncryptedSharedPreferences)
+-keep class androidx.security.crypto.** { *; }
+-dontwarn com.google.crypto.tink.**

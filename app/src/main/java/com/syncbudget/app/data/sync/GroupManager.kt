@@ -35,8 +35,12 @@ object GroupManager {
     }
 
     fun getEncryptionKey(context: Context): ByteArray? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val keyStr = prefs.getString("encryptionKey", null) ?: return null
+        // Try encrypted prefs first, then fall back to plain (pre-migration)
+        val securePrefs = SecurePrefs.get(context)
+        val keyStr = securePrefs.getString("encryptionKey", null)
+            ?: context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString("encryptionKey", null)
+            ?: return null
         return Base64.decode(keyStr, Base64.NO_WRAP)
     }
 
@@ -68,12 +72,14 @@ object GroupManager {
         random.nextBytes(key)
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        // TODO(security): Move encryption key to EncryptedSharedPreferences
         prefs.edit()
             .putString("groupId", groupId)
-            .putString("encryptionKey", Base64.encodeToString(key, Base64.NO_WRAP))
             .putBoolean("isAdmin", true)
             .apply()
+        // Store encryption key in encrypted prefs
+        SecurePrefs.get(context).edit()
+            .putString("encryptionKey", Base64.encodeToString(key, Base64.NO_WRAP))
+            .commit()
 
         // Set familyTimezone to device's default timezone in SharedSettings
         val currentSettings = SharedSettingsRepository.load(context)
@@ -88,12 +94,14 @@ object GroupManager {
         val pairingData = FirestoreService.redeemPairingCode(pairingCode) ?: return false
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        // TODO(security): Move encryption key to EncryptedSharedPreferences
         prefs.edit()
             .putString("groupId", pairingData.groupId)
-            .putString("encryptionKey", pairingData.encryptedKey)
             .putBoolean("isAdmin", false)
             .apply()
+        // Store encryption key in encrypted prefs
+        SecurePrefs.get(context).edit()
+            .putString("encryptionKey", pairingData.encryptedKey)
+            .commit()
 
         // Register this device in the group
         val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
@@ -127,6 +135,8 @@ object GroupManager {
             .remove("catIdRemap")
             .remove("syncDirty")
             .apply()
+        // Also clear from encrypted prefs
+        try { SecurePrefs.get(context).edit().remove("encryptionKey").commit() } catch (_: Exception) {}
         SyncWorker.cancel(context)
     }
 

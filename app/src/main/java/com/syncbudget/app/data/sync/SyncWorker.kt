@@ -42,8 +42,10 @@ class SyncWorker(
         if (!syncPrefs.getBoolean("syncDirty", false)) return Result.success()
 
         val groupId = syncPrefs.getString("groupId", null) ?: return Result.success()
-        // TODO(security): Move encryption key to EncryptedSharedPreferences
-        val keyBase64 = syncPrefs.getString("encryptionKey", null) ?: return Result.success()
+        // Read key from encrypted prefs (with plain fallback for pre-migration)
+        val keyBase64 = SecurePrefs.get(applicationContext).getString("encryptionKey", null)
+            ?: syncPrefs.getString("encryptionKey", null)
+            ?: return Result.success()
 
         val encryptionKey = Base64.decode(keyBase64, Base64.NO_WRAP)
         val deviceId = SyncIdGenerator.getOrCreateDeviceId(applicationContext)
