@@ -552,6 +552,9 @@ data class SyncStrings(
     val enterNickname: String,
     val createGroupTitle: String,
     val renameDevice: String,
+    val removeDeviceTitle: String,
+    val removeDeviceMessage: (deviceName: String) -> String,
+    val removeDeviceConfirm: String,
     val copy: String
 )
 

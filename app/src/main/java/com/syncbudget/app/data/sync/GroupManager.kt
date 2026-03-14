@@ -122,6 +122,10 @@ object GroupManager {
             .remove("lastSyncVersion")
             .remove("lastPushedClock")
             .remove("lastSnapshotVersion")
+            .remove("lastSuccessfulSync")
+            .remove("lastIntegrityCheckTime")
+            .remove("catIdRemap")
+            .remove("syncDirty")
             .apply()
         SyncWorker.cancel(context)
     }

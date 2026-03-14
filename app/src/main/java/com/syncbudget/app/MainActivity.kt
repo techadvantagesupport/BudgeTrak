@@ -694,9 +694,13 @@ class MainActivity : ComponentActivity() {
                         // locally-owned records.  Unlike the old blanket approach
                         // this preserves field clocks set by the other device,
                         // preventing rescue from overwriting cross-device edits.
+                        // IMPORTANT: use a SINGLE clock tick for the entire batch
+                        // so that all rescued clocks == lastPushedClock after push,
+                        // preventing an infinite re-stamp → push → re-stamp loop.
                         val lpc = syncPrefs.getLong("lastPushedClock", 0L)
                         if (lpc > 0) {
                             val stranded = { clk: Long -> clk in 1 until lpc }
+                            val rc = lamportClock.tick()  // one clock for entire rescue batch
                             var anyRescued = false
                             for (i in transactions.indices) {
                                 val t = transactions[i]
@@ -711,7 +715,6 @@ class MainActivity : ComponentActivity() {
                                     stranded(t.linkedIncomeSourceAmount_clock) || stranded(t.linkedSavingsGoalId_clock) ||
                                     stranded(t.linkedSavingsGoalAmount_clock) || stranded(t.deviceId_clock) ||
                                     stranded(t.deleted_clock)) {
-                                    val rc = lamportClock.tick()
                                     anyRescued = true
                                     transactions[i] = t.copy(
                                         source_clock = if (stranded(t.source_clock)) rc else t.source_clock,
@@ -745,7 +748,6 @@ class MainActivity : ComponentActivity() {
                                     stranded(r.repeatInterval_clock) || stranded(r.startDate_clock) ||
                                     stranded(r.monthDay1_clock) || stranded(r.monthDay2_clock) ||
                                     stranded(r.deviceId_clock) || stranded(r.deleted_clock)) {
-                                    val rc = lamportClock.tick()
                                     anyRescued = true
                                     recurringExpenses[i] = r.copy(
                                         source_clock = if (stranded(r.source_clock)) rc else r.source_clock,
@@ -770,7 +772,6 @@ class MainActivity : ComponentActivity() {
                                     stranded(s.repeatInterval_clock) || stranded(s.startDate_clock) ||
                                     stranded(s.monthDay1_clock) || stranded(s.monthDay2_clock) ||
                                     stranded(s.deviceId_clock) || stranded(s.deleted_clock)) {
-                                    val rc = lamportClock.tick()
                                     anyRescued = true
                                     incomeSources[i] = s.copy(
                                         source_clock = if (stranded(s.source_clock)) rc else s.source_clock,
@@ -793,8 +794,11 @@ class MainActivity : ComponentActivity() {
                         // DeltaBuilder piggybacking can include them, preventing
                         // skeleton records on the receiving device.
                         // Runs every cycle because CSV import can re-introduce clk=0.
+                        // Uses a single clock tick for the entire batch to prevent
+                        // push loop oscillation (same fix as rescue above).
                         run {
                             var changed = false
+                            val clk0Fix = lamportClock.tick()
                             transactions.forEachIndexed { i, t ->
                                 // Only fix records in the sync system (have a deviceId)
                                 if (t.deviceId.isEmpty()) return@forEachIndexed
@@ -808,17 +812,16 @@ class MainActivity : ComponentActivity() {
                                 val needsBudgetIncome = t.isBudgetIncome && t.isBudgetIncome_clock == 0L
                                 if (needsSource || needsAmount || needsDate || needsType ||
                                     needsDesc || needsDeviceId || needsExclude || needsBudgetIncome) {
-                                    val clk = lamportClock.tick()
                                     changed = true
                                     transactions[i] = t.copy(
-                                        source_clock = if (needsSource) clk else t.source_clock,
-                                        amount_clock = if (needsAmount) clk else t.amount_clock,
-                                        date_clock = if (needsDate) clk else t.date_clock,
-                                        type_clock = if (needsType) clk else t.type_clock,
-                                        description_clock = if (needsDesc) clk else t.description_clock,
-                                        deviceId_clock = if (needsDeviceId) clk else t.deviceId_clock,
-                                        excludeFromBudget_clock = if (needsExclude) clk else t.excludeFromBudget_clock,
-                                        isBudgetIncome_clock = if (needsBudgetIncome) clk else t.isBudgetIncome_clock
+                                        source_clock = if (needsSource) clk0Fix else t.source_clock,
+                                        amount_clock = if (needsAmount) clk0Fix else t.amount_clock,
+                                        date_clock = if (needsDate) clk0Fix else t.date_clock,
+                                        type_clock = if (needsType) clk0Fix else t.type_clock,
+                                        description_clock = if (needsDesc) clk0Fix else t.description_clock,
+                                        deviceId_clock = if (needsDeviceId) clk0Fix else t.deviceId_clock,
+                                        excludeFromBudget_clock = if (needsExclude) clk0Fix else t.excludeFromBudget_clock,
+                                        isBudgetIncome_clock = if (needsBudgetIncome) clk0Fix else t.isBudgetIncome_clock
                                     )
                                 }
                             }
@@ -1117,8 +1120,12 @@ class MainActivity : ComponentActivity() {
                             syncErrorMessage = result.error
                             syncProgressMessage = null
                             pendingAdminClaim = result.pendingAdminClaim
-                            // Handle auto-leave on removal (skip for admin — admin
-                            // can't be removed, so this is likely a transient error)
+                            // Auto-leave only on explicit admin actions: the
+                            // SyncEngine checks Firestore for a "removed" flag on
+                            // the device doc or a "dissolved" status on the group
+                            // doc.  Only those produce "removed_from_group" or
+                            // "group_deleted" — transient errors, cache staleness,
+                            // and offline periods never trigger auto-leave.
                             if ((result.error == "removed_from_group" || result.error == "group_deleted") && !isSyncAdmin) {
                                 GroupManager.leaveGroup(context, localOnly = true)
                                 syncPrefs.edit()
@@ -3277,9 +3284,12 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
                                         saveAmortizationEntries()
+                                    } else {
+                                        syncErrorMessage = "Invalid or expired pairing code"
                                     }
-                                } catch (_: Exception) {
+                                } catch (e: Exception) {
                                     syncStatus = "error"
+                                    syncErrorMessage = e.message
                                 }
                             }
                         },
@@ -3385,6 +3395,15 @@ class MainActivity : ComponentActivity() {
                                         lastChangedBy = localDeviceId
                                     )
                                     SharedSettingsRepository.save(context, sharedSettings)
+                                } catch (_: Exception) {}
+                            }
+                        },
+                        onRemoveDevice = { targetDeviceId ->
+                            val gId = syncGroupId ?: return@FamilySyncScreen
+                            coroutineScope.launch {
+                                try {
+                                    FirestoreService.removeDevice(gId, targetDeviceId)
+                                    syncDevices = GroupManager.getDevices(gId)
                                 } catch (_: Exception) {}
                             }
                         },

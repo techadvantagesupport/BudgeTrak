@@ -50,9 +50,8 @@ class SyncEngine(
     private val lamportClock: LamportClock
 ) {
     companion object {
-        const val SNAPSHOT_CATCHUP_THRESHOLD = 500
-        const val SNAPSHOT_WRITE_THRESHOLD = 500
-        const val STALE_CHECK_DAYS = 3L
+        const val SNAPSHOT_CATCHUP_THRESHOLD = 100
+        const val SNAPSHOT_WRITE_THRESHOLD = 100
         const val INTEGRITY_CHECK_INTERVAL_MS = 30 * 60 * 1000L  // 30 minutes
     }
 
@@ -159,7 +158,17 @@ class SyncEngine(
                 }
             }
 
-            // Step 1: Check device registration; bootstrap from snapshot if new
+            // Step 1: Check for explicit removal/dissolution signals first
+            if (FirestoreService.isGroupDissolved(groupId)) {
+                syncLog("Group has been dissolved by admin")
+                return SyncResult(success = false, error = "group_deleted")
+            }
+            if (FirestoreService.isDeviceRemoved(groupId, deviceId)) {
+                syncLog("Device has been removed from group by admin")
+                return SyncResult(success = false, error = "removed_from_group")
+            }
+
+            // Step 1b: Check device registration; bootstrap from snapshot if new
             var deviceRecord = FirestoreService.getDeviceRecord(groupId, deviceId)
             var snapshotApplied = false
             var snapshotCatchUp = false
@@ -171,21 +180,16 @@ class SyncEngine(
                 deviceRecord = FirestoreService.getDeviceRecord(groupId, deviceId)
             }
             if (deviceRecord == null) {
-                // New device — try to bootstrap from snapshot
+                // No device record and no explicit removal — likely a new device
+                // or transient Firestore cache issue. Try to bootstrap from snapshot.
                 syncLog("No device record found — bootstrapping from snapshot")
                 reportProgress("Loading family data…")
                 val snapshot = FirestoreService.getSnapshot(groupId)
                 if (snapshot == null) {
-                    // Verify the group itself still exists before concluding removal
-                    val groupExists = try {
-                        FirestoreService.getGroupNextVersion(groupId)
-                        true
-                    } catch (_: Exception) { false }
-                    return if (groupExists) {
-                        SyncResult(success = false, error = "removed_from_group")
-                    } else {
-                        SyncResult(success = false, error = "group_deleted")
-                    }
+                    // No snapshot available — return a non-fatal error so the
+                    // sync loop retries without triggering auto-leave.
+                    syncLog("No snapshot available and no device record — will retry")
+                    return SyncResult(success = false, error = "device_not_found")
                 }
                 snapshotState = decryptSnapshot(snapshot)
                 if (snapshotState == null) {
@@ -218,24 +222,25 @@ class SyncEngine(
                     }
                     // else: fall through to normal delta fetch from version 0
                 } else if (lastSync > 0L) {
-                    // Existing device — check if stale enough to benefit from snapshot catch-up
-                    val daysSinceSync = (System.currentTimeMillis() - lastSync) / (24 * 60 * 60 * 1000L)
-                    if (daysSinceSync > STALE_CHECK_DAYS) {
-                        val nextVersion = FirestoreService.getGroupNextVersion(groupId)
-                        val deltasBehind = nextVersion - 1 - lastSyncVersion
-                        if (deltasBehind > SNAPSHOT_CATCHUP_THRESHOLD) {
-                            val snapshot = FirestoreService.getSnapshot(groupId)
-                            if (snapshot != null && snapshot.snapshotVersion > lastSyncVersion) {
-                                val decrypted = decryptSnapshot(snapshot)
-                                if (decrypted != null) {
-                                    snapshotState = decrypted
-                                    lastSyncVersion = snapshot.snapshotVersion
-                                    catchUpSnapshotVersion = snapshot.snapshotVersion
-                                    snapshotCatchUp = true
-                                }
+                    // Existing device — check if far enough behind to benefit
+                    // from snapshot catch-up.  Uses delta count only (no time
+                    // gate) so devices behind due to push loops, long offline
+                    // periods, or slow networks always get the fast path.
+                    val nextVersion = FirestoreService.getGroupNextVersion(groupId)
+                    val deltasBehind = nextVersion - 1 - lastSyncVersion
+                    if (deltasBehind > SNAPSHOT_CATCHUP_THRESHOLD) {
+                        syncLog("Device is $deltasBehind deltas behind — attempting snapshot catch-up")
+                        val snapshot = FirestoreService.getSnapshot(groupId)
+                        if (snapshot != null && snapshot.snapshotVersion > lastSyncVersion) {
+                            val decrypted = decryptSnapshot(snapshot)
+                            if (decrypted != null) {
+                                snapshotState = decrypted
+                                lastSyncVersion = snapshot.snapshotVersion
+                                catchUpSnapshotVersion = snapshot.snapshotVersion
+                                snapshotCatchUp = true
                             }
-                            // else: fall through to normal paginated fetch
                         }
+                        // else: fall through to normal paginated fetch
                     }
                 }
             }
@@ -604,19 +609,31 @@ class SyncEngine(
             if (localDeltas.isNotEmpty()) {
                 reportProgress("Sending local changes…")
 
-                val packet = DeltaPacket(
-                    sourceDeviceId = deviceId,
-                    timestamp = Instant.now(),
-                    changes = localDeltas
-                )
-                val serialized = DeltaSerializer.serialize(packet).toString().toByteArray()
-                val encrypted = CryptoHelper.encryptWithKey(serialized, encryptionKey)
-                val encoded = Base64.encodeToString(encrypted, Base64.NO_WRAP)
+                // Chunk large deltas to stay under Firestore's 1MB document
+                // limit.  200 records ≈ 200-400KB encoded, well within limits.
+                // Chunk large deltas and use adaptive timeouts: first chunk
+                // gets base timeout, subsequent chunks get extended timeout
+                // since the first push proved the connection works.
+                val chunks = localDeltas.chunked(200)
+                for ((chunkIdx, chunk) in chunks.withIndex()) {
+                    if (chunks.size > 1) {
+                        reportProgress("Sending batch ${chunkIdx + 1}/${chunks.size}…")
+                    }
+                    val packet = DeltaPacket(
+                        sourceDeviceId = deviceId,
+                        timestamp = Instant.now(),
+                        changes = chunk
+                    )
+                    val serialized = DeltaSerializer.serialize(packet).toString().toByteArray()
+                    val encrypted = CryptoHelper.encryptWithKey(serialized, encryptionKey)
+                    val encoded = Base64.encodeToString(encrypted, Base64.NO_WRAP)
 
-                syncLog("Pushing delta (${encoded.length} chars encoded)")
-                FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded)
+                    val pushTimeout = if (chunkIdx == 0) 30_000L else 60_000L
+                    syncLog("Pushing delta chunk ${chunkIdx + 1}/${chunks.size} (${encoded.length} chars, ${chunk.size} records)")
+                    FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded, pushTimeout)
+                }
                 deltasPushed = localDeltas.size
-                syncLog("Push complete ($deltasPushed records)")
+                syncLog("Push complete ($deltasPushed records in ${chunks.size} chunk(s))")
 
                 // Advance lastPushedClock AFTER successful push.  This ensures
                 // that if the push fails (e.g. network error), the delta will
@@ -888,9 +905,10 @@ class SyncEngine(
                 repairAttempted = didRepair
             )
         } catch (e: Exception) {
+            // Don't infer removal from Firestore exceptions — only explicit
+            // flags (checked in Step 1) trigger auto-leave.  PERMISSION_DENIED
+            // and NOT_FOUND are treated as transient/config errors.
             val errorCode = when {
-                e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.NOT_FOUND -> "group_deleted"
-                e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED -> "removed_from_group"
                 e is javax.crypto.AEADBadTagException -> "encryption_error"
                 else -> e.message
             }

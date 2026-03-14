@@ -1,7 +1,9 @@
 package com.syncbudget.app.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -144,6 +146,7 @@ fun FamilySyncScreen(
     generatedPairingCode: String?,
     onDismissPairingCode: () -> Unit,
     onRenameDevice: (deviceId: String, newName: String) -> Unit = { _, _ -> },
+    onRemoveDevice: (deviceId: String) -> Unit = {},
     onHelpClick: () -> Unit = {},
     onBack: () -> Unit
 ) {
@@ -158,6 +161,8 @@ fun FamilySyncScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameTargetDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var renameInput by remember { mutableStateOf("") }
+    var removeTargetDevice by remember { mutableStateOf<DeviceInfo?>(null) }
+    var showRemoveDialog by remember { mutableStateOf(false) }
     var showJoinDialog by remember { mutableStateOf(false) }
     var joinCodeInput by remember { mutableStateOf("") }
     var joinNicknameInput by remember { mutableStateOf("") }
@@ -473,17 +478,27 @@ fun FamilySyncScreen(
                 }
 
                 items(devices) { device ->
+                    @OptIn(ExperimentalFoundationApi::class)
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(
-                                if (isAdmin) Modifier.clickable {
-                                    renameTargetDevice = device
-                                    renameInput = device.deviceName
-                                    showRenameDialog = true
-                                } else Modifier
+                                if (isAdmin) Modifier.combinedClickable(
+                                    onClick = {
+                                        renameTargetDevice = device
+                                        renameInput = device.deviceName
+                                        showRenameDialog = true
+                                    },
+                                    onLongClick = {
+                                        // Only allow removing non-admin, non-self devices
+                                        if (device.deviceId != localDeviceId && !device.isAdmin) {
+                                            removeTargetDevice = device
+                                            showRemoveDialog = true
+                                        }
+                                    }
+                                ) else Modifier
                             )
                     ) {
                         Row(
@@ -875,6 +890,38 @@ fun FamilySyncScreen(
                         showRenameDialog = false
                         renameTargetDevice = null
                         renameInput = ""
+                    }) {
+                        Text(S.common.cancel)
+                    }
+                }
+            )
+        }
+
+        if (showRemoveDialog && removeTargetDevice != null) {
+            val target = removeTargetDevice!!
+            val displayName = target.deviceName.ifEmpty { target.deviceId.take(8) }
+            AdAwareAlertDialog(
+                onDismissRequest = {
+                    showRemoveDialog = false
+                    removeTargetDevice = null
+                },
+                title = { Text(S.sync.removeDeviceTitle) },
+                text = {
+                    Text(S.sync.removeDeviceMessage(displayName))
+                },
+                confirmButton = {
+                    DialogDangerButton(onClick = {
+                        onRemoveDevice(target.deviceId)
+                        showRemoveDialog = false
+                        removeTargetDevice = null
+                    }) {
+                        Text(S.sync.removeDeviceConfirm)
+                    }
+                },
+                dismissButton = {
+                    DialogSecondaryButton(onClick = {
+                        showRemoveDialog = false
+                        removeTargetDevice = null
                     }) {
                         Text(S.common.cancel)
                     }

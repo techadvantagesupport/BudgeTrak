@@ -521,6 +521,9 @@ object EnglishStrings : AppStrings {
         enterNickname = "Your name",
         createGroupTitle = "Create Group",
         renameDevice = "Rename Device",
+        removeDeviceTitle = "Remove Device",
+        removeDeviceMessage = { name -> "Remove \"$name\" from this group? The device will be disconnected from family sync." },
+        removeDeviceConfirm = "Remove",
         copy = "Copy"
     )
 

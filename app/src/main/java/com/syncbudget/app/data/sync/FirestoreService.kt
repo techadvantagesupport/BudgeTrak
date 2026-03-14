@@ -49,9 +49,11 @@ object FirestoreService {
 
     private val db: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
 
-    /** Timeout for individual Firestore operations (ms).  Prevents indefinite
-     *  hangs on flaky networks — the sync engine retries on the next cycle. */
+    /** Base timeout for individual Firestore operations (ms). */
     private const val OP_TIMEOUT_MS = 30_000L
+    /** Extended timeout used after a successful operation proves the
+     *  connection is working (just slow). */
+    private const val OP_TIMEOUT_EXTENDED_MS = 60_000L
 
     suspend fun getGroupNextVersion(groupId: String): Long = withTimeout(OP_TIMEOUT_MS) {
         val doc = db.collection("groups")
@@ -61,12 +63,15 @@ object FirestoreService {
         doc.getLong("nextDeltaVersion") ?: 1L
     }
 
-    suspend fun fetchDeltas(groupId: String, lastSyncVersion: Long, pageSize: Int = 200): List<FirestoreDelta> {
+    suspend fun fetchDeltas(groupId: String, lastSyncVersion: Long, pageSize: Int = 50): List<FirestoreDelta> {
         val allDeltas = mutableListOf<FirestoreDelta>()
         var cursor = lastSyncVersion
+        // First page gets base timeout; subsequent pages get extended
+        // timeout since a successful first page proves the connection works.
+        var timeout = OP_TIMEOUT_MS
 
         while (true) {
-            val snapshot = withTimeout(OP_TIMEOUT_MS) {
+            val snapshot = withTimeout(timeout) {
                 db.collection("groups")
                     .document(groupId)
                     .collection("deltas")
@@ -86,6 +91,8 @@ object FirestoreService {
                 )
             }
             allDeltas.addAll(page)
+            // Page succeeded — extend timeout for next page
+            timeout = OP_TIMEOUT_EXTENDED_MS
 
             if (page.size < pageSize) break
             cursor = page.last().version
@@ -125,6 +132,7 @@ object FirestoreService {
             .await()
 
         if (!doc.exists()) null
+        else if (doc.getBoolean("removed") == true) null  // treat removed as absent
         else DeviceRecord(
             deviceId = doc.getString("deviceId") ?: deviceId,
             deviceName = doc.getString("deviceName") ?: "",
@@ -134,20 +142,71 @@ object FirestoreService {
         )
     }
 
-    suspend fun getSnapshot(groupId: String): SnapshotRecord? = withTimeout(OP_TIMEOUT_MS) {
+    /** Check if the device has been explicitly removed by the admin. */
+    suspend fun isDeviceRemoved(groupId: String, deviceId: String): Boolean = withTimeout(OP_TIMEOUT_MS) {
         val doc = db.collection("groups")
             .document(groupId)
-            .collection("snapshots")
-            .document("latest")
+            .collection("devices")
+            .document(deviceId)
             .get()
             .await()
+        doc.exists() && doc.getBoolean("removed") == true
+    }
 
-        if (!doc.exists()) null
-        else SnapshotRecord(
-            snapshotVersion = doc.getLong("snapshotVersion") ?: 0L,
-            createdBy = doc.getString("createdBy") ?: "",
-            encryptedData = doc.getString("encryptedData") ?: "",
-            timestamp = doc.getLong("timestamp") ?: 0L
+    /** Check if the group has been dissolved by the admin. */
+    suspend fun isGroupDissolved(groupId: String): Boolean = withTimeout(OP_TIMEOUT_MS) {
+        val doc = db.collection("groups")
+            .document(groupId)
+            .get()
+            .await()
+        doc.exists() && doc.getString("status") == "dissolved"
+    }
+
+    /** Max encoded chars per snapshot chunk.  600K chars ≈ 600KB, well
+     *  under the 1MB Firestore document limit after field overhead. */
+    private const val SNAPSHOT_CHUNK_SIZE = 600_000
+
+    suspend fun getSnapshot(groupId: String): SnapshotRecord? {
+        val metaDoc = withTimeout(OP_TIMEOUT_MS) {
+            db.collection("groups")
+                .document(groupId)
+                .collection("snapshots")
+                .document("latest")
+                .get()
+                .await()
+        }
+
+        if (!metaDoc.exists()) return null
+        val chunkCount = metaDoc.getLong("chunkCount")?.toInt() ?: 0
+
+        val encryptedData: String
+        if (chunkCount > 0) {
+            // Multi-chunk snapshot: reassemble from chunk documents.
+            // Metadata fetch proved connectivity; use extended timeout
+            // for chunk reads on slow connections.
+            val sb = StringBuilder()
+            for (i in 0 until chunkCount) {
+                val chunkDoc = withTimeout(OP_TIMEOUT_EXTENDED_MS) {
+                    db.collection("groups")
+                        .document(groupId)
+                        .collection("snapshots")
+                        .document("chunk_$i")
+                        .get()
+                        .await()
+                }
+                sb.append(chunkDoc.getString("data") ?: "")
+            }
+            encryptedData = sb.toString()
+        } else {
+            // Legacy single-document snapshot (backward compatible)
+            encryptedData = metaDoc.getString("encryptedData") ?: ""
+        }
+
+        return SnapshotRecord(
+            snapshotVersion = metaDoc.getLong("snapshotVersion") ?: 0L,
+            createdBy = metaDoc.getString("createdBy") ?: "",
+            encryptedData = encryptedData,
+            timestamp = metaDoc.getLong("timestamp") ?: 0L
         )
     }
 
@@ -156,19 +215,55 @@ object FirestoreService {
         snapshotVersion: Long,
         createdBy: String,
         encryptedData: String
-    ) = withTimeout(OP_TIMEOUT_MS) {
-        val data = mapOf(
-            "snapshotVersion" to snapshotVersion,
-            "createdBy" to createdBy,
-            "encryptedData" to encryptedData,
-            "timestamp" to System.currentTimeMillis()
-        )
-        db.collection("groups")
+    ) {
+        val snapshotRef = db.collection("groups")
             .document(groupId)
             .collection("snapshots")
-            .document("latest")
-            .set(data)
-            .await()
+
+        if (encryptedData.length <= SNAPSHOT_CHUNK_SIZE) {
+            // Small enough for a single document (backward compatible)
+            withTimeout(OP_TIMEOUT_MS) {
+                snapshotRef.document("latest").set(mapOf(
+                    "snapshotVersion" to snapshotVersion,
+                    "createdBy" to createdBy,
+                    "encryptedData" to encryptedData,
+                    "chunkCount" to 0,
+                    "timestamp" to System.currentTimeMillis()
+                )).await()
+            }
+        } else {
+            // Split into chunks, write chunks first, then metadata
+            val chunks = encryptedData.chunked(SNAPSHOT_CHUNK_SIZE)
+            for ((i, chunk) in chunks.withIndex()) {
+                withTimeout(OP_TIMEOUT_MS) {
+                    snapshotRef.document("chunk_$i").set(mapOf(
+                        "data" to chunk
+                    )).await()
+                }
+            }
+            // Write metadata last so readers don't see partial data
+            withTimeout(OP_TIMEOUT_MS) {
+                snapshotRef.document("latest").set(mapOf(
+                    "snapshotVersion" to snapshotVersion,
+                    "createdBy" to createdBy,
+                    "chunkCount" to chunks.size,
+                    "timestamp" to System.currentTimeMillis()
+                )).await()
+            }
+            // Clean up any stale chunks beyond current count
+            for (i in chunks.size until chunks.size + 10) {
+                try {
+                    val stale = withTimeout(OP_TIMEOUT_MS) {
+                        snapshotRef.document("chunk_$i").get().await()
+                    }
+                    if (stale.exists()) {
+                        withTimeout(OP_TIMEOUT_MS) {
+                            snapshotRef.document("chunk_$i").delete().await()
+                        }
+                    } else break
+                } catch (_: Exception) { break }
+            }
+        }
     }
 
     /**
@@ -179,12 +274,13 @@ object FirestoreService {
     suspend fun pushDeltaAtomically(
         groupId: String,
         sourceDeviceId: String,
-        encryptedPayload: String
+        encryptedPayload: String,
+        timeoutMs: Long = OP_TIMEOUT_MS
     ): Long {
         require(groupId.isNotBlank()) { "Group ID required" }
         require(sourceDeviceId.isNotBlank()) { "Device ID required" }
         val groupRef = db.collection("groups").document(groupId)
-        return withTimeout(OP_TIMEOUT_MS) {
+        return withTimeout(timeoutMs) {
             db.runTransaction { transaction ->
                 val snapshot = transaction.get(groupRef)
                 val version = snapshot.getLong("nextDeltaVersion") ?: 1L
@@ -258,17 +354,19 @@ object FirestoreService {
             .get()
             .await()
 
-        snapshot.documents.map { doc ->
-            DeviceRecord(
-                deviceId = doc.getString("deviceId") ?: doc.id,
-                deviceName = doc.getString("deviceName") ?: "",
-                isAdmin = doc.getBoolean("isAdmin") ?: false,
-                lastSyncVersion = doc.getLong("lastSyncVersion") ?: 0L,
-                lastSeen = doc.getLong("lastSeen") ?: 0L,
-                fingerprintData = doc.getString("fingerprintData"),
-                fingerprintSyncVersion = doc.getLong("fingerprintSyncVersion") ?: 0L
-            )
-        }
+        snapshot.documents
+            .filter { doc -> doc.getBoolean("removed") != true }
+            .map { doc ->
+                DeviceRecord(
+                    deviceId = doc.getString("deviceId") ?: doc.id,
+                    deviceName = doc.getString("deviceName") ?: "",
+                    isAdmin = doc.getBoolean("isAdmin") ?: false,
+                    lastSyncVersion = doc.getLong("lastSyncVersion") ?: 0L,
+                    lastSeen = doc.getLong("lastSeen") ?: 0L,
+                    fingerprintData = doc.getString("fingerprintData"),
+                    fingerprintSyncVersion = doc.getLong("fingerprintSyncVersion") ?: 0L
+                )
+            }
     }
 
     suspend fun updateDeviceName(groupId: String, deviceId: String, newName: String) {
@@ -281,11 +379,15 @@ object FirestoreService {
     }
 
     suspend fun removeDevice(groupId: String, deviceId: String) {
+        // Mark as removed rather than deleting — gives the non-admin an
+        // affirmative signal so it can auto-leave reliably instead of
+        // guessing from document absence (which has false positives from
+        // Firestore cache staleness and network issues).
         db.collection("groups")
             .document(groupId)
             .collection("devices")
             .document(deviceId)
-            .delete()
+            .set(mapOf("removed" to true), SetOptions.merge())
             .await()
     }
 
@@ -294,6 +396,7 @@ object FirestoreService {
             "deviceId" to deviceId,
             "deviceName" to deviceName,
             "isAdmin" to isAdmin,
+            "removed" to false,
             "lastSyncVersion" to 0L,
             "lastSeen" to System.currentTimeMillis()
         )
@@ -309,6 +412,12 @@ object FirestoreService {
 
     suspend fun deleteGroup(groupId: String, onProgress: ((String) -> Unit)? = null) {
         val groupRef = db.collection("groups").document(groupId)
+
+        // Write dissolved flag BEFORE deleting anything — gives non-admin
+        // devices an affirmative signal to auto-leave, even if they check
+        // before the subcollection cleanup finishes.
+        onProgress?.invoke("Notifying devices…")
+        groupRef.set(mapOf("status" to "dissolved"), SetOptions.merge()).await()
 
         // Delete subcollections in paginated batches to avoid downloading
         // huge payloads (e.g. 600+ encrypted delta documents).

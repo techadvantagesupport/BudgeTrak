@@ -521,6 +521,9 @@ object SpanishStrings : AppStrings {
         enterNickname = "Tu nombre",
         createGroupTitle = "Crear Grupo",
         renameDevice = "Renombrar Dispositivo",
+        removeDeviceTitle = "Eliminar Dispositivo",
+        removeDeviceMessage = { name -> "Eliminar \"$name\" de este grupo? El dispositivo se desconectar\u00e1 de la sincronizaci\u00f3n familiar." },
+        removeDeviceConfirm = "Eliminar",
         copy = "Copiar"
     )
 
