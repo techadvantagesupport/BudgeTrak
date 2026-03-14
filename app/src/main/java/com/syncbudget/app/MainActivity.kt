@@ -677,6 +677,7 @@ class MainActivity : ComponentActivity() {
                     prefs.edit().putBoolean("migration_add_re_setaside_fields", true).apply()
                 }
 
+                var consecutiveErrors = 0
                 while (true) {
                     // File-based lock works across processes (unlike ReentrantLock)
                     val syncFileLock = SyncWorker.createSyncLock(context)
@@ -1087,6 +1088,7 @@ class MainActivity : ComponentActivity() {
                             syncProgressMessage = null
                             syncPrefs.edit().putBoolean("syncDirty", false).apply()
                             lastSyncTime = "just now"
+                            consecutiveErrors = 0
                             pendingAdminClaim = result.pendingAdminClaim
                             if (result.repairAttempted) syncRepairAlert = true
                             // Compute stale days
@@ -1125,6 +1127,7 @@ class MainActivity : ComponentActivity() {
                             syncStatus = "error"
                             syncErrorMessage = result.error
                             syncProgressMessage = null
+                            consecutiveErrors++
                             pendingAdminClaim = result.pendingAdminClaim
                             // Auto-leave only on explicit admin actions: the
                             // SyncEngine checks Firestore for a "removed" flag on
@@ -1156,6 +1159,7 @@ class MainActivity : ComponentActivity() {
                         android.util.Log.e("SyncLoop", "Foreground sync failed", e)
                         syncStatus = "error"
                         syncProgressMessage = null
+                        consecutiveErrors++
                         // Write sync errors to crash_log.txt for debugging
                         try {
                             val sb = StringBuilder()
@@ -1179,9 +1183,12 @@ class MainActivity : ComponentActivity() {
                     } finally {
                         syncFileLock.unlock()
                     }
-                    // Wait up to 60s, but short-circuit if app returns to foreground
+                    // Exponential backoff: 60s on success, doubling on errors
+                    // up to 5 minutes max. Short-circuit if user triggers sync.
+                    val backoffMs = if (consecutiveErrors == 0) 60_000L
+                        else minOf(60_000L * (1L shl minOf(consecutiveErrors, 3)), 300_000L)
                     val before = syncTrigger
-                    val deadline = System.currentTimeMillis() + 60_000
+                    val deadline = System.currentTimeMillis() + backoffMs
                     while (syncTrigger == before && System.currentTimeMillis() < deadline) {
                         delay(1_000)
                     }

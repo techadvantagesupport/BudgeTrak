@@ -215,7 +215,8 @@ class SyncEngine(
                             snapshotApplied = true
                             syncLog("Snapshot applied (version ${snapshot.snapshotVersion})")
                         } else {
-                            syncLog("Snapshot decrypt failed — falling through to delta fetch from 0")
+                            syncLog("Snapshot decrypt failed — encryption key may be wrong")
+                            return SyncResult(success = false, error = "snapshot_decrypt_failed")
                         }
                     } else {
                         syncLog("No snapshot available — falling through to delta fetch from 0")
@@ -548,7 +549,25 @@ class SyncEngine(
                 }
             }
 
-            // 5d: Apply remap to all transactions
+            // 5d: Resolve transitive remap chains (A→B→C becomes A→C, B→C)
+            // before applying to transactions.  Prevents orphaned references
+            // when multiple dedup passes create chained remaps.
+            if (catIdRemap.isNotEmpty()) {
+                val resolved = mutableMapOf<Int, Int>()
+                for ((source, target) in catIdRemap) {
+                    var final = target
+                    val visited = mutableSetOf(source)
+                    while (final in catIdRemap && final !in visited) {
+                        visited.add(final)
+                        final = catIdRemap[final]!!
+                    }
+                    resolved[source] = final
+                }
+                catIdRemap.clear()
+                catIdRemap.putAll(resolved)
+            }
+
+            // Apply remap to all transactions
             var remapChangedTxns = false
             if (catIdRemap.isNotEmpty()) {
                 for (i in mergedTxns.indices) {

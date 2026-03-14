@@ -257,10 +257,19 @@ object IntegrityChecker {
                 if (ls.count > rs.count) {
                     val diff = ls.count - rs.count
                     if (diff == 1) {
-                        // XOR trick: the single missing ID = localXor ^ remoteXor
+                        // XOR trick: the single missing ID = localXor ^ remoteXor.
+                        // Only trust it if the computed ID actually exists in the
+                        // local dataset — XOR is not injective and can produce
+                        // garbage IDs when multiple records differ.
                         val missingId = ls.idXor xor rs.idXor
-                        repairs.add(RepairAction(key, setOf(missingId),
-                            "seg$seg: local has 1 extra record (id=$missingId)"))
+                        if (missingId > 0) {
+                            repairs.add(RepairAction(key, setOf(missingId),
+                                "seg$seg: local has 1 extra record (id=$missingId)"))
+                        } else {
+                            // Invalid ID — fall back to segment scan
+                            repairs.add(RepairAction(key, setOf(-seg - 1),
+                                "seg$seg: XOR produced invalid id=$missingId, using segment scan"))
+                        }
                     } else {
                         // Multiple missing — can't pinpoint with XOR alone.
                         // Mark segment for full scan (handled by caller).
