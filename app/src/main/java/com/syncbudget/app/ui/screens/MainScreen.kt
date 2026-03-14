@@ -348,13 +348,13 @@ fun MainScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Image(
-                        painter = painterResource(id = com.syncbudget.app.R.drawable.budgexync_logo),
+                        painter = painterResource(id = com.syncbudget.app.R.drawable.budgetrak_logo),
                         contentDescription = S.dashboard.appTitle,
                         contentScale = ContentScale.Fit,
                         colorFilter = ColorFilter.tint(customColors.headerText),
                         modifier = Modifier
-                            .fillMaxHeight(0.8f)
-                            .fillMaxWidth(0.6f)
+                            .fillMaxHeight()
+                            .fillMaxWidth()
                     )
                 },
                 navigationIcon = {

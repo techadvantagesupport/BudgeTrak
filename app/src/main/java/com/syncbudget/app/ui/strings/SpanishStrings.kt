@@ -75,7 +75,7 @@ object SpanishStrings : AppStrings {
     )
 
     override val dashboard = DashboardStrings(
-        appTitle = "BudgeXync",
+        appTitle = "BudgeTrak",
         notConfigured = "Sin configurar",
         spending = "Gastos",
         settings = "Ajustes",
@@ -224,8 +224,8 @@ object SpanishStrings : AppStrings {
         confirmPassword = "Confirmar contrase\u00f1a",
         selectFile = "Seleccionar archivo",
         usBank = "US Bank",
-        secureSyncCsv = "Archivo CSV de BudgeXync",
-        secureSyncEncrypted = "Archivo cifrado de BudgeXync",
+        secureSyncCsv = "Archivo CSV de BudgeTrak",
+        secureSyncEncrypted = "Archivo cifrado de BudgeTrak",
         duplicateDetected = "Posible duplicado",
         duplicateExisting = "Existente:",
         duplicateNew = "Nuevo:",
@@ -236,6 +236,23 @@ object SpanishStrings : AppStrings {
         ignoreAll = "Omitir todos",
         excludedToast = "Transacci\u00f3n excluida del presupuesto.",
         includedToast = "Transacci\u00f3n incluida en el presupuesto.",
+        effectTitleRecurring = "Gasto recurrente vinculado",
+        effectTitleAmortization = "Amortizaci\u00f3n vinculada",
+        effectTitleIncome = "Fuente de ingreso vinculada",
+        effectTitleSavingsGoal = "Compra con meta de ahorro",
+        effectTitleExcluded = "Excluida del presupuesto",
+        effectRecurringMatch = { amt, name, reAmt -> "Este gasto de $amt coincide con el presupuestado de $reAmt para \"$name\", por lo que no tiene efecto adicional en tu efectivo disponible.\n\nSi se elimina, el monto presupuestado seguir\u00e1 deduci\u00e9ndose cada per\u00edodo." },
+        effectRecurringUnder = { amt, name, reAmt, diff -> "Este gasto de $amt es $diff menos que el presupuestado de $reAmt para \"$name\". La diferencia de $diff se devuelve a tu efectivo disponible.\n\nSi se elimina, el monto presupuestado seguir\u00e1 deduci\u00e9ndose cada per\u00edodo." },
+        effectRecurringOver = { amt, name, reAmt, diff -> "Este gasto de $amt es $diff m\u00e1s que el presupuestado de $reAmt para \"$name\". El exceso de $diff se deduce de tu efectivo disponible.\n\nSi se elimina, el monto presupuestado seguir\u00e1 deduci\u00e9ndose cada per\u00edodo." },
+        effectAmortizationComplete = { amt, name, aeTotal, periods, period -> "Esta compra de $amt est\u00e1 vinculada a \"$name\", una amortizaci\u00f3n completada de $aeTotal en $periods ${period}s. El costo total ya fue deducido de tu presupuesto, por lo que no tiene efecto adicional.\n\nSi se elimina, la transacci\u00f3n se elimina pero la entrada de amortizaci\u00f3n permanece." },
+        effectAmortizationActive = { amt, name, aeTotal, perPeriod, period, elapsed, total -> "Esta compra de $amt est\u00e1 vinculada a \"$name\", una amortizaci\u00f3n de $aeTotal a $perPeriod/$period ($elapsed de $total per\u00edodos transcurridos). El costo se distribuye entre per\u00edodos en lugar de impactar todo de una vez.\n\nSi se elimina, la transacci\u00f3n se elimina pero la amortizaci\u00f3n contin\u00faa sus deducciones." },
+        effectIncomeFixed = { amt, name, srcAmt -> "Este ingreso de $amt est\u00e1 vinculado a \"$name\" (presupuestado en $srcAmt). En modo Fijo, el presupuesto usa el monto fijo sin importar lo que recibiste, por lo que no tiene efecto en tu efectivo disponible.\n\nSi se elimina, el monto de ingreso presupuestado no cambia." },
+        effectIncomeActualMatch = { amt, name, srcAmt -> "Este ingreso de $amt coincide con el presupuestado de $srcAmt para \"$name\". Sin ajuste al efectivo disponible.\n\nSi se elimina, el presupuesto vuelve a usar solo el monto presupuestado." },
+        effectIncomeActualOver = { amt, name, srcAmt, diff -> "Este ingreso de $amt es $diff m\u00e1s que el presupuestado de $srcAmt para \"$name\". El excedente de $diff se agrega a tu efectivo disponible.\n\nSi se elimina, este excedente se eliminar\u00e1 del efectivo disponible." },
+        effectIncomeActualUnder = { amt, name, srcAmt, diff -> "Este ingreso de $amt es $diff menos que el presupuestado de $srcAmt para \"$name\". El d\u00e9ficit de $diff se deduce de tu efectivo disponible.\n\nSi se elimina, este d\u00e9ficit se eliminar\u00e1 del efectivo disponible." },
+        effectIncomeActualAdjust = { amt, name -> "Este ingreso de $amt est\u00e1 vinculado a \"$name\". En modo Actual-Ajuste, el monto presupuestado se actualiz\u00f3 para coincidir, por lo que no hay diferencia.\n\nSi se elimina, el presupuesto vuelve al monto actual de la fuente." },
+        effectSavingsGoal = { amt, name -> "Esta compra de $amt fue financiada por la meta de ahorro \"$name\". El dinero provino de ahorros, no del presupuesto, por lo que no afecta tu efectivo disponible.\n\nSi se elimina, el monto gastado se restaurar\u00e1 a la meta de ahorro." },
+        effectExcluded = { amt -> "Esta transacci\u00f3n de $amt est\u00e1 excluida de los c\u00e1lculos del presupuesto. No tiene efecto en tu efectivo disponible.\n\nSi se elimina, simplemente se elimina." },
         verifiedToast = "\u00a1Has verificado esta transacci\u00f3n!",
         unverifiedToast = "Has marcado esta transacci\u00f3n como no verificada.",
         bulkVerifyTitle = "Verificar transacciones",
@@ -303,6 +320,7 @@ object SpanishStrings : AppStrings {
         fullBackupGroupDissolved = "Respaldo restaurado. Grupo familiar disuelto.",
         linkToRecurring = "Vincular a",
         linkToAmortization = "Vincular a",
+        createNewAmortization = "Crear nueva amortizaci\u00f3n",
         linkToIncome = "Vincular a",
         linkToSavingsGoal = "Vincular a",
         linkMismatchTitle = "Montos diferentes",
@@ -316,8 +334,8 @@ object SpanishStrings : AppStrings {
         unmodifiedBankTransactions = "Transacciones no verificadas",
         formatGenericCsv = "CSV de cualquier banco",
         formatUsBank = "US Bank",
-        formatBudgeXyncCsv = "Archivo CSV de BudgeXync",
-        formatBudgeXyncEncrypted = "Archivo cifrado de BudgeXync",
+        formatBudgeTrakCsv = "Archivo CSV de BudgeTrak",
+        formatBudgeTrakEncrypted = "Archivo cifrado de BudgeTrak",
         unknown = "Desconocido",
         amountExample = "ej. 42.50",
         moveCategoryBody = { valueLabel, catName -> "¿Dónde desea colocar $valueLabel de $catName?" },
@@ -395,7 +413,9 @@ object SpanishStrings : AppStrings {
         pauseAll = "Pausar todas",
         resumeAll = "Reanudar todas",
         pause = "Pausar",
-        resume = "Reanudar"
+        resume = "Reanudar",
+        linkedTransactions = "Transacciones vinculadas",
+        noLinkedTransactions = "Sin transacciones vinculadas"
     )
 
     override val recurringExpenses = RecurringExpensesStrings(
@@ -508,8 +528,8 @@ object SpanishStrings : AppStrings {
 
     override val dashboardHelp = DashboardHelpStrings(
         title = "Ayuda del panel principal",
-        welcomeTitle = "Bienvenido a BudgeXync",
-        welcomeBody = "BudgeXync es una app de presupuesto que prioriza tu privacidad, " +
+        welcomeTitle = "Bienvenido a BudgeTrak",
+        welcomeBody = "BudgeTrak es una app de presupuesto que prioriza tu privacidad, " +
             "dise\u00f1ada para darte una imagen clara y en tiempo real de cu\u00e1nto puedes gastar " +
             "con tranquilidad en este momento. A diferencia de los rastreadores tradicionales que solo " +
             "te muestran en qu\u00e9 gastaste, esta app te dice en qu\u00e9 puedes gastar \u2014 " +
@@ -615,7 +635,7 @@ object SpanishStrings : AppStrings {
         step6Title = "Empieza a registrar",
         step6Desc = "Vuelve al panel principal. Tu pantalla Solari ahora muestra tu efectivo disponible. Registra gastos a medida que gastas y observa c\u00f3mo se actualiza el n\u00famero en tiempo real.",
         habitsTitle = "Construyendo mejores h\u00e1bitos financieros",
-        habitsBody = "BudgeXync es m\u00e1s que un rastreador \u2014 es una herramienta para crear " +
+        habitsBody = "BudgeTrak es m\u00e1s que un rastreador \u2014 es una herramienta para crear " +
             "conciencia financiera duradera. As\u00ed puedes sacarle el m\u00e1ximo provecho:",
         tipKnowTitle = "Conoce tu n\u00famero",
         tipKnowBody = "Revisa la pantalla Solari al menos una vez al d\u00eda. El simple hecho de saber " +
@@ -660,13 +680,13 @@ object SpanishStrings : AppStrings {
         syncArrowsBullet = "Flechas de sincronizaci\u00f3n \u2014 muestran el estado de conexi\u00f3n con la nube (verde = conectado, amarillo = sincronizando, naranja = obsoleto, rojo = error)",
         syncDotsBullet = "Puntos de colores \u2014 uno por dispositivo familiar (hasta 4), mostrando cu\u00e1ndo sincroniz\u00f3 cada dispositivo: verde (< 5 min), amarillo (< 2 hrs), naranja (< 24 hrs), rojo (> 24 hrs), gris (nunca)",
         privacyTitle = "Privacidad y seguridad",
-        privacyBody = "Tus datos financieros permanecen en tu dispositivo por defecto. BudgeXync no " +
+        privacyBody = "Tus datos financieros permanecen en tu dispositivo por defecto. BudgeTrak no " +
             "recopila an\u00e1lisis y no comparte tus datos con nadie. Al exportar tus transacciones, puedes elegir formato cifrado " +
             "(ChaCha20-Poly1305 con derivaci\u00f3n de clave PBKDF2) para m\u00e1xima seguridad. " +
             "Si activas la Sincronizaci\u00f3n Familiar, los datos se comparten entre tus dispositivos con cifrado de extremo a extremo \u2014 " +
             "el servidor no puede leer tus datos financieros. Tu dinero, tus datos, tu control.",
         widgetTitle = "Widget de pantalla de inicio",
-        widgetBody = "BudgeXync incluye un widget de pantalla de inicio que muestra tu efectivo disponible " +
+        widgetBody = "BudgeTrak incluye un widget de pantalla de inicio que muestra tu efectivo disponible " +
             "en estilo de pantalla Solari, para que puedas consultar tu presupuesto de un vistazo sin abrir la app. " +
             "Agr\u00e9galo desde el selector de widgets de tu lanzador.",
         widgetSolariDesc = "El widget muestra tu efectivo disponible actual en tarjetas Solari que " +
@@ -753,7 +773,7 @@ object SpanishStrings : AppStrings {
             "de Transacciones aparecen atenuados y no funcionan, un peque\u00f1o banner publicitario aparece en la parte superior de cada pantalla, " +
             "y el widget de la pantalla de inicio est\u00e1 limitado a 1 transacci\u00f3n por d\u00eda.",
         widgetLogoTitle = "Mostrar logo en el widget",
-        widgetLogoBody = "Al activarlo, el logo de BudgeXync aparece entre los botones de transacci\u00f3n en el " +
+        widgetLogoBody = "Al activarlo, el logo de BudgeTrak aparece entre los botones de transacci\u00f3n en el " +
             "widget de la pantalla de inicio. Desact\u00edvalo para ocultar el logo y obtener una apariencia m\u00e1s minimalista.",
         categoriesTitle = "Categor\u00edas",
         categoriesBody = "Las categor\u00edas te permiten clasificar tus transacciones para un mejor an\u00e1lisis de gastos. " +
@@ -894,11 +914,11 @@ object SpanishStrings : AppStrings {
         savingTitle = "Guardar transacciones",
         savingBody = "Toca el icono de Guardar en la barra superior para exportar todas las transacciones a un archivo. Dos formatos est\u00e1n disponibles:",
         csvFormatTitle = "Formato CSV",
-        csvFormatBody = "Guarda tus transacciones como un archivo CSV de texto plano (budgexync_transactions.csv). " +
+        csvFormatBody = "Guarda tus transacciones como un archivo CSV de texto plano (budgetrak_transactions.csv). " +
             "Este archivo conserva todos los datos incluyendo categor\u00edas y puede cargarse de nuevo en la app. " +
             "Tambi\u00e9n se puede abrir en hojas de c\u00e1lculo como Excel o Google Sheets para su revisi\u00f3n.",
         encryptedFormatTitle = "Formato cifrado",
-        encryptedFormatBody = "Guarda tus transacciones en un archivo cifrado (budgexync_transactions.enc) " +
+        encryptedFormatBody = "Guarda tus transacciones en un archivo cifrado (budgetrak_transactions.enc) " +
             "protegido con una contrase\u00f1a que t\u00fa eliges. Este es el formato recomendado para respaldos " +
             "y transferencia de datos entre dispositivos, ya que mantiene tu informaci\u00f3n financiera privada.",
         encryptionDetailsTitle = "Detalles del cifrado",
@@ -950,10 +970,10 @@ object SpanishStrings : AppStrings {
         loadUsBank = "US Bank",
         loadUsBankDesc = "Importa transacciones desde un archivo CSV de US Bank. " +
             "Las transacciones se categorizan autom\u00e1ticamente seg\u00fan tu historial de comercios.",
-        loadCsv = "Archivo CSV de BudgeXync",
+        loadCsv = "Archivo CSV de BudgeTrak",
         loadCsvDesc = "Carga un archivo CSV guardado previamente desde esta app. " +
             "Todas las categor\u00edas y datos se conservan exactamente como estaban.",
-        loadEncrypted = "Archivo cifrado de BudgeXync",
+        loadEncrypted = "Archivo cifrado de BudgeTrak",
         loadEncryptedDesc = "Carga un archivo cifrado guardado previamente. " +
             "Debes ingresar la contrase\u00f1a usada al guardar el archivo.",
         loadPasswordNote = "Para archivos cifrados, el campo de contrase\u00f1a aparece autom\u00e1ticamente al seleccionar el " +

@@ -207,23 +207,17 @@ fun FutureExpendituresScreen(
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
                 if (!isManualOverBudget) {
-                    val simResult = remember(
-                        recurringExpenses, incomeSources, budgetPeriod,
-                        baseBudget, amortizationEntries, savingsGoals,
-                        availableCash, resetDayOfWeek, resetDayOfMonth
-                    ) {
-                        SavingsSimulator.calculateSavingsRequired(
-                            incomeSources = incomeSources,
-                            recurringExpenses = recurringExpenses,
-                            budgetPeriod = budgetPeriod,
-                            baseBudget = baseBudget,
-                            amortizationEntries = amortizationEntries,
-                            savingsGoals = savingsGoals,
-                            availableCash = availableCash,
-                            resetDayOfWeek = resetDayOfWeek,
-                            resetDayOfMonth = resetDayOfMonth
-                        )
-                    }
+                    val simResult = SavingsSimulator.calculateSavingsRequired(
+                        incomeSources = incomeSources,
+                        recurringExpenses = recurringExpenses,
+                        budgetPeriod = budgetPeriod,
+                        baseBudget = baseBudget,
+                        amortizationEntries = amortizationEntries,
+                        savingsGoals = savingsGoals,
+                        availableCash = availableCash,
+                        resetDayOfWeek = resetDayOfWeek,
+                        resetDayOfMonth = resetDayOfMonth
+                    )
                     run {
                         val formattedAmount = formatCurrency(maxOf(0.0, simResult.savingsRequired), currencySymbol)
                         val periodText = budgetPeriodLabel

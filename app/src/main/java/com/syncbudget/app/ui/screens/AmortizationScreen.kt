@@ -1,7 +1,9 @@
 package com.syncbudget.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -67,11 +69,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import com.syncbudget.app.ui.theme.AdAwareDialog
 import com.syncbudget.app.ui.theme.PulsingScrollArrow
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.BudgetPeriod
+import com.syncbudget.app.data.Transaction
 import com.syncbudget.app.data.generateAmortizationEntryId
 import com.syncbudget.app.ui.components.formatCurrency
 import com.syncbudget.app.ui.components.CURRENCY_DECIMALS
+import com.syncbudget.app.ui.theme.LocalAppToast
 import com.syncbudget.app.ui.strings.LocalStrings
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import java.time.Instant
@@ -102,6 +109,7 @@ fun AmortizationScreen(
     currencySymbol: String,
     budgetPeriod: BudgetPeriod,
     dateFormatPattern: String = "yyyy-MM-dd",
+    transactions: List<Transaction> = emptyList(),
     onAddEntry: (AmortizationEntry) -> Unit,
     onUpdateEntry: (AmortizationEntry) -> Unit,
     onDeleteEntry: (AmortizationEntry) -> Unit,
@@ -112,9 +120,11 @@ fun AmortizationScreen(
     val S = LocalStrings.current
     val dateFormatter = remember(dateFormatPattern) { DateTimeFormatter.ofPattern(dateFormatPattern) }
 
+    val toastState = LocalAppToast.current
     var showAddDialog by remember { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
     var deletingEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
+    var linkedTransactionsEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
 
     val allPaused = amortizationEntries.isNotEmpty() && amortizationEntries.all { it.isPaused }
     val anyActive = amortizationEntries.any { !it.isPaused }
@@ -222,10 +232,25 @@ fun AmortizationScreen(
                 val amountPaid = perPeriod * elapsed
                 val contentAlpha = if (entry.isPaused) 0.5f else if (isCompleted) 0.6f else 1f
 
+                var rowYPx by remember { mutableIntStateOf(0) }
+                @OptIn(ExperimentalFoundationApi::class)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { editingEntry = entry }
+                        .onGloballyPositioned { rowYPx = it.positionInWindow().y.toInt() }
+                        .combinedClickable(
+                            onClick = { editingEntry = entry },
+                            onLongClick = {
+                                val linked = transactions.filter { it.linkedAmortizationEntryId == entry.id }
+                                    .sortedByDescending { it.date }
+                                    .take(10)
+                                if (linked.isEmpty()) {
+                                    toastState.show(S.amortization.noLinkedTransactions, rowYPx)
+                                } else {
+                                    linkedTransactionsEntry = entry
+                                }
+                            }
+                        )
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -371,11 +396,53 @@ fun AmortizationScreen(
             }
         )
     }
+
+    linkedTransactionsEntry?.let { entry ->
+        val linked = remember(entry, transactions) {
+            transactions.filter { it.linkedAmortizationEntryId == entry.id }
+                .sortedByDescending { it.date }
+                .take(10)
+        }
+        AdAwareAlertDialog(
+            onDismissRequest = { linkedTransactionsEntry = null },
+            title = { Text(entry.source) },
+            text = {
+                Column {
+                    Text(
+                        S.amortization.linkedTransactions,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    linked.forEach { tx ->
+                        val txDate = tx.date.format(dateFormatter)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(tx.source, style = MaterialTheme.typography.bodyMedium)
+                                Text(txDate, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            }
+                            Text(
+                                formatCurrency(tx.amount, currencySymbol),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                DialogSecondaryButton(onClick = { linkedTransactionsEntry = null }) { Text(S.common.close) }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddEditAmortizationDialog(
+internal fun AddEditAmortizationDialog(
     title: String,
     initialSource: String,
     initialDescription: String = "",

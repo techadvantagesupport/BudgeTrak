@@ -113,17 +113,11 @@ fun SimulationGraphScreen(
     val customColors = LocalSyncBudgetColors.current
     val density = LocalDensity.current
 
-    val (simResult, timeline) = remember(
+    val (simResult, timeline) = SavingsSimulator.simulateTimeline(
         incomeSources, recurringExpenses, budgetPeriod,
         baseBudget, amortizationEntries, savingsGoals,
         availableCash, resetDayOfWeek, resetDayOfMonth
-    ) {
-        SavingsSimulator.simulateTimeline(
-            incomeSources, recurringExpenses, budgetPeriod,
-            baseBudget, amortizationEntries, savingsGoals,
-            availableCash, resetDayOfWeek, resetDayOfMonth
-        )
-    }
+    )
 
     val maxDecimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
     var savingsText by remember {
@@ -143,18 +137,11 @@ fun SimulationGraphScreen(
     val savingsExceedBudget = savedPerPeriod > 0 && savedPerPeriod >= baseBudget
 
     // Re-run simulation when savedPerPeriod changes
-    val (adjSimResult, adjTimeline) = remember(
+    val (adjSimResult, adjTimeline) = SavingsSimulator.simulateTimeline(
         incomeSources, recurringExpenses, budgetPeriod,
-        baseBudget, amortizationEntries, savingsGoals,
-        availableCash, resetDayOfWeek, resetDayOfMonth,
-        savedPerPeriod
-    ) {
-        SavingsSimulator.simulateTimeline(
-            incomeSources, recurringExpenses, budgetPeriod,
-            baseBudget - savedPerPeriod, amortizationEntries, savingsGoals,
-            availableCash, resetDayOfWeek, resetDayOfMonth
-        )
-    }
+        baseBudget - savedPerPeriod, amortizationEntries, savingsGoals,
+        availableCash, resetDayOfWeek, resetDayOfMonth
+    )
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onBackground,

@@ -11,8 +11,8 @@ import kotlin.math.abs
 enum class BankFormat(val displayName: String) {
     GENERIC_CSV("Any Bank CSV"),
     US_BANK("US Bank"),
-    SECURESYNC_CSV("BudgeXync CSV Save File"),
-    SECURESYNC_ENCRYPTED("BudgeXync Encrypted Save File")
+    SECURESYNC_CSV("BudgeTrak CSV Save File"),
+    SECURESYNC_ENCRYPTED("BudgeTrak Encrypted Save File")
 }
 
 data class CsvParseResult(
@@ -842,7 +842,7 @@ fun parseSyncBudgetCsv(reader: BufferedReader, existingIds: Set<Int>): CsvParseR
     try {
         val header = reader.readLine() ?: return CsvParseResult(emptyList(), "Empty file")
         if (!header.startsWith("id,type,date,")) {
-            return CsvParseResult(emptyList(), "Not a BudgeXync CSV file (invalid header)")
+            return CsvParseResult(emptyList(), "Not a BudgeTrak CSV file (invalid header)")
         }
 
         var lineNumber = 1

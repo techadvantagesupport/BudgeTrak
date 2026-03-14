@@ -133,6 +133,7 @@ import com.syncbudget.app.data.IncomeMode
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CryptoHelper
 import com.syncbudget.app.data.AmortizationEntry
+import com.syncbudget.app.data.generateAmortizationEntryId
 import com.syncbudget.app.data.CategoryAmount
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.Transaction
@@ -246,7 +247,9 @@ fun TransactionsScreen(
     isSyncAdmin: Boolean = false,
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     incomeMode: IncomeMode = IncomeMode.FIXED,
-    onAdjustIncomeAmount: (incomeSourceId: Int, newAmount: Double) -> Unit = { _, _ -> }
+    onAdjustIncomeAmount: (incomeSourceId: Int, newAmount: Double) -> Unit = { _, _ -> },
+    onAddAmortization: ((AmortizationEntry) -> Unit)? = null,
+    onDeleteAmortization: ((AmortizationEntry) -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -274,6 +277,9 @@ fun TransactionsScreen(
 
     // Category filter state
     var categoryFilterId by remember { mutableStateOf<Int?>(null) }
+
+    // Effect explanation popup state
+    var effectExplanationTransaction by remember { mutableStateOf<Transaction?>(null) }
 
     // Search dialog states
     var showTextSearch by remember { mutableStateOf(false) }
@@ -1051,7 +1057,8 @@ fun TransactionsScreen(
                         linkedAmortizationApplied = linkedAmortizationApplied,
                         linkedIncomeAmount = linkedIncomeAmount,
                         incomeMode = incomeMode,
-                        isLinkedSavingsGoal = isLinkedSavingsGoal
+                        isLinkedSavingsGoal = isLinkedSavingsGoal,
+                        onEffectTap = { effectExplanationTransaction = transaction }
                     )
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
@@ -1076,6 +1083,7 @@ fun TransactionsScreen(
             incomeSources = incomeSources,
             savingsGoals = savingsGoals,
             pastSources = pastSources,
+            budgetPeriod = budgetPeriod,
             onDismiss = { showAddIncome = false },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
@@ -1115,7 +1123,9 @@ fun TransactionsScreen(
                     }
                 }
                 showAddIncome = false
-            }
+            },
+            onAddAmortization = onAddAmortization,
+            onDeleteAmortization = onDeleteAmortization
         )
     }
 
@@ -1135,6 +1145,7 @@ fun TransactionsScreen(
             incomeSources = incomeSources,
             savingsGoals = savingsGoals,
             pastSources = pastSources,
+            budgetPeriod = budgetPeriod,
             onDismiss = { showAddExpense = false },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
@@ -1166,7 +1177,9 @@ fun TransactionsScreen(
                     }
                 }
                 showAddExpense = false
-            }
+            },
+            onAddAmortization = onAddAmortization,
+            onDeleteAmortization = onDeleteAmortization
         )
     }
 
@@ -1187,6 +1200,7 @@ fun TransactionsScreen(
             incomeSources = incomeSources,
             savingsGoals = savingsGoals,
             pastSources = pastSources,
+            budgetPeriod = budgetPeriod,
             onDismiss = { editingTransaction = null },
             onSave = { updated ->
                 // Only run duplicate/matching checks if merchant, date, or amount changed
@@ -1234,7 +1248,9 @@ fun TransactionsScreen(
                 }
                 editingTransaction = null
             },
-            onDelete = { onDeleteTransaction(txn); editingTransaction = null }
+            onDelete = { onDeleteTransaction(txn); editingTransaction = null },
+            onAddAmortization = onAddAmortization,
+            onDeleteAmortization = onDeleteAmortization
         )
     }
 
@@ -1700,7 +1716,7 @@ fun TransactionsScreen(
                                 when {
                                     includeAllData && selectedSaveFormat == SaveFormat.CSV -> {
                                         showSaveDialog = false
-                                        jsonSaveLauncher.launch("budgexync_backup.json")
+                                        jsonSaveLauncher.launch("budgetrak_backup.json")
                                     }
                                     includeAllData && selectedSaveFormat == SaveFormat.ENCRYPTED -> {
                                         when {
@@ -1712,17 +1728,17 @@ fun TransactionsScreen(
                                             }
                                             else -> {
                                                 showSaveDialog = false
-                                                encryptedSaveLauncher.launch("budgexync_backup.enc")
+                                                encryptedSaveLauncher.launch("budgetrak_backup.enc")
                                             }
                                         }
                                     }
                                     selectedSaveFormat == SaveFormat.CSV -> {
                                         showSaveDialog = false
-                                        csvSaveLauncher.launch("budgexync_transactions.csv")
+                                        csvSaveLauncher.launch("budgetrak_transactions.csv")
                                     }
                                     selectedSaveFormat == SaveFormat.XLS -> {
                                         showSaveDialog = false
-                                        xlsSaveLauncher.launch("budgexync_transactions.xlsx")
+                                        xlsSaveLauncher.launch("budgetrak_transactions.xlsx")
                                     }
                                     selectedSaveFormat == SaveFormat.ENCRYPTED -> {
                                         when {
@@ -1734,7 +1750,7 @@ fun TransactionsScreen(
                                             }
                                             else -> {
                                                 showSaveDialog = false
-                                                encryptedSaveLauncher.launch("budgexync_transactions.enc")
+                                                encryptedSaveLauncher.launch("budgetrak_transactions.enc")
                                             }
                                         }
                                     }
@@ -1889,8 +1905,8 @@ fun TransactionsScreen(
                                 Text(when (format) {
                                     BankFormat.GENERIC_CSV -> S.transactions.formatGenericCsv
                                     BankFormat.US_BANK -> S.transactions.formatUsBank
-                                    BankFormat.SECURESYNC_CSV -> S.transactions.formatBudgeXyncCsv
-                                    BankFormat.SECURESYNC_ENCRYPTED -> S.transactions.formatBudgeXyncEncrypted
+                                    BankFormat.SECURESYNC_CSV -> S.transactions.formatBudgeTrakCsv
+                                    BankFormat.SECURESYNC_ENCRYPTED -> S.transactions.formatBudgeTrakEncrypted
                                 }, style = MaterialTheme.typography.bodyLarge)
                             }
                         }
@@ -2317,6 +2333,98 @@ fun TransactionsScreen(
         )
     }
 
+    // Effect explanation popup
+    effectExplanationTransaction?.let { txn ->
+        val isExpense = txn.type == TransactionType.EXPENSE
+        val fc = { amt: Double -> formatCurrency(amt, currencySymbol) }
+
+        val title: String
+        val body: String
+
+        if (txn.linkedRecurringExpenseId != null) {
+            val reAmt = if (txn.linkedRecurringExpenseAmount > 0.0) txn.linkedRecurringExpenseAmount
+                else recurringExpenses.find { it.id == txn.linkedRecurringExpenseId }?.amount ?: 0.0
+            val reName = recurringExpenses.find { it.id == txn.linkedRecurringExpenseId }?.source ?: txn.source
+            val diff = reAmt - txn.amount
+            title = S.transactions.effectTitleRecurring
+            body = if (kotlin.math.abs(diff) < 0.005) {
+                S.transactions.effectRecurringMatch(fc(txn.amount), reName, fc(reAmt))
+            } else if (diff > 0) {
+                S.transactions.effectRecurringUnder(fc(txn.amount), reName, fc(reAmt), fc(diff))
+            } else {
+                S.transactions.effectRecurringOver(fc(txn.amount), reName, fc(reAmt), fc(kotlin.math.abs(diff)))
+            }
+        } else if (txn.linkedAmortizationEntryId != null) {
+            val ae = amortizationEntries.find { it.id == txn.linkedAmortizationEntryId }
+            val aeName = ae?.source ?: txn.source
+            val aeTotal = ae?.amount ?: txn.amount
+            val aePeriods = ae?.totalPeriods ?: 1
+            val perPeriod = aeTotal / aePeriods
+            val elapsed = if (ae != null) {
+                val today = LocalDate.now()
+                when (budgetPeriod) {
+                    BudgetPeriod.DAILY -> java.time.temporal.ChronoUnit.DAYS.between(ae.startDate, today).toInt()
+                    BudgetPeriod.WEEKLY -> java.time.temporal.ChronoUnit.WEEKS.between(ae.startDate, today).toInt()
+                    BudgetPeriod.MONTHLY -> java.time.temporal.ChronoUnit.MONTHS.between(ae.startDate, today).toInt()
+                }.coerceIn(0, aePeriods)
+            } else 0
+            val isComplete = elapsed >= aePeriods
+            val periodLabel = when (budgetPeriod) {
+                BudgetPeriod.DAILY -> S.common.periodDay
+                BudgetPeriod.WEEKLY -> S.common.periodWeek
+                BudgetPeriod.MONTHLY -> S.common.periodMonth
+            }
+            title = S.transactions.effectTitleAmortization
+            body = if (isComplete) {
+                S.transactions.effectAmortizationComplete(fc(txn.amount), aeName, fc(aeTotal), aePeriods.toString(), periodLabel)
+            } else {
+                S.transactions.effectAmortizationActive(fc(txn.amount), aeName, fc(aeTotal), fc(perPeriod), periodLabel, elapsed.toString(), aePeriods.toString())
+            }
+        } else if (txn.linkedIncomeSourceId != null) {
+            val srcAmt = if (txn.linkedIncomeSourceAmount > 0.0) txn.linkedIncomeSourceAmount
+                else incomeSources.find { it.id == txn.linkedIncomeSourceId }?.amount ?: 0.0
+            val srcName = incomeSources.find { it.id == txn.linkedIncomeSourceId }?.source ?: txn.source
+            title = S.transactions.effectTitleIncome
+            body = when (incomeMode) {
+                IncomeMode.FIXED -> S.transactions.effectIncomeFixed(fc(txn.amount), srcName, fc(srcAmt))
+                IncomeMode.ACTUAL -> {
+                    val diff = txn.amount - srcAmt
+                    if (kotlin.math.abs(diff) < 0.005) {
+                        S.transactions.effectIncomeActualMatch(fc(txn.amount), srcName, fc(srcAmt))
+                    } else if (diff > 0) {
+                        S.transactions.effectIncomeActualOver(fc(txn.amount), srcName, fc(srcAmt), fc(diff))
+                    } else {
+                        S.transactions.effectIncomeActualUnder(fc(txn.amount), srcName, fc(srcAmt), fc(kotlin.math.abs(diff)))
+                    }
+                }
+                IncomeMode.ACTUAL_ADJUST -> S.transactions.effectIncomeActualAdjust(fc(txn.amount), srcName)
+            }
+        } else if (txn.linkedSavingsGoalId != null || txn.linkedSavingsGoalAmount > 0.0) {
+            val goalName = savingsGoals.find { it.id == txn.linkedSavingsGoalId }?.name ?: txn.source
+            title = S.transactions.effectTitleSavingsGoal
+            body = S.transactions.effectSavingsGoal(fc(txn.amount), goalName)
+        } else if (txn.excludeFromBudget) {
+            title = S.transactions.effectTitleExcluded
+            body = S.transactions.effectExcluded(fc(txn.amount))
+        } else {
+            title = ""
+            body = ""
+        }
+
+        if (title.isNotEmpty()) {
+            AdAwareAlertDialog(
+                onDismissRequest = { effectExplanationTransaction = null },
+                title = { Text(title) },
+                text = { Text(body) },
+                confirmButton = {
+                    DialogSecondaryButton(onClick = { effectExplanationTransaction = null }) {
+                        Text(S.common.close)
+                    }
+                }
+            )
+        }
+    }
+
 }
 
 @Composable
@@ -2651,7 +2759,8 @@ private fun TransactionRow(
     linkedRecurringAmount: Double? = null,
     linkedAmortizationApplied: Double? = null,
     linkedIncomeAmount: Double? = null,
-    incomeMode: IncomeMode = IncomeMode.FIXED
+    incomeMode: IncomeMode = IncomeMode.FIXED,
+    onEffectTap: (() -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val isExpense = transaction.type == TransactionType.EXPENSE
@@ -2802,7 +2911,13 @@ private fun TransactionRow(
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Row(
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = if (onEffectTap != null && (isLinked || transaction.excludeFromBudget))
+                        Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onEffectTap() }
+                            .padding(4.dp)
+                    else Modifier
                 ) {
                     if (isLinkedRecurring) {
                         Icon(
@@ -2983,9 +3098,12 @@ fun TransactionDialog(
     incomeSources: List<IncomeSource> = emptyList(),
     savingsGoals: List<SavingsGoal> = emptyList(),
     pastSources: List<String> = emptyList(),
+    budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    onAddAmortization: ((AmortizationEntry) -> Unit)? = null,
+    onDeleteAmortization: ((AmortizationEntry) -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val maxDecimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
@@ -3014,6 +3132,8 @@ fun TransactionDialog(
     var showLinkSavingsGoalPicker by remember { mutableStateOf(false) }
     var showLinkMismatchDialog by remember { mutableStateOf(false) }
     var pendingLinkEntry by remember { mutableStateOf<Any?>(null) }
+    var showCreateAmortizationDialog by remember { mutableStateOf(false) }
+    var provisionalAmortizationEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
 
     // Category selection
     val selectedCategoryIds = remember {
@@ -3154,8 +3274,15 @@ fun TransactionDialog(
     val focusManager = LocalFocusManager.current
     val scrollScope = rememberCoroutineScope()
 
+    val dismissWithCleanup: () -> Unit = {
+        provisionalAmortizationEntry?.let { entry ->
+            onDeleteAmortization?.invoke(entry)
+        }
+        onDismiss()
+    }
+
     AdAwareDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismissWithCleanup,
     ) {
         Surface(
             modifier = Modifier
@@ -3358,9 +3485,15 @@ fun TransactionDialog(
                                         Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(fixedIconSize))
                                     }
                                 }
-                                if (amortizationEntries.isNotEmpty()) {
+                                if (amortizationEntries.isNotEmpty() || onAddAmortization != null) {
                                     OutlinedButton(
-                                        onClick = { showLinkAmortizationPicker = true },
+                                        onClick = {
+                                            if (amortizationEntries.isNotEmpty()) {
+                                                showLinkAmortizationPicker = true
+                                            } else {
+                                                showCreateAmortizationDialog = true
+                                            }
+                                        },
                                         modifier = Modifier.weight(1f),
                                         contentPadding = linkPadding
                                     ) {
@@ -3851,7 +3984,7 @@ fun TransactionDialog(
                             )
                         }
                         Spacer(modifier = Modifier.weight(1f))
-                        DialogSecondaryButton(onClick = onDismiss) { Text(S.common.cancel) }
+                        DialogSecondaryButton(onClick = dismissWithCleanup) { Text(S.common.cancel) }
                         Spacer(modifier = Modifier.width(8.dp))
                         DialogPrimaryButton(
                             onClick = {
@@ -4413,11 +4546,59 @@ fun TransactionDialog(
                     }
                 }
             },
-            confirmButton = {},
+            confirmButton = {
+                if (onAddAmortization != null) {
+                    DialogPrimaryButton(onClick = {
+                        showLinkAmortizationPicker = false
+                        showCreateAmortizationDialog = true
+                    }) {
+                        Text(S.transactions.createNewAmortization)
+                    }
+                }
+            },
             dismissButton = {
                 DialogSecondaryButton(onClick = { showLinkAmortizationPicker = false }) {
                     Text(S.common.cancel)
                 }
+            }
+        )
+    }
+
+    if (showCreateAmortizationDialog && onAddAmortization != null) {
+        val txnAmount = (singleAmountText.toDoubleOrNull()
+            ?: totalAmountText.toDoubleOrNull()
+            ?: 0.0)
+        val maxDec = CURRENCY_DECIMALS[currencySymbol] ?: 2
+        AddEditAmortizationDialog(
+            title = S.transactions.createNewAmortization,
+            initialSource = source,
+            initialDescription = description,
+            initialAmount = if (txnAmount > 0) "%.${maxDec}f".format(txnAmount) else "",
+            initialTotalPeriods = "",
+            initialStartDate = LocalDate.now(),
+            currencySymbol = currencySymbol,
+            budgetPeriod = budgetPeriod,
+            dateFormatter = dateFormatter,
+            onDismiss = { showCreateAmortizationDialog = false },
+            onSave = { aSource, aDescription, aAmount, aTotalPeriods, aStartDate ->
+                val newId = generateAmortizationEntryId(
+                    amortizationEntries.map { it.id }.toSet()
+                )
+                val newEntry = AmortizationEntry(
+                    id = newId,
+                    source = aSource,
+                    description = aDescription,
+                    amount = aAmount,
+                    totalPeriods = aTotalPeriods,
+                    startDate = aStartDate
+                )
+                onAddAmortization(newEntry)
+                provisionalAmortizationEntry = newEntry
+                linkedAmortizationId = newId
+                linkedRecurringId = null
+                linkedIncomeId = null
+                linkedSavingsGoalId = null
+                showCreateAmortizationDialog = false
             }
         )
     }

@@ -75,7 +75,7 @@ object EnglishStrings : AppStrings {
     )
 
     override val dashboard = DashboardStrings(
-        appTitle = "BudgeXync",
+        appTitle = "BudgeTrak",
         notConfigured = "Not configured",
         spending = "Spending",
         settings = "Settings",
@@ -224,8 +224,8 @@ object EnglishStrings : AppStrings {
         confirmPassword = "Confirm Password",
         selectFile = "Select File",
         usBank = "US Bank",
-        secureSyncCsv = "BudgeXync CSV Save File",
-        secureSyncEncrypted = "BudgeXync Encrypted Save File",
+        secureSyncCsv = "BudgeTrak CSV Save File",
+        secureSyncEncrypted = "BudgeTrak Encrypted Save File",
         duplicateDetected = "Possible Duplicate",
         duplicateExisting = "Existing:",
         duplicateNew = "New:",
@@ -238,6 +238,23 @@ object EnglishStrings : AppStrings {
         unverifiedToast = "You have marked this transaction as unverified.",
         excludedToast = "Transaction excluded from budget.",
         includedToast = "Transaction included in budget.",
+        effectTitleRecurring = "Linked Recurring Expense",
+        effectTitleAmortization = "Linked Amortization",
+        effectTitleIncome = "Linked Income Source",
+        effectTitleSavingsGoal = "Savings Goal Purchase",
+        effectTitleExcluded = "Excluded from Budget",
+        effectRecurringMatch = { amt, name, reAmt -> "This $amt expense matches the budgeted $reAmt for \"$name\", so it has no additional effect on your available cash.\n\nIf deleted, the budgeted amount will continue being deducted each period." },
+        effectRecurringUnder = { amt, name, reAmt, diff -> "This $amt expense is $diff less than the budgeted $reAmt for \"$name\". The $diff difference is added back to your available cash.\n\nIf deleted, the budgeted amount will continue being deducted each period." },
+        effectRecurringOver = { amt, name, reAmt, diff -> "This $amt expense is $diff more than the budgeted $reAmt for \"$name\". The $diff overage is deducted from your available cash.\n\nIf deleted, the budgeted amount will continue being deducted each period." },
+        effectAmortizationComplete = { amt, name, aeTotal, periods, period -> "This $amt purchase is linked to \"$name\", a completed amortization of $aeTotal over $periods ${period}s. The full cost has already been deducted from your budget, so this transaction has no additional effect on available cash.\n\nIf deleted, the transaction is removed but the amortization entry remains." },
+        effectAmortizationActive = { amt, name, aeTotal, perPeriod, period, elapsed, total -> "This $amt purchase is linked to \"$name\", an amortization of $aeTotal at $perPeriod/$period ($elapsed of $total periods elapsed). The cost is being spread across budget periods instead of hitting all at once.\n\nIf deleted, the transaction is removed but the amortization entry continues its deductions." },
+        effectIncomeFixed = { amt, name, srcAmt -> "This $amt income is linked to \"$name\" (budgeted at $srcAmt). In Fixed mode, the budget uses the fixed amount regardless of what you actually received, so this transaction has no effect on available cash.\n\nIf deleted, the budgeted income amount remains unchanged." },
+        effectIncomeActualMatch = { amt, name, srcAmt -> "This $amt income matches the budgeted $srcAmt for \"$name\". No adjustment to available cash.\n\nIf deleted, the budget reverts to using only the budgeted amount." },
+        effectIncomeActualOver = { amt, name, srcAmt, diff -> "This $amt income is $diff more than the budgeted $srcAmt for \"$name\". The $diff surplus is added to your available cash.\n\nIf deleted, this surplus will be removed from available cash." },
+        effectIncomeActualUnder = { amt, name, srcAmt, diff -> "This $amt income is $diff less than the budgeted $srcAmt for \"$name\". The $diff shortfall is deducted from your available cash.\n\nIf deleted, this shortfall will be removed from available cash." },
+        effectIncomeActualAdjust = { amt, name -> "This $amt income is linked to \"$name\". In Actual-Adjust mode, the budgeted amount was updated to match, so there is no difference.\n\nIf deleted, the budget reverts to the source's current amount." },
+        effectSavingsGoal = { amt, name -> "This $amt purchase was funded from savings goal \"$name\". The money came from savings, not your budget, so it has no effect on available cash.\n\nIf deleted, the spent amount will be restored to the savings goal." },
+        effectExcluded = { amt -> "This $amt transaction is excluded from budget calculations. It has no effect on your available cash.\n\nIf deleted, it is simply removed." },
         bulkVerifyTitle = "Verify Transactions",
         bulkVerifyMessage = { count -> "Mark $count selected transaction(s) as:" },
         markVerified = "Verified",
@@ -303,6 +320,7 @@ object EnglishStrings : AppStrings {
         fullBackupGroupDissolved = "Backup restored. Family group dissolved.",
         linkToRecurring = "Link to",
         linkToAmortization = "Link to",
+        createNewAmortization = "Create New Amortization",
         linkToIncome = "Link to",
         linkToSavingsGoal = "Link to",
         linkMismatchTitle = "Amount Mismatch",
@@ -316,8 +334,8 @@ object EnglishStrings : AppStrings {
         unmodifiedBankTransactions = "Unverified Transactions",
         formatGenericCsv = "Any Bank CSV",
         formatUsBank = "US Bank",
-        formatBudgeXyncCsv = "BudgeXync CSV Save File",
-        formatBudgeXyncEncrypted = "BudgeXync Encrypted Save File",
+        formatBudgeTrakCsv = "BudgeTrak CSV Save File",
+        formatBudgeTrakEncrypted = "BudgeTrak Encrypted Save File",
         unknown = "Unknown",
         amountExample = "e.g. 42.50",
         moveCategoryBody = { valueLabel, catName -> "Where would you like to place $valueLabel from $catName?" },
@@ -395,7 +413,9 @@ object EnglishStrings : AppStrings {
         pauseAll = "Pause All",
         resumeAll = "Resume All",
         pause = "Pause",
-        resume = "Resume"
+        resume = "Resume",
+        linkedTransactions = "Linked Transactions",
+        noLinkedTransactions = "No linked transactions"
     )
 
     override val recurringExpenses = RecurringExpensesStrings(
@@ -508,8 +528,8 @@ object EnglishStrings : AppStrings {
 
     override val dashboardHelp = DashboardHelpStrings(
         title = "Dashboard Help",
-        welcomeTitle = "Welcome to BudgeXync",
-        welcomeBody = "BudgeXync is a privacy-first budgeting app designed to give you " +
+        welcomeTitle = "Welcome to BudgeTrak",
+        welcomeBody = "BudgeTrak is a privacy-first budgeting app designed to give you " +
             "a clear, real-time picture of how much money you can safely spend right now. " +
             "Unlike traditional budget trackers that only show you where your money went, " +
             "this app tells you where your money can go \u2014 calculated from your actual " +
@@ -616,7 +636,7 @@ object EnglishStrings : AppStrings {
         step6Title = "Start Tracking",
         step6Desc = "Return to the dashboard. Your Solari display now shows your available cash. Record expenses as you spend and watch your number update in real time.",
         habitsTitle = "Building Better Financial Habits",
-        habitsBody = "BudgeXync is more than a tracker \u2014 it's a tool for building " +
+        habitsBody = "BudgeTrak is more than a tracker \u2014 it's a tool for building " +
             "lasting financial awareness. Here's how to get the most out of it:",
         tipKnowTitle = "Know Your Number",
         tipKnowBody = "Check the Solari display at least once a day. The simple act of knowing " +
@@ -661,13 +681,13 @@ object EnglishStrings : AppStrings {
         syncArrowsBullet = "Sync arrows \u2014 show cloud connectivity status (green = connected, yellow = syncing, orange = stale, red = error)",
         syncDotsBullet = "Colored dots \u2014 one per family member device (up to 4), showing how recently each device synced: green (< 5 min), yellow (< 2 hrs), orange (< 24 hrs), red (> 24 hrs), gray (never)",
         privacyTitle = "Privacy & Security",
-        privacyBody = "Your financial data stays on your device by default. BudgeXync does not collect analytics " +
+        privacyBody = "Your financial data stays on your device by default. BudgeTrak does not collect analytics " +
             "and does not share your data with anyone. When you export your transactions, you can choose encrypted " +
             "format (ChaCha20-Poly1305 with PBKDF2 key derivation) for maximum security. " +
             "If you enable Family Sync, data is shared between your devices using end-to-end encryption \u2014 " +
             "the server cannot read your financial data. Your money, your data, your control.",
         widgetTitle = "Home Screen Widget",
-        widgetBody = "BudgeXync includes a home screen widget that displays your available cash " +
+        widgetBody = "BudgeTrak includes a home screen widget that displays your available cash " +
             "in a Solari flip-display style, so you can check your budget at a glance without opening the app. " +
             "Add it from your launcher's widget picker.",
         widgetSolariDesc = "The widget shows your current available cash on Solari-style flip cards that " +
@@ -754,7 +774,7 @@ object EnglishStrings : AppStrings {
             "screen appear dimmed and are non-functional, a small ad banner appears at the top of every screen, " +
             "and the home screen widget is limited to 1 transaction per day.",
         widgetLogoTitle = "Show Logo on Widget",
-        widgetLogoBody = "When checked, the BudgeXync logo appears between the transaction buttons on the " +
+        widgetLogoBody = "When checked, the BudgeTrak logo appears between the transaction buttons on the " +
             "home screen widget. Uncheck to hide the logo for a more minimal widget appearance.",
         categoriesTitle = "Categories",
         categoriesBody = "Categories let you classify your transactions for better spending insight. " +
@@ -895,11 +915,11 @@ object EnglishStrings : AppStrings {
         savingTitle = "Saving Transactions",
         savingBody = "Tap the Save icon in the header to export all transactions to a file. Two formats are available:",
         csvFormatTitle = "CSV Format",
-        csvFormatBody = "Saves your transactions as a plain-text CSV file (budgexync_transactions.csv). " +
+        csvFormatBody = "Saves your transactions as a plain-text CSV file (budgetrak_transactions.csv). " +
             "This file preserves all data including categories and can be loaded back into the app. " +
             "It can also be opened in spreadsheet software like Excel or Google Sheets for review.",
         encryptedFormatTitle = "Encrypted Format",
-        encryptedFormatBody = "Saves your transactions in an encrypted file (budgexync_transactions.enc) " +
+        encryptedFormatBody = "Saves your transactions in an encrypted file (budgetrak_transactions.enc) " +
             "protected with a password you choose. This is the recommended format for backups " +
             "and transferring data between devices, as it keeps your financial information private.",
         encryptionDetailsTitle = "Encryption Details",
@@ -951,10 +971,10 @@ object EnglishStrings : AppStrings {
         loadUsBank = "US Bank",
         loadUsBankDesc = "Import transactions from a US Bank CSV export file. " +
             "Transactions are automatically categorized based on your existing merchant history.",
-        loadCsv = "BudgeXync CSV Save File",
+        loadCsv = "BudgeTrak CSV Save File",
         loadCsvDesc = "Load a CSV file previously saved from this app. " +
             "All categories and data are preserved exactly as they were.",
-        loadEncrypted = "BudgeXync Encrypted Save File",
+        loadEncrypted = "BudgeTrak Encrypted Save File",
         loadEncryptedDesc = "Load a previously encrypted save file. " +
             "You must enter the password used when the file was saved.",
         loadPasswordNote = "For encrypted files, the password field appears automatically when you select the " +

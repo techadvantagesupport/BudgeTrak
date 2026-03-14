@@ -393,6 +393,35 @@ class MainActivity : ComponentActivity() {
                 persistAvailableCash()
             }
 
+            // Simulation-adjusted available cash: recomputes cash as if the
+            // current period's ledger entry used the live budgetAmount.
+            // This ensures mid-period budget changes (pause/delete/add) are
+            // immediately reflected in the simulation, using the exact same
+            // recomputeAvailableCash logic (single source of truth).
+            val simAvailableCash by remember {
+                derivedStateOf {
+                    val bsd = budgetStartDate
+                    if (bsd == null) {
+                        availableCash
+                    } else {
+                        val currentPeriod = BudgetCalculator.currentPeriodStart(
+                            budgetPeriod, resetDayOfWeek, resetDayOfMonth
+                        )
+                        val adjustedLedger = periodLedger.map { entry ->
+                            if (entry.periodStartDate.toLocalDate() == currentPeriod) {
+                                entry.copy(appliedAmount = budgetAmount)
+                            } else entry
+                        }
+                        BudgetCalculator.recomputeAvailableCash(
+                            bsd, adjustedLedger,
+                            transactions.toList().active,
+                            recurringExpenses.toList().active,
+                            incomeMode, incomeSources.toList().active
+                        )
+                    }
+                }
+            }
+
             // One-time migration: fix stale budget-start ledger entry.
             // If the entry on budgetStartDate has a clock older than
             // budgetStartDate_clock, it's from before the reset and wrong.
@@ -1273,7 +1302,7 @@ class MainActivity : ComponentActivity() {
                         baseBudget = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount,
                         amortizationEntries = amortizationEntries.toList().active,
                         savingsGoals = savingsGoals.toList().active,
-                        availableCash = availableCash,
+                        availableCash = simAvailableCash,
                         resetDayOfWeek = resetDayOfWeek,
                         resetDayOfMonth = resetDayOfMonth,
                         currencySymbol = currencySymbol
@@ -2406,6 +2435,30 @@ class MainActivity : ComponentActivity() {
                                 saveIncomeSources()
                             }
                         },
+                        onAddAmortization = { entry ->
+                            val clock = lamportClock.tick()
+                            amortizationEntries.add(entry.copy(
+                                deviceId = localDeviceId,
+                                source_clock = clock,
+                                description_clock = clock,
+                                amount_clock = clock,
+                                totalPeriods_clock = clock,
+                                startDate_clock = clock,
+                                isPaused_clock = clock,
+                                deviceId_clock = clock
+                            ))
+                            saveAmortizationEntries()
+                        },
+                        onDeleteAmortization = { entry ->
+                            val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
+                            if (idx >= 0) {
+                                val clock = lamportClock.tick()
+                                amortizationEntries[idx] = amortizationEntries[idx].copy(
+                                    deleted = true, deleted_clock = clock
+                                )
+                                saveAmortizationEntries()
+                            }
+                        },
                         onBack = { currentScreen = "main" },
                         onHelpClick = { currentScreen = "transactions_help" }
                     )
@@ -2419,7 +2472,7 @@ class MainActivity : ComponentActivity() {
                         incomeSources = incomeSources.toList().active,
                         amortizationEntries = amortizationEntries.toList().active,
                         baseBudget = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount,
-                        availableCash = availableCash,
+                        availableCash = simAvailableCash,
                         resetDayOfWeek = resetDayOfWeek,
                         resetDayOfMonth = resetDayOfMonth,
                         isManualOverBudget = isManualBudgetEnabled && manualBudgetAmount > safeBudgetAmount,
@@ -2492,7 +2545,7 @@ class MainActivity : ComponentActivity() {
                         baseBudget = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount,
                         amortizationEntries = amortizationEntries.toList().active,
                         savingsGoals = savingsGoals.toList().active,
-                        availableCash = availableCash,
+                        availableCash = simAvailableCash,
                         resetDayOfWeek = resetDayOfWeek,
                         resetDayOfMonth = resetDayOfMonth,
                         currencySymbol = currencySymbol,
@@ -2504,6 +2557,7 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         budgetPeriod = budgetPeriod,
                         dateFormatPattern = dateFormatPattern,
+                        transactions = transactions.toList().active,
                         onAddEntry = { entry ->
                             val clock = lamportClock.tick()
                             amortizationEntries.add(entry.copy(
@@ -3395,10 +3449,31 @@ class MainActivity : ComponentActivity() {
                         incomeSources = incomeSources.toList().active,
                         savingsGoals = savingsGoals.toList().active,
                         pastSources = transactions.toList().active.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
+                        budgetPeriod = budgetPeriod,
                         onDismiss = { dashboardShowAddIncome = false },
                         onSave = { txn ->
                             runMatchingChain(txn)
                             dashboardShowAddIncome = false
+                        },
+                        onAddAmortization = { entry ->
+                            val clock = lamportClock.tick()
+                            amortizationEntries.add(entry.copy(
+                                deviceId = localDeviceId,
+                                source_clock = clock, description_clock = clock,
+                                amount_clock = clock, totalPeriods_clock = clock,
+                                startDate_clock = clock, isPaused_clock = clock,
+                                deviceId_clock = clock
+                            ))
+                            saveAmortizationEntries()
+                        },
+                        onDeleteAmortization = { entry ->
+                            val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
+                            if (idx >= 0) {
+                                amortizationEntries[idx] = amortizationEntries[idx].copy(
+                                    deleted = true, deleted_clock = lamportClock.tick()
+                                )
+                                saveAmortizationEntries()
+                            }
                         }
                     )
                 }
@@ -3418,10 +3493,31 @@ class MainActivity : ComponentActivity() {
                         incomeSources = incomeSources.toList().active,
                         savingsGoals = savingsGoals.toList().active,
                         pastSources = transactions.toList().active.groupingBy { it.source }.eachCount().entries.sortedByDescending { it.value }.map { it.key },
+                        budgetPeriod = budgetPeriod,
                         onDismiss = { dashboardShowAddExpense = false },
                         onSave = { txn ->
                             runMatchingChain(txn)
                             dashboardShowAddExpense = false
+                        },
+                        onAddAmortization = { entry ->
+                            val clock = lamportClock.tick()
+                            amortizationEntries.add(entry.copy(
+                                deviceId = localDeviceId,
+                                source_clock = clock, description_clock = clock,
+                                amount_clock = clock, totalPeriods_clock = clock,
+                                startDate_clock = clock, isPaused_clock = clock,
+                                deviceId_clock = clock
+                            ))
+                            saveAmortizationEntries()
+                        },
+                        onDeleteAmortization = { entry ->
+                            val idx = amortizationEntries.indexOfFirst { it.id == entry.id }
+                            if (idx >= 0) {
+                                amortizationEntries[idx] = amortizationEntries[idx].copy(
+                                    deleted = true, deleted_clock = lamportClock.tick()
+                                )
+                                saveAmortizationEntries()
+                            }
                         }
                     )
                 }

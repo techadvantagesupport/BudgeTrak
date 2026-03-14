@@ -3,6 +3,7 @@ package com.syncbudget.app.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -225,6 +227,29 @@ fun BudgetCalendarScreen(
             val expenseBg = expenseColor.copy(alpha = 0.18f)
             val todayBorder = MaterialTheme.colorScheme.primary
 
+            val swipeThreshold = with(density) { 48.dp.toPx() }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .pointerInput(Unit) {
+                        var totalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { totalDrag = 0f },
+                            onDragEnd = {
+                                if (totalDrag > swipeThreshold) {
+                                    displayedMonth = displayedMonth.minusMonths(1)
+                                } else if (totalDrag < -swipeThreshold) {
+                                    displayedMonth = displayedMonth.plusMonths(1)
+                                }
+                            },
+                            onDragCancel = { totalDrag = 0f },
+                            onHorizontalDrag = { _, dragAmount ->
+                                totalDrag += dragAmount
+                            }
+                        )
+                    }
+            ) {
             for (week in 0 until 6) {
                 Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     for (col in 0 until 7) {
@@ -297,11 +322,20 @@ fun BudgetCalendarScreen(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
+                                    if (events.size > 1) {
+                                        Text(
+                                            text = "[${events.size}]",
+                                            fontSize = amountFontSize,
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
             }
         }
     }

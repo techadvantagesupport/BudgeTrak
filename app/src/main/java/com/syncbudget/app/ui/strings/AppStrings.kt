@@ -261,6 +261,24 @@ data class TransactionsStrings(
     val unverifiedToast: String,
     val excludedToast: String,
     val includedToast: String,
+    // Effect explanation popup strings
+    val effectTitleRecurring: String,
+    val effectTitleAmortization: String,
+    val effectTitleIncome: String,
+    val effectTitleSavingsGoal: String,
+    val effectTitleExcluded: String,
+    val effectRecurringMatch: (String, String, String) -> String,
+    val effectRecurringUnder: (String, String, String, String) -> String,
+    val effectRecurringOver: (String, String, String, String) -> String,
+    val effectAmortizationComplete: (String, String, String, String, String) -> String,
+    val effectAmortizationActive: (String, String, String, String, String, String, String) -> String,
+    val effectIncomeFixed: (String, String, String) -> String,
+    val effectIncomeActualMatch: (String, String, String) -> String,
+    val effectIncomeActualOver: (String, String, String, String) -> String,
+    val effectIncomeActualUnder: (String, String, String, String) -> String,
+    val effectIncomeActualAdjust: (String, String) -> String,
+    val effectSavingsGoal: (String, String) -> String,
+    val effectExcluded: (String) -> String,
     val bulkVerifyTitle: String,
     val bulkVerifyMessage: (Int) -> String,
     val markVerified: String,
@@ -326,6 +344,7 @@ data class TransactionsStrings(
     val fullBackupGroupDissolved: String,
     val linkToRecurring: String,
     val linkToAmortization: String,
+    val createNewAmortization: String,
     val linkToIncome: String,
     val linkToSavingsGoal: String,
     val linkMismatchTitle: String,
@@ -340,8 +359,8 @@ data class TransactionsStrings(
     // Bank format names
     val formatGenericCsv: String,
     val formatUsBank: String,
-    val formatBudgeXyncCsv: String,
-    val formatBudgeXyncEncrypted: String,
+    val formatBudgeTrakCsv: String,
+    val formatBudgeTrakEncrypted: String,
     // Misc untranslated
     val unknown: String,
     val amountExample: String,
@@ -420,7 +439,9 @@ data class AmortizationStrings(
     val pauseAll: String,
     val resumeAll: String,
     val pause: String,
-    val resume: String
+    val resume: String,
+    val linkedTransactions: String,
+    val noLinkedTransactions: String
 )
 
 data class RecurringExpensesStrings(

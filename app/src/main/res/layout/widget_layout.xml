@@ -42,7 +42,7 @@
             android:scaleType="fitCenter"
             android:adjustViewBounds="true"
             android:padding="2dp"
-            android:src="@drawable/budgexync_logo"
+            android:src="@drawable/budgetrak_logo"
             android:contentDescription="@string/app_name" />
 
         <!-- Expense (-) button -->

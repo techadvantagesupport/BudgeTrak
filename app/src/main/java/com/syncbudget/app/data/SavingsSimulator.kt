@@ -189,6 +189,7 @@ object SavingsSimulator {
             var savingsDed = 0.0
             savingsGoals.forEachIndexed { i, goal ->
                 if (goal.isPaused) return@forEachIndexed
+                if (goal.totalSavedSoFar >= goal.targetAmount) return@forEachIndexed
                 val remaining = goal.targetAmount - simGoalSaved[i]
                 if (remaining <= 0) return@forEachIndexed
                 val ded = if (goal.targetDate != null) {
@@ -464,6 +465,7 @@ object SavingsSimulator {
             var savingsDed = 0.0
             savingsGoals.forEachIndexed { i, goal ->
                 if (goal.isPaused) return@forEachIndexed
+                if (goal.totalSavedSoFar >= goal.targetAmount) return@forEachIndexed
                 val remaining = goal.targetAmount - simGoalSaved[i]
                 if (remaining <= 0) return@forEachIndexed
                 val ded = if (goal.targetDate != null) {
