@@ -822,6 +822,75 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             if (anyRescued) saveIncomeSources()
+                            // Rescue period ledger entries with stranded clocks
+                            anyRescued = false
+                            for (i in periodLedger.indices) {
+                                val e = periodLedger[i]
+                                if (e.deviceId != localDeviceId) continue
+                                if (stranded(e.clock)) {
+                                    anyRescued = true
+                                    periodLedger[i] = e.copy(clock = rc)
+                                }
+                            }
+                            if (anyRescued) savePeriodLedger()
+                            // Rescue savings goals with stranded clocks
+                            anyRescued = false
+                            for (i in savingsGoals.indices) {
+                                val g = savingsGoals[i]
+                                if (g.deviceId != localDeviceId) continue
+                                if (stranded(g.name_clock) || stranded(g.targetAmount_clock) ||
+                                    stranded(g.totalSavedSoFar_clock) || stranded(g.contributionPerPeriod_clock) ||
+                                    stranded(g.isPaused_clock) || stranded(g.deviceId_clock) ||
+                                    stranded(g.deleted_clock)) {
+                                    anyRescued = true
+                                    savingsGoals[i] = g.copy(
+                                        name_clock = if (stranded(g.name_clock)) rc else g.name_clock,
+                                        targetAmount_clock = if (stranded(g.targetAmount_clock)) rc else g.targetAmount_clock,
+                                        totalSavedSoFar_clock = if (stranded(g.totalSavedSoFar_clock)) rc else g.totalSavedSoFar_clock,
+                                        contributionPerPeriod_clock = if (stranded(g.contributionPerPeriod_clock)) rc else g.contributionPerPeriod_clock,
+                                        isPaused_clock = if (stranded(g.isPaused_clock)) rc else g.isPaused_clock,
+                                        deviceId_clock = if (stranded(g.deviceId_clock)) rc else g.deviceId_clock,
+                                        deleted_clock = if (stranded(g.deleted_clock)) rc else g.deleted_clock)
+                                }
+                            }
+                            if (anyRescued) saveSavingsGoals()
+                            // Rescue amortization entries with stranded clocks
+                            anyRescued = false
+                            for (i in amortizationEntries.indices) {
+                                val e = amortizationEntries[i]
+                                if (e.deviceId != localDeviceId) continue
+                                if (stranded(e.source_clock) || stranded(e.amount_clock) ||
+                                    stranded(e.totalPeriods_clock) || stranded(e.startDate_clock) ||
+                                    stranded(e.isPaused_clock) || stranded(e.deviceId_clock) ||
+                                    stranded(e.deleted_clock)) {
+                                    anyRescued = true
+                                    amortizationEntries[i] = e.copy(
+                                        source_clock = if (stranded(e.source_clock)) rc else e.source_clock,
+                                        amount_clock = if (stranded(e.amount_clock)) rc else e.amount_clock,
+                                        totalPeriods_clock = if (stranded(e.totalPeriods_clock)) rc else e.totalPeriods_clock,
+                                        startDate_clock = if (stranded(e.startDate_clock)) rc else e.startDate_clock,
+                                        isPaused_clock = if (stranded(e.isPaused_clock)) rc else e.isPaused_clock,
+                                        deviceId_clock = if (stranded(e.deviceId_clock)) rc else e.deviceId_clock,
+                                        deleted_clock = if (stranded(e.deleted_clock)) rc else e.deleted_clock)
+                                }
+                            }
+                            if (anyRescued) saveAmortizationEntries()
+                            // Rescue categories with stranded clocks
+                            anyRescued = false
+                            for (i in categories.indices) {
+                                val c = categories[i]
+                                if (c.deviceId != localDeviceId) continue
+                                if (stranded(c.name_clock) || stranded(c.tag_clock) ||
+                                    stranded(c.deviceId_clock) || stranded(c.deleted_clock)) {
+                                    anyRescued = true
+                                    categories[i] = c.copy(
+                                        name_clock = if (stranded(c.name_clock)) rc else c.name_clock,
+                                        tag_clock = if (stranded(c.tag_clock)) rc else c.tag_clock,
+                                        deviceId_clock = if (stranded(c.deviceId_clock)) rc else c.deviceId_clock,
+                                        deleted_clock = if (stranded(c.deleted_clock)) rc else c.deleted_clock)
+                                }
+                            }
+                            if (anyRescued) saveCategories()
                         }
 
                         // Continuous fix: stamp critical field clocks that are still 0
