@@ -56,7 +56,7 @@ object WidgetRenderer {
         decimalPlaces: Int,
         minDigitCount: Int = 3,
         upgradeText: String = "Upgrade for full widget"
-    ): RenderResult {
+    ): RenderResult? {
         val cardBg = if (isDarkMode) DARK_CARD_BG else LIGHT_CARD_BG
         val cardText = if (isDarkMode) DARK_CARD_TEXT else LIGHT_CARD_TEXT
         val dividerColor = if (isDarkMode) DARK_DIVIDER else LIGHT_DIVIDER
@@ -102,6 +102,7 @@ object WidgetRenderer {
         val dotSpace = if (hasDecimals) DOT_WIDTH else 0f
         val availableWidth = widgetWidth - 2 * FRAME_H_PAD - gapCount * GAP - dotSpace
         val maxCardHeight = (maxHeight.toFloat() - 2 * FRAME_V_PAD).coerceAtLeast(20f)
+        if (fullCardCount <= 0) return null
         val cardWidth = (availableWidth / fullCardCount)
             .coerceAtMost(maxCardHeight / CARD_ASPECT)
         val cardHeight = (cardWidth * CARD_ASPECT).coerceAtMost(maxCardHeight)
@@ -110,7 +111,11 @@ object WidgetRenderer {
         val bitmapHeight = (FRAME_V_PAD + cardHeight + FRAME_V_PAD).toInt()
             .coerceAtMost(maxHeight).coerceAtLeast(20)
 
-        val bitmap = Bitmap.createBitmap(widgetWidth, bitmapHeight, Bitmap.Config.ARGB_8888)
+        val bitmap = try {
+            Bitmap.createBitmap(widgetWidth, bitmapHeight, Bitmap.Config.ARGB_8888)
+        } catch (_: OutOfMemoryError) {
+            return null  // caller should show text-only fallback
+        }
         val canvas = Canvas(bitmap)
 
         // Total row width for centering

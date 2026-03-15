@@ -140,8 +140,12 @@ fun DialogPrimaryButton(
     contentPadding: PaddingValues = CompactButtonPadding,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
+    var lastClickTime by remember { mutableStateOf(0L) }
     Button(
-        onClick = onClick,
+        onClick = {
+            val now = System.currentTimeMillis()
+            if (now - lastClickTime > 500) { lastClickTime = now; onClick() }
+        },
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
@@ -278,8 +282,12 @@ fun DialogDangerButton(
     enabled: Boolean = true,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
+    var lastClickTime by remember { mutableStateOf(0L) }
     Button(
-        onClick = onClick,
+        onClick = {
+            val now = System.currentTimeMillis()
+            if (now - lastClickTime > 500) { lastClickTime = now; onClick() }
+        },
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
@@ -299,8 +307,12 @@ fun DialogWarningButton(
     enabled: Boolean = true,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
+    var lastClickTime by remember { mutableStateOf(0L) }
     Button(
-        onClick = onClick,
+        onClick = {
+            val now = System.currentTimeMillis()
+            if (now - lastClickTime > 500) { lastClickTime = now; onClick() }
+        },
         modifier = modifier,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),

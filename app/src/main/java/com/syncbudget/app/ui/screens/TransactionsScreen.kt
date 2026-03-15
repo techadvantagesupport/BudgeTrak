@@ -1,6 +1,8 @@
 package com.syncbudget.app.ui.screens
 
 import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -469,7 +471,7 @@ fun TransactionsScreen(
         }
     }
 
-    // Process file when URI is set — dispatch on selected format
+    // Process file when URI is set — dispatch on IO thread to avoid ANR
     LaunchedEffect(pendingUri) {
         val uri = pendingUri ?: return@LaunchedEffect
         pendingUri = null
@@ -478,14 +480,12 @@ fun TransactionsScreen(
         try {
             val existingIdSet = transactions.map { it.id }.toSet()
 
-            val result = when (selectedBankFormat) {
+            // Run file I/O and parsing on IO dispatcher to avoid ANR
+            val result = withContext(Dispatchers.IO) {
+                when (selectedBankFormat) {
                 BankFormat.GENERIC_CSV -> {
                     val inputStream = context.contentResolver.openInputStream(uri)
-                    if (inputStream == null) {
-                        importError = "Could not open file"
-                        importStage = ImportStage.PARSE_ERROR
-                        return@LaunchedEffect
-                    }
+                        ?: return@withContext null
                     val reader = BufferedReader(InputStreamReader(inputStream))
                     val r = parseGenericCsv(reader, existingIdSet)
                     reader.close()
@@ -493,11 +493,7 @@ fun TransactionsScreen(
                 }
                 BankFormat.US_BANK -> {
                     val inputStream = context.contentResolver.openInputStream(uri)
-                    if (inputStream == null) {
-                        importError = "Could not open file"
-                        importStage = ImportStage.PARSE_ERROR
-                        return@LaunchedEffect
-                    }
+                        ?: return@withContext null
                     val reader = BufferedReader(InputStreamReader(inputStream))
                     val r = parseUsBank(reader, existingIdSet)
                     reader.close()
@@ -505,17 +501,13 @@ fun TransactionsScreen(
                 }
                 BankFormat.SECURESYNC_CSV -> {
                     val inputStream = context.contentResolver.openInputStream(uri)
-                    if (inputStream == null) {
-                        importError = "Could not open file"
-                        importStage = ImportStage.PARSE_ERROR
-                        return@LaunchedEffect
-                    }
+                        ?: return@withContext null
                     val textContent = inputStream.bufferedReader().use { it.readText() }
                     if (FullBackupSerializer.isFullBackup(textContent)) {
                         pendingFullBackupContent = textContent
                         showFullBackupDialog = true
                         importStage = null
-                        return@LaunchedEffect
+                        return@withContext null
                     }
                     val reader = BufferedReader(textContent.reader())
                     val r = parseSyncBudgetCsv(reader, existingIdSet)
@@ -524,11 +516,7 @@ fun TransactionsScreen(
                 }
                 BankFormat.SECURESYNC_ENCRYPTED -> {
                     val inputStream = context.contentResolver.openInputStream(uri)
-                    if (inputStream == null) {
-                        importError = "Could not open file"
-                        importStage = ImportStage.PARSE_ERROR
-                        return@LaunchedEffect
-                    }
+                        ?: return@withContext null
                     try {
                         val encryptedBytes = inputStream.readBytes()
                         inputStream.close()
@@ -542,7 +530,7 @@ fun TransactionsScreen(
                             pendingFullBackupContent = textContent
                             showFullBackupDialog = true
                             importStage = null
-                            return@LaunchedEffect
+                            return@withContext null
                         }
                         val reader = BufferedReader(textContent.reader())
                         val r = parseSyncBudgetCsv(reader, existingIdSet)
@@ -552,16 +540,24 @@ fun TransactionsScreen(
                         encryptedLoadPassword = ""
                         importError = "Wrong password or corrupted file"
                         importStage = ImportStage.PARSE_ERROR
-                        return@LaunchedEffect
+                        return@withContext null
                     } catch (e: javax.crypto.BadPaddingException) {
                         encryptedLoadPassword = ""
                         importError = "Wrong password or corrupted file"
                         importStage = ImportStage.PARSE_ERROR
-                        return@LaunchedEffect
+                        return@withContext null
                     }
                 }
-            }
+            } }  // close when + withContext
 
+            if (result == null) {
+                // Early return from withContext (file open failed, backup detected, etc.)
+                if (importStage == ImportStage.PARSING) {
+                    importError = "Could not open file"
+                    importStage = ImportStage.PARSE_ERROR
+                }
+                return@LaunchedEffect
+            }
             parsedTransactions.clear()
             parsedTransactions.addAll(result.transactions)
             importSkippedRows = result.skippedRows

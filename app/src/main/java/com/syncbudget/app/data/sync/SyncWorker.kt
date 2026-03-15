@@ -30,6 +30,9 @@ class SyncWorker(
         if (!fileLock.tryLock()) return Result.success()
         try {
             return doSyncWork()
+        } catch (e: Exception) {
+            android.util.Log.e("SyncWorker", "Background sync failed: ${e.message}", e)
+            return Result.retry()
         } finally {
             fileLock.unlock()
         }

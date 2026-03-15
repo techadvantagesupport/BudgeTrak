@@ -104,6 +104,11 @@ class BudgetWidgetProvider : AppWidgetProvider() {
                 upgradeText = widgetStrings.dashboard.upgradeForFullWidget
             )
 
+            if (result == null) {
+                // Render failed (OOM or invalid dimensions) — skip bitmap update
+                appWidgetManager.updateAppWidget(appWidgetId, views)
+                return
+            }
             views.setImageViewBitmap(R.id.widget_solari, result.bitmap)
 
             // Toggle logo visibility
