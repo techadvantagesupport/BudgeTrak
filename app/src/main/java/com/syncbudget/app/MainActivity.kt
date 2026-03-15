@@ -325,15 +325,22 @@ class MainActivity : ComponentActivity() {
             val activeSavingsGoals: List<SavingsGoal> by remember { derivedStateOf { savingsGoals.filter { !it.deleted } } }
             val activeCategories: List<Category> by remember { derivedStateOf { categories.filter { !it.deleted } } }
 
-            // Budget "today" respects resetHour: before resetHour in DAILY mode
-            // we're still in yesterday's period, so calculations should use yesterday.
+            // Budget "today" respects resetHour: before resetHour on a reset
+            // day we're still in the previous period for all modes.
             val budgetToday by remember {
                 derivedStateOf {
                     val now = java.time.LocalDateTime.now()
-                    if (budgetPeriod == BudgetPeriod.DAILY && resetHour > 0 && now.hour < resetHour)
-                        now.toLocalDate().minusDays(1)
+                    val calendarToday = now.toLocalDate()
+                    val isBeforeResetHour = resetHour > 0 && now.hour < resetHour
+                    val isResetDay = when (budgetPeriod) {
+                        BudgetPeriod.DAILY -> true
+                        BudgetPeriod.WEEKLY -> calendarToday.dayOfWeek == java.time.DayOfWeek.of(resetDayOfWeek)
+                        BudgetPeriod.MONTHLY -> calendarToday.dayOfMonth == resetDayOfMonth.coerceAtMost(calendarToday.lengthOfMonth())
+                    }
+                    if (isResetDay && isBeforeResetHour)
+                        calendarToday.minusDays(1)
                     else
-                        now.toLocalDate()
+                        calendarToday
                 }
             }
 
@@ -1366,10 +1373,15 @@ class MainActivity : ComponentActivity() {
                         // at resetHour, not midnight. Before resetHour we're still in
                         // yesterday's period.
                         val now = java.time.LocalDateTime.now()
-                        val today = if (budgetPeriod == BudgetPeriod.DAILY && resetHour > 0 && now.hour < resetHour)
-                            now.toLocalDate().minusDays(1)
-                        else
-                            now.toLocalDate()
+                        val calendarToday = now.toLocalDate()
+                        val isBeforeResetHour = resetHour > 0 && now.hour < resetHour
+                        val isResetDay = when (budgetPeriod) {
+                            BudgetPeriod.DAILY -> true
+                            BudgetPeriod.WEEKLY -> calendarToday.dayOfWeek == java.time.DayOfWeek.of(resetDayOfWeek)
+                            BudgetPeriod.MONTHLY -> calendarToday.dayOfMonth == resetDayOfMonth.coerceAtMost(calendarToday.lengthOfMonth())
+                        }
+                        val today = if (isResetDay && isBeforeResetHour)
+                            calendarToday.minusDays(1) else calendarToday
                         val missedPeriods = BudgetCalculator.countPeriodsCompleted(lastRefreshDate!!, today, budgetPeriod)
                         if (missedPeriods > 0) {
                             lastRefreshDate = today
