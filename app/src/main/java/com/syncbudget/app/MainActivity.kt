@@ -728,10 +728,14 @@ class MainActivity : ComponentActivity() {
                         // IMPORTANT: use a SINGLE clock tick for the entire batch
                         // so that all rescued clocks == lastPushedClock after push,
                         // preventing an infinite re-stamp → push → re-stamp loop.
+                        // Single clock tick shared by BOTH rescue and clk=0 fix.
+                        // Using two separate ticks creates sequential values where
+                        // the lower one becomes stranded next cycle → infinite loop.
+                        val rescueClk = lamportClock.tick()
                         val lpc = syncPrefs.getLong("lastPushedClock", 0L)
                         if (lpc > 0) {
                             val stranded = { clk: Long -> clk in 1 until lpc }
-                            val rc = lamportClock.tick()  // one clock for entire rescue batch
+                            val rc = rescueClk
                             var anyRescued = false
                             for (i in transactions.indices) {
                                 val t = transactions[i]
@@ -829,7 +833,7 @@ class MainActivity : ComponentActivity() {
                         // push loop oscillation (same fix as rescue above).
                         run {
                             var changed = false
-                            val clk0Fix = lamportClock.tick()
+                            val clk0Fix = rescueClk  // same tick as rescue
                             transactions.forEachIndexed { i, t ->
                                 // Only fix records in the sync system (have a deviceId)
                                 if (t.deviceId.isEmpty()) return@forEachIndexed
