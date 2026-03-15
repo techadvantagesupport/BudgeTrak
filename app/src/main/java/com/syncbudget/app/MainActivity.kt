@@ -737,6 +737,10 @@ class MainActivity : ComponentActivity() {
                             val stranded = { clk: Long -> clk in 1 until lpc }
                             val rc = rescueClk
                             var anyRescued = false
+                            // When ANY field on a record is stranded, stamp ALL fields
+                            // to rc.  Stamping only stranded fields creates mixed clocks
+                            // where the highest field advances lastPushedClock past the
+                            // lower fields, making them stranded again → infinite loop.
                             for (i in transactions.indices) {
                                 val t = transactions[i]
                                 if (t.deviceId != localDeviceId) continue
@@ -752,25 +756,16 @@ class MainActivity : ComponentActivity() {
                                     stranded(t.deleted_clock)) {
                                     anyRescued = true
                                     transactions[i] = t.copy(
-                                        source_clock = if (stranded(t.source_clock)) rc else t.source_clock,
-                                        description_clock = if (stranded(t.description_clock)) rc else t.description_clock,
-                                        amount_clock = if (stranded(t.amount_clock)) rc else t.amount_clock,
-                                        date_clock = if (stranded(t.date_clock)) rc else t.date_clock,
-                                        type_clock = if (stranded(t.type_clock)) rc else t.type_clock,
-                                        categoryAmounts_clock = if (stranded(t.categoryAmounts_clock)) rc else t.categoryAmounts_clock,
-                                        isUserCategorized_clock = if (stranded(t.isUserCategorized_clock)) rc else t.isUserCategorized_clock,
-                                        excludeFromBudget_clock = if (stranded(t.excludeFromBudget_clock)) rc else t.excludeFromBudget_clock,
-                                        isBudgetIncome_clock = if (stranded(t.isBudgetIncome_clock)) rc else t.isBudgetIncome_clock,
-                                        linkedRecurringExpenseId_clock = if (stranded(t.linkedRecurringExpenseId_clock)) rc else t.linkedRecurringExpenseId_clock,
-                                        linkedAmortizationEntryId_clock = if (stranded(t.linkedAmortizationEntryId_clock)) rc else t.linkedAmortizationEntryId_clock,
-                                        linkedIncomeSourceId_clock = if (stranded(t.linkedIncomeSourceId_clock)) rc else t.linkedIncomeSourceId_clock,
-                                        amortizationAppliedAmount_clock = if (stranded(t.amortizationAppliedAmount_clock)) rc else t.amortizationAppliedAmount_clock,
-                                        linkedRecurringExpenseAmount_clock = if (stranded(t.linkedRecurringExpenseAmount_clock)) rc else t.linkedRecurringExpenseAmount_clock,
-                                        linkedIncomeSourceAmount_clock = if (stranded(t.linkedIncomeSourceAmount_clock)) rc else t.linkedIncomeSourceAmount_clock,
-                                        linkedSavingsGoalId_clock = if (stranded(t.linkedSavingsGoalId_clock)) rc else t.linkedSavingsGoalId_clock,
-                                        linkedSavingsGoalAmount_clock = if (stranded(t.linkedSavingsGoalAmount_clock)) rc else t.linkedSavingsGoalAmount_clock,
-                                        deviceId_clock = if (stranded(t.deviceId_clock)) rc else t.deviceId_clock,
-                                        deleted_clock = if (stranded(t.deleted_clock)) rc else t.deleted_clock)
+                                        source_clock = rc, description_clock = rc,
+                                        amount_clock = rc, date_clock = rc,
+                                        type_clock = rc, categoryAmounts_clock = rc,
+                                        isUserCategorized_clock = rc, excludeFromBudget_clock = rc,
+                                        isBudgetIncome_clock = rc, linkedRecurringExpenseId_clock = rc,
+                                        linkedAmortizationEntryId_clock = rc, linkedIncomeSourceId_clock = rc,
+                                        amortizationAppliedAmount_clock = rc, linkedRecurringExpenseAmount_clock = rc,
+                                        linkedIncomeSourceAmount_clock = rc, linkedSavingsGoalId_clock = rc,
+                                        linkedSavingsGoalAmount_clock = rc, deviceId_clock = rc,
+                                        deleted_clock = rc)
                                 }
                             }
                             if (anyRescued) saveTransactions()
@@ -785,16 +780,11 @@ class MainActivity : ComponentActivity() {
                                     stranded(r.deviceId_clock) || stranded(r.deleted_clock)) {
                                     anyRescued = true
                                     recurringExpenses[i] = r.copy(
-                                        source_clock = if (stranded(r.source_clock)) rc else r.source_clock,
-                                        description_clock = if (stranded(r.description_clock)) rc else r.description_clock,
-                                        amount_clock = if (stranded(r.amount_clock)) rc else r.amount_clock,
-                                        repeatType_clock = if (stranded(r.repeatType_clock)) rc else r.repeatType_clock,
-                                        repeatInterval_clock = if (stranded(r.repeatInterval_clock)) rc else r.repeatInterval_clock,
-                                        startDate_clock = if (stranded(r.startDate_clock)) rc else r.startDate_clock,
-                                        monthDay1_clock = if (stranded(r.monthDay1_clock)) rc else r.monthDay1_clock,
-                                        monthDay2_clock = if (stranded(r.monthDay2_clock)) rc else r.monthDay2_clock,
-                                        deviceId_clock = if (stranded(r.deviceId_clock)) rc else r.deviceId_clock,
-                                        deleted_clock = if (stranded(r.deleted_clock)) rc else r.deleted_clock)
+                                        source_clock = rc, description_clock = rc,
+                                        amount_clock = rc, repeatType_clock = rc,
+                                        repeatInterval_clock = rc, startDate_clock = rc,
+                                        monthDay1_clock = rc, monthDay2_clock = rc,
+                                        deviceId_clock = rc, deleted_clock = rc)
                                 }
                             }
                             if (anyRescued) saveRecurringExpenses()
@@ -809,16 +799,11 @@ class MainActivity : ComponentActivity() {
                                     stranded(s.deviceId_clock) || stranded(s.deleted_clock)) {
                                     anyRescued = true
                                     incomeSources[i] = s.copy(
-                                        source_clock = if (stranded(s.source_clock)) rc else s.source_clock,
-                                        description_clock = if (stranded(s.description_clock)) rc else s.description_clock,
-                                        amount_clock = if (stranded(s.amount_clock)) rc else s.amount_clock,
-                                        repeatType_clock = if (stranded(s.repeatType_clock)) rc else s.repeatType_clock,
-                                        repeatInterval_clock = if (stranded(s.repeatInterval_clock)) rc else s.repeatInterval_clock,
-                                        startDate_clock = if (stranded(s.startDate_clock)) rc else s.startDate_clock,
-                                        monthDay1_clock = if (stranded(s.monthDay1_clock)) rc else s.monthDay1_clock,
-                                        monthDay2_clock = if (stranded(s.monthDay2_clock)) rc else s.monthDay2_clock,
-                                        deviceId_clock = if (stranded(s.deviceId_clock)) rc else s.deviceId_clock,
-                                        deleted_clock = if (stranded(s.deleted_clock)) rc else s.deleted_clock)
+                                        source_clock = rc, description_clock = rc,
+                                        amount_clock = rc, repeatType_clock = rc,
+                                        repeatInterval_clock = rc, startDate_clock = rc,
+                                        monthDay1_clock = rc, monthDay2_clock = rc,
+                                        deviceId_clock = rc, deleted_clock = rc)
                                 }
                             }
                             if (anyRescued) saveIncomeSources()
@@ -844,13 +829,9 @@ class MainActivity : ComponentActivity() {
                                     stranded(g.deleted_clock)) {
                                     anyRescued = true
                                     savingsGoals[i] = g.copy(
-                                        name_clock = if (stranded(g.name_clock)) rc else g.name_clock,
-                                        targetAmount_clock = if (stranded(g.targetAmount_clock)) rc else g.targetAmount_clock,
-                                        totalSavedSoFar_clock = if (stranded(g.totalSavedSoFar_clock)) rc else g.totalSavedSoFar_clock,
-                                        contributionPerPeriod_clock = if (stranded(g.contributionPerPeriod_clock)) rc else g.contributionPerPeriod_clock,
-                                        isPaused_clock = if (stranded(g.isPaused_clock)) rc else g.isPaused_clock,
-                                        deviceId_clock = if (stranded(g.deviceId_clock)) rc else g.deviceId_clock,
-                                        deleted_clock = if (stranded(g.deleted_clock)) rc else g.deleted_clock)
+                                        name_clock = rc, targetAmount_clock = rc,
+                                        totalSavedSoFar_clock = rc, contributionPerPeriod_clock = rc,
+                                        isPaused_clock = rc, deviceId_clock = rc, deleted_clock = rc)
                                 }
                             }
                             if (anyRescued) saveSavingsGoals()
@@ -865,13 +846,9 @@ class MainActivity : ComponentActivity() {
                                     stranded(e.deleted_clock)) {
                                     anyRescued = true
                                     amortizationEntries[i] = e.copy(
-                                        source_clock = if (stranded(e.source_clock)) rc else e.source_clock,
-                                        amount_clock = if (stranded(e.amount_clock)) rc else e.amount_clock,
-                                        totalPeriods_clock = if (stranded(e.totalPeriods_clock)) rc else e.totalPeriods_clock,
-                                        startDate_clock = if (stranded(e.startDate_clock)) rc else e.startDate_clock,
-                                        isPaused_clock = if (stranded(e.isPaused_clock)) rc else e.isPaused_clock,
-                                        deviceId_clock = if (stranded(e.deviceId_clock)) rc else e.deviceId_clock,
-                                        deleted_clock = if (stranded(e.deleted_clock)) rc else e.deleted_clock)
+                                        source_clock = rc, amount_clock = rc,
+                                        totalPeriods_clock = rc, startDate_clock = rc,
+                                        isPaused_clock = rc, deviceId_clock = rc, deleted_clock = rc)
                                 }
                             }
                             if (anyRescued) saveAmortizationEntries()
@@ -884,10 +861,8 @@ class MainActivity : ComponentActivity() {
                                     stranded(c.deviceId_clock) || stranded(c.deleted_clock)) {
                                     anyRescued = true
                                     categories[i] = c.copy(
-                                        name_clock = if (stranded(c.name_clock)) rc else c.name_clock,
-                                        tag_clock = if (stranded(c.tag_clock)) rc else c.tag_clock,
-                                        deviceId_clock = if (stranded(c.deviceId_clock)) rc else c.deviceId_clock,
-                                        deleted_clock = if (stranded(c.deleted_clock)) rc else c.deleted_clock)
+                                        name_clock = rc, tag_clock = rc,
+                                        deviceId_clock = rc, deleted_clock = rc)
                                 }
                             }
                             if (anyRescued) saveCategories()
