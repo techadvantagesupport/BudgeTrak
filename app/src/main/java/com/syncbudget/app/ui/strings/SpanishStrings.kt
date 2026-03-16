@@ -718,10 +718,11 @@ object SpanishStrings : AppStrings {
         backDesc = "Volver al panel principal.",
         helpDesc = "Abre esta p\u00e1gina de ayuda.",
         configureTitle = "Configurar tu presupuesto",
-        configureBody = "El primer elemento en Ajustes es un bot\u00f3n que abre la Configuraci\u00f3n del presupuesto. " +
-            "Aqu\u00ed es donde configuras tus fuentes de ingreso, eliges tu per\u00edodo de presupuesto " +
-            "y calculas tu presupuesto diario seguro. Consulta la p\u00e1gina de ayuda de Configuraci\u00f3n " +
-            "del presupuesto para m\u00e1s detalles.",
+        configureBody = "En la parte superior de Ajustes, la Gu\u00eda de Inicio R\u00e1pido " +
+            "gu\u00eda a nuevos usuarios paso a paso. Debajo, los botones Configurar Presupuesto " +
+            "y Sincronizar dan acceso a la configuraci\u00f3n del presupuesto (fuentes de ingreso, " +
+            "per\u00edodo, c\u00e1lculo del presupuesto seguro) y sincronizaci\u00f3n familiar. " +
+            "Consulta sus p\u00e1ginas de ayuda para m\u00e1s detalles.",
         currencyTitle = "Moneda",
         currencyBody = "Elige el s\u00edmbolo de moneda que se muestra en toda la app. El men\u00fa desplegable incluye " +
             "s\u00edmbolos comunes:",
@@ -772,15 +773,15 @@ object SpanishStrings : AppStrings {
         matchCharsBullet = "Caracteres de coincidencia \u2014 longitud m\u00ednima de subcadena compartida para la coincidencia de nombres de comercio",
         matchingNote = "Los valores predeterminados funcionan bien para la mayor\u00eda. Aumenta las tolerancias si la " +
             "app no detecta coincidencias, o reduc\u00e9las si ves demasiados falsos positivos.",
-        paidTitle = "Usuario de pago",
-        paidBody = "Al activarlo, se desbloquean funciones premium y se elimina el banner publicitario:",
-        paidSave = "Guardar transacciones \u2014 exportar a CSV o archivo cifrado",
-        paidLoad = "Cargar transacciones \u2014 importar desde CSV bancario, CSV de la app o respaldo cifrado",
-        paidAdFree = "Experiencia sin anuncios \u2014 el banner en la parte superior de todas las pantallas se oculta",
-        paidWidget = "Acceso completo al widget \u2014 transacciones ilimitadas desde el widget por d\u00eda y una pantalla Solari limpia sin el mensaje de actualizaci\u00f3n",
-        paidNote = "Cuando el Usuario de pago no est\u00e1 activado, los iconos de Guardar y Cargar en la pantalla " +
-            "de Transacciones aparecen atenuados y no funcionan, un peque\u00f1o banner publicitario aparece en la parte superior de cada pantalla, " +
-            "y el widget de la pantalla de inicio est\u00e1 limitado a 1 transacci\u00f3n por d\u00eda.",
+        paidTitle = "Usuario de Pago y Suscriptor",
+        paidBody = "BudgeTrak tiene dos niveles de mejora. Usuario de pago (compra \u00fanica) desbloquea:",
+        paidSave = "Sin anuncios \u2014 el banner en la parte superior de todas las pantallas se oculta",
+        paidLoad = "Widget completo \u2014 transacciones ilimitadas por d\u00eda y Solari limpio sin mensaje de actualizaci\u00f3n",
+        paidAdFree = "Suscriptor (suscripci\u00f3n mensual) agrega funciones avanzadas:",
+        paidWidget = "Guardar/Cargar transacciones \u2014 exportar a CSV o archivo cifrado, importar desde estados de cuenta bancarios",
+        paidNote = "Gr\u00e1fico de simulaci\u00f3n de flujo de efectivo, crear y administrar grupos de sincronizaci\u00f3n, " +
+            "y reclamar rol de administrador. Los usuarios gratuitos pueden unirse a grupos existentes. " +
+            "El estado de suscriptor incluye autom\u00e1ticamente todos los beneficios de usuario de pago.",
         widgetLogoTitle = "Mostrar logo en el widget",
         widgetLogoBody = "Al activarlo, el logo de BudgeTrak aparece entre los botones de transacci\u00f3n en el " +
             "widget de la pantalla de inicio. Desact\u00edvalo para ocultar el logo y obtener una apariencia m\u00e1s minimalista.",
@@ -1421,27 +1422,31 @@ object SpanishStrings : AppStrings {
 
     override val familySyncHelp = FamilySyncHelpStrings(
         title = "Ayuda de Sincronizaci\u00f3n",
-        whatTitle = "\u00bfQu\u00e9 es la Sincronizaci\u00f3n Familiar?",
-        whatBody = "La Sincronizaci\u00f3n Familiar te permite compartir un presupuesto familiar en hasta 5 dispositivos. " +
+        whatTitle = "\u00bfQu\u00e9 es la Sincronizaci\u00f3n?",
+        whatBody = "La Sincronizaci\u00f3n te permite compartir un presupuesto familiar en hasta 5 dispositivos. " +
             "Todas las transacciones, fuentes de ingreso, gastos recurrentes, metas de ahorro y configuraciones " +
             "se mantienen sincronizados autom\u00e1ticamente usando cifrado de extremo a extremo. " +
             "Nadie \u2014 ni siquiera el servidor \u2014 puede leer tus datos financieros.",
         adminRoleTitle = "El Rol de Administrador",
-        adminRoleBody = "La persona que crea el grupo familiar se convierte en administrador. El admin puede " +
+        adminRoleBody = "La persona que crea el grupo se convierte en administrador. Crear un grupo " +
+            "y mantener el rol de admin requiere una suscripci\u00f3n. El admin puede " +
             "cambiar la configuraci\u00f3n compartida del presupuesto (moneda, per\u00edodo, calendario de reinicio), " +
             "iniciar o restablecer el presupuesto, generar c\u00f3digos de emparejamiento para invitar nuevos dispositivos, " +
+            "eliminar dispositivos (mantener pulsado en la lista de dispositivos), " +
             "configurar la zona horaria familiar, habilitar la atribuci\u00f3n de transacciones y disolver el " +
-            "grupo. Los miembros no admin pueden ver la configuraci\u00f3n pero no pueden cambiarla, y el " +
-            "bot\u00f3n Iniciar/Restablecer Presupuesto est\u00e1 desactivado en sus dispositivos.",
+            "grupo. Los miembros no admin pueden ver la configuraci\u00f3n pero no cambiarla \u2014 " +
+            "tocar una opci\u00f3n bloqueada muestra \"Solo administrador\". " +
+            "Los usuarios gratuitos pueden unirse a un grupo sin suscripci\u00f3n.",
         gettingStartedTitle = "Primeros Pasos",
-        gettingStartedBody = "Para configurar la sincronizaci\u00f3n: Abre Configuraci\u00f3n, toca Sincronizaci\u00f3n Familiar y " +
-            "toca \"Crear Grupo Familiar\". Se crear\u00e1 un grupo contigo como admin. " +
+        gettingStartedBody = "Para configurar la sincronizaci\u00f3n: Abre Configuraci\u00f3n, toca Sincronizar y " +
+            "toca \"Crear Grupo\" (requiere suscripci\u00f3n). Se crear\u00e1 un grupo contigo como admin. " +
             "Luego toca \"Generar C\u00f3digo\" y comparte el c\u00f3digo de 6 caracteres con " +
             "tus familiares. Ellos ingresan el c\u00f3digo en su dispositivo para unirse. " +
             "Los c\u00f3digos expiran despu\u00e9s de 10 minutos por seguridad.",
         joiningTitle = "Unirse a un Grupo",
-        joiningBody = "Para unirte a un grupo existente, toca \"Unirse a Grupo Familiar\" e ingresa el " +
-            "c\u00f3digo de 6 caracteres. Importante: unirte reemplazar\u00e1 tus datos locales " +
+        joiningBody = "Para unirte a un grupo existente, toca \"Unirse a Grupo\" e ingresa el " +
+            "c\u00f3digo de 6 caracteres. Cualquier usuario puede unirse sin suscripci\u00f3n. " +
+            "Importante: unirte reemplazar\u00e1 tus datos locales " +
             "con los datos compartidos del grupo. Tus transacciones, metas y configuraciones " +
             "actuales ser\u00e1n sobrescritas. Aseg\u00farate de hacer una copia de seguridad primero.",
         syncStatusTitle = "Estado de Sincronizaci\u00f3n",
@@ -1463,20 +1468,28 @@ object SpanishStrings : AppStrings {
             "Tus propias transacciones muestran \"T\u00fa\" y las de otros dispositivos muestran " +
             "el nombre del dispositivo. Esto ayuda a las familias a ver qui\u00e9n registr\u00f3 cada gasto.",
         adminClaimsTitle = "Reclamos de Admin",
-        adminClaimsBody = "Si el dispositivo admin se pierde o no est\u00e1 disponible, cualquier miembro puede " +
-            "reclamar el rol de admin. Toca \"Reclamar Rol de Admin\" en la pantalla de Sincronizaci\u00f3n Familiar. " +
+        adminClaimsBody = "Si el dispositivo admin se pierde o no est\u00e1 disponible, cualquier suscriptor puede " +
+            "reclamar el rol de admin. Toca \"Reclamar Rol de Admin\" en la pantalla de Sincronizaci\u00f3n (requiere suscripci\u00f3n). " +
             "Los dem\u00e1s miembros tienen 24 horas para objetar. Si nadie objeta, el reclamo se aprueba. " +
             "Si alguien objeta, el reclamo se rechaza.",
         leavingTitle = "Salir o Disolver",
         leavingBody = "Los miembros no admin pueden salir del grupo en cualquier momento. Tus datos locales se conservan " +
             "pero dejan de sincronizarse. El admin puede disolver el grupo completamente, " +
             "desconectando a todos los miembros y eliminando los datos de sincronizaci\u00f3n del servidor. " +
-            "Los datos locales en cada dispositivo se conservan.",
+            "Los datos locales en cada dispositivo se conservan. " +
+            "El admin tambi\u00e9n puede eliminar dispositivos individuales manteniendo pulsado en la lista.",
         privacyTitle = "Privacidad y Seguridad",
         privacyBody = "Todos los datos de sincronizaci\u00f3n est\u00e1n cifrados de extremo a extremo con una clave de 256 bits " +
-            "generada al crear el grupo. La clave se comparte solo a trav\u00e9s del mecanismo de c\u00f3digo de emparejamiento. " +
+            "generada al crear el grupo. La clave se comparte solo a trav\u00e9s del mecanismo de c\u00f3digo de emparejamiento " +
+            "y se almacena en almacenamiento cifrado del dispositivo. " +
             "El servidor almacena solo datos cifrados \u2014 no puede leer tus transacciones, montos, " +
-            "nombres de comercios ni ning\u00fan dato financiero. Tu dinero, tus datos, tu control."
+            "nombres de comercios ni ning\u00fan dato financiero. Tu dinero, tus datos, tu control.",
+        subscriptionTitle = "Suscripci\u00f3n y Ciclo de Vida del Grupo",
+        subscriptionBody = "La suscripci\u00f3n del admin mantiene el grupo activo. Si la suscripci\u00f3n expira, " +
+            "todos los miembros reciben notificaciones diarias y tienen un per\u00edodo de gracia de 7 d\u00edas " +
+            "para renovar. Durante el per\u00edodo de gracia, cualquier suscriptor puede reclamar admin " +
+            "para mantener el grupo activo. Despu\u00e9s de 7 d\u00edas sin suscripci\u00f3n activa de admin, " +
+            "el grupo se disuelve autom\u00e1ticamente. Los datos locales en cada dispositivo se conservan."
     )
 
     override val simulationGraphHelp = SimulationGraphHelpStrings(

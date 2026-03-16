@@ -628,7 +628,7 @@ object EnglishStrings : AppStrings {
         availableCashSectionTitle = "Available Cash",
         availableCashSectionBody = "Available Cash is the number shown on the Solari display. It is automatically " +
             "computed from your budget period credits, expenses, and extra income. " +
-            "In Family Sync, it stays consistent across all devices without manual intervention. " +
+            "With Sync enabled, it stays consistent across all devices without manual intervention. " +
             "The result: a single number that tells you exactly how much you can spend.",
         gettingStartedTitle = "Getting Started",
         gettingStartedBody = "Follow these steps to set up your budget for the first time:",
@@ -684,9 +684,9 @@ object EnglishStrings : AppStrings {
         featureBullet9 = "Duplicate transaction detection",
         featureBullet10 = "Fully customizable categories with icon selection",
         featureBullet11 = "Multiple currency and date format support",
-        featureBullet12 = "Family Sync \u2014 share budgets across devices with end-to-end encryption",
+        featureBullet12 = "Sync \u2014 share budgets across devices with end-to-end encryption",
         syncIndicatorTitle = "Sync Indicator",
-        syncIndicatorBody = "When Family Sync is enabled, a sync indicator appears in the bottom-left corner of the Solari display:",
+        syncIndicatorBody = "When Sync is enabled, a sync indicator appears in the bottom-left corner of the Solari display:",
         syncArrowsBullet = "Sync arrows \u2014 show cloud connectivity status (green = connected, yellow = syncing, orange = stale, red = error)",
         syncDotsBullet = "Colored dots \u2014 one per family member device (up to 4), showing how recently each device synced: green (< 5 min), yellow (< 2 hrs), orange (< 24 hrs), red (> 24 hrs), gray (never)",
         privacyTitle = "Privacy & Security",
@@ -718,10 +718,11 @@ object EnglishStrings : AppStrings {
         headerBody = "The header provides navigation and help access:",
         backDesc = "Return to the dashboard.",
         helpDesc = "Opens this help page.",
-        configureTitle = "Configure Your Budget",
-        configureBody = "The first item in Settings is a button that opens Budget Configuration. " +
-            "This is where you set up your income sources, choose your budget period, " +
-            "and calculate your safe daily budget. See the Budget Configuration help page " +
+        configureTitle = "Quick Start Guide & Budget Configuration",
+        configureBody = "At the top of Settings, the Quick Start Guide walks new users through " +
+            "initial setup step by step. Below it, Configure Budget and Sync buttons " +
+            "provide access to budget configuration (income sources, budget period, " +
+            "safe budget calculation) and family sync settings. See their help pages " +
             "for full details.",
         currencyTitle = "Currency",
         currencyBody = "Choose the currency symbol displayed throughout the app. The dropdown includes " +
@@ -773,15 +774,15 @@ object EnglishStrings : AppStrings {
         matchCharsBullet = "Match Characters \u2014 minimum shared substring length for merchant name matching",
         matchingNote = "The defaults work well for most users. Increase the tolerances if you find " +
             "the app is missing matches, or decrease them if you're seeing too many false positives.",
-        paidTitle = "Paid User",
-        paidBody = "When checked, this unlocks premium features and removes the ad banner:",
-        paidSave = "Save transactions \u2014 export to CSV or encrypted file",
-        paidLoad = "Load transactions \u2014 import from bank CSV, app CSV, or encrypted backup",
-        paidAdFree = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
-        paidWidget = "Full widget access \u2014 unlimited widget transactions per day and a clean Solari display without the upgrade overlay",
-        paidNote = "When Paid User is not enabled, the Save and Load icons on the Transactions " +
-            "screen appear dimmed and are non-functional, a small ad banner appears at the top of every screen, " +
-            "and the home screen widget is limited to 1 transaction per day.",
+        paidTitle = "Paid User & Subscriber",
+        paidBody = "BudgeTrak has two upgrade tiers. Paid User (one-time purchase) unlocks:",
+        paidSave = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
+        paidLoad = "Full widget access \u2014 unlimited widget transactions per day and a clean Solari display without the upgrade overlay",
+        paidAdFree = "Subscriber (monthly subscription) adds advanced features:",
+        paidWidget = "Save/Load transactions \u2014 export to CSV or encrypted file, import from bank statements",
+        paidNote = "Cash flow simulation chart, create and administer sync groups, " +
+            "and claim admin role. Free users can join existing sync groups. " +
+            "Subscriber status automatically includes all Paid User benefits.",
         widgetLogoTitle = "Show Logo on Widget",
         widgetLogoBody = "When checked, the BudgeTrak logo appears between the transaction buttons on the " +
             "home screen widget. Uncheck to hide the logo for a more minimal widget appearance.",
@@ -1422,27 +1423,31 @@ object EnglishStrings : AppStrings {
 
     override val familySyncHelp = FamilySyncHelpStrings(
         title = "Sync Help",
-        whatTitle = "What is Family Sync?",
-        whatBody = "Family Sync lets you share a single household budget across up to 5 devices. " +
+        whatTitle = "What is Sync?",
+        whatBody = "Sync lets you share a single household budget across up to 5 devices. " +
             "All transactions, income sources, recurring expenses, savings goals, and settings " +
             "are kept in sync automatically using end-to-end encrypted cloud relay. " +
             "No one \u2014 not even the server \u2014 can read your financial data.",
         adminRoleTitle = "The Admin Role",
-        adminRoleBody = "The person who creates the family group becomes the admin. The admin can " +
+        adminRoleBody = "The person who creates the group becomes the admin. Creating a group " +
+            "and holding admin status requires a subscription. The admin can " +
             "change shared budget settings (currency, budget period, reset schedule), " +
             "start or reset the budget, generate pairing codes to invite new devices, " +
+            "remove devices (long-press on the device roster), " +
             "set the family timezone, enable transaction attribution, and dissolve the " +
-            "group. Non-admin members can view settings but cannot change them, and the " +
-            "Start/Reset Budget button is disabled on their devices.",
+            "group. Non-admin members can view settings but cannot change them \u2014 " +
+            "tapping a locked setting shows \"Administrator only\". " +
+            "Free users can join an existing group without a subscription.",
         gettingStartedTitle = "Getting Started",
-        gettingStartedBody = "To set up Family Sync: Open Settings, tap Family Sync, and tap " +
-            "\"Create Family Group\". A sync group is created with you as admin. " +
+        gettingStartedBody = "To set up Sync: Open Settings, tap Sync, and tap " +
+            "\"Create Group\" (requires subscription). A sync group is created with you as admin. " +
             "Then tap \"Generate Pairing Code\" and share the 6-character code with " +
             "family members. They enter the code on their device to join. " +
             "Codes expire after 10 minutes for security.",
         joiningTitle = "Joining a Group",
-        joiningBody = "To join an existing group, tap \"Join Family Group\" and enter the " +
-            "6-character pairing code. Important: joining replaces your local budget data " +
+        joiningBody = "To join an existing group, tap \"Join Group\" and enter the " +
+            "6-character pairing code. Any user can join \u2014 no subscription required. " +
+            "Important: joining replaces your local budget data " +
             "with the group's shared data. Your current transactions, goals, and settings " +
             "will be overwritten. Make sure to back up first if needed.",
         syncStatusTitle = "Sync Status",
@@ -1464,21 +1469,29 @@ object EnglishStrings : AppStrings {
             "created it. Your own transactions show \"You\" and transactions from other " +
             "devices show the device name. This helps families see who recorded each expense.",
         adminClaimsTitle = "Admin Claims",
-        adminClaimsBody = "If the admin device is lost or unavailable, any member can claim the " +
-            "admin role. Tap \"Claim Admin Role\" on the Family Sync screen. Other members " +
-            "have 24 hours to object. If no one objects, the claim is approved and you " +
-            "become the new admin. If someone objects, the claim is rejected.",
+        adminClaimsBody = "If the admin device is lost or unavailable, any subscriber can claim the " +
+            "admin role. Tap \"Claim Admin Role\" on the Sync screen (requires subscription). " +
+            "Other members have 24 hours to object. If no one objects, the claim is " +
+            "approved and you become the new admin. If someone objects, the claim is rejected.",
         leavingTitle = "Leaving or Dissolving",
         leavingBody = "Non-admin members can leave a group at any time. Your local data is kept " +
             "but stops syncing. The admin can dissolve the group entirely, which " +
             "disconnects all members and deletes all sync data from the server. " +
-            "Local data on each device is preserved.",
+            "Local data on each device is preserved. " +
+            "The admin can also remove individual devices by long-pressing on the device roster.",
+
         privacyTitle = "Privacy & Security",
         privacyBody = "All sync data is encrypted end-to-end with a 256-bit key generated " +
             "when the group is created. The key is shared only via the pairing code " +
-            "mechanism. The server stores only encrypted blobs \u2014 it cannot read " +
-            "your transactions, amounts, merchant names, or any financial data. " +
-            "Your money, your data, your control."
+            "mechanism and stored in encrypted device storage. The server stores only " +
+            "encrypted blobs \u2014 it cannot read your transactions, amounts, merchant " +
+            "names, or any financial data. Your money, your data, your control.",
+        subscriptionTitle = "Subscription & Group Lifecycle",
+        subscriptionBody = "The admin's subscription keeps the group active. If the subscription " +
+            "expires, all group members are notified daily and have a 7-day grace period " +
+            "to resubscribe. During the grace period, any subscriber can claim admin " +
+            "to keep the group alive. After 7 days without an active admin subscription, " +
+            "the group is automatically dissolved. Local data on each device is preserved."
     )
 
     override val simulationGraphHelp = SimulationGraphHelpStrings(

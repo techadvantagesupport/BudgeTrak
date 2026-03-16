@@ -1227,7 +1227,26 @@ class MainActivity : ComponentActivity() {
                             lastSyncTime = "just now"
                             consecutiveErrors = 0
                             pendingAdminClaim = result.pendingAdminClaim
-                            if (result.repairAttempted) syncRepairAlert = true
+                            if (result.repairAttempted && com.syncbudget.app.BuildConfig.DEBUG) {
+                                syncRepairAlert = true
+                                // Show notification in debug builds
+                                try {
+                                    val nm = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                        nm.createNotificationChannel(android.app.NotificationChannel(
+                                            "sync_repair", "Sync Repair (Debug)",
+                                            android.app.NotificationManager.IMPORTANCE_DEFAULT
+                                        ))
+                                    }
+                                    val notification = androidx.core.app.NotificationCompat.Builder(context, "sync_repair")
+                                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                                        .setContentTitle("Sync Repair")
+                                        .setContentText("Integrity check repaired divergent records")
+                                        .setAutoCancel(true)
+                                        .build()
+                                    nm.notify(9002, notification)
+                                } catch (_: Exception) {}
+                            }
                             // Compute stale days
                             val lastSync = syncPrefs.getLong("lastSuccessfulSync", 0L)
                             staleDays = if (lastSync > 0L) ((System.currentTimeMillis() - lastSync) / (24 * 60 * 60 * 1000L)).toInt() else 0

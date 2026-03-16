@@ -1208,7 +1208,9 @@ data class FamilySyncHelpStrings(
     val leavingTitle: String,
     val leavingBody: String,
     val privacyTitle: String,
-    val privacyBody: String
+    val privacyBody: String,
+    val subscriptionTitle: String = "",
+    val subscriptionBody: String = ""
 )
 
 data class WidgetTransactionStrings(

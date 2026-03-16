@@ -91,6 +91,11 @@ fun FamilySyncHelpScreen(onBack: () -> Unit) {
 
             HelpSectionTitle(S.familySyncHelp.privacyTitle)
             HelpBodyText(S.familySyncHelp.privacyBody)
+
+            if (S.familySyncHelp.subscriptionTitle.isNotEmpty()) {
+                HelpSectionTitle(S.familySyncHelp.subscriptionTitle)
+                HelpBodyText(S.familySyncHelp.subscriptionBody)
+            }
         }
     }
 }
