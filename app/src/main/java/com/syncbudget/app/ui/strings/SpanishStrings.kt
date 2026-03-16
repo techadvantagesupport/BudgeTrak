@@ -530,6 +530,7 @@ object SpanishStrings : AppStrings {
         removeDeviceMessage = { name -> "Eliminar \"$name\" de este grupo? El dispositivo se desconectar\u00e1 de la sincronizaci\u00f3n familiar." },
         removeDeviceConfirm = "Eliminar",
         subscriptionExpiredNotice = "La suscripci\u00f3n del admin expir\u00f3. El grupo se disolver\u00e1 pronto. Suscr\u00edbete y reclama admin para mantener el grupo activo.",
+        updateRequiredNotice = "Un miembro de la familia actualiz\u00f3 BudgeTrak. Actualiza desde Play Store para continuar sincronizando.",
         copy = "Copiar"
     )
 

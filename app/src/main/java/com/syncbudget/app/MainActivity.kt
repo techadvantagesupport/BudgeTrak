@@ -1281,7 +1281,9 @@ class MainActivity : ComponentActivity() {
                             }
                         } else {
                             syncStatus = "error"
-                            syncErrorMessage = result.error
+                            syncErrorMessage = if (result.error == "update_required")
+                                strings.sync.updateRequiredNotice
+                            else result.error
                             syncProgressMessage = null
                             consecutiveErrors++
                             pendingAdminClaim = result.pendingAdminClaim

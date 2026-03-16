@@ -53,6 +53,12 @@ class SyncEngine(
         const val SNAPSHOT_CATCHUP_THRESHOLD = 100
         const val SNAPSHOT_WRITE_THRESHOLD = 100
         const val INTEGRITY_CHECK_INTERVAL_MS = 30 * 60 * 1000L  // 30 minutes
+        /** Increment this when a release introduces breaking sync changes
+         *  (new synced data types, changed serialization formats, etc.).
+         *  Non-breaking changes (UI, bug fixes) do NOT require incrementing.
+         *  See .claude-memory/project_min_sync_version.md for history. */
+        const val MIN_SYNC_VERSION = 1
+        const val APP_SYNC_VERSION = 1
     }
 
     private val prefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
@@ -167,6 +173,16 @@ class SyncEngine(
                     return SyncResult(success = false, error = "sync_blocked_stale")
                 }
             }
+
+            // Step 0b: Version compatibility check — block sync if any device
+            // in the group requires a higher sync version than we support.
+            try {
+                val maxMinVersion = FirestoreService.getMaxMinSyncVersion(groupId)
+                if (maxMinVersion > APP_SYNC_VERSION) {
+                    syncLog("Sync blocked: a device requires sync version $maxMinVersion but we are version $APP_SYNC_VERSION")
+                    return SyncResult(success = false, error = "update_required")
+                }
+            } catch (_: Exception) {}
 
             // Step 1: Check for explicit removal/dissolution signals first
             if (FirestoreService.isGroupDissolved(groupId)) {
@@ -737,7 +753,8 @@ class SyncEngine(
                     IntegrityChecker.toJson(fp).toString()
                 } catch (_: Exception) { null }
             } else null
-            FirestoreService.updateDeviceMetadata(groupId, deviceId, newSyncVersion, fpJson)
+            FirestoreService.updateDeviceMetadata(groupId, deviceId, newSyncVersion, fpJson,
+                appSyncVersion = APP_SYNC_VERSION, minSyncVersion = MIN_SYNC_VERSION)
 
             // Save merged settings if changed
             if (settingsChanged) {

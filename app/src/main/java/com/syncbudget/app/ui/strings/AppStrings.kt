@@ -561,6 +561,7 @@ data class SyncStrings(
     val removeDeviceMessage: (deviceName: String) -> String,
     val removeDeviceConfirm: String,
     val subscriptionExpiredNotice: String,
+    val updateRequiredNotice: String,
     val copy: String
 )
 

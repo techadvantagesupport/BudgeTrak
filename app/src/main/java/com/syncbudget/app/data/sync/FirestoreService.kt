@@ -148,12 +148,18 @@ object FirestoreService {
         groupId: String,
         deviceId: String,
         syncVersion: Long,
-        fingerprintJson: String? = null
+        fingerprintJson: String? = null,
+        appSyncVersion: Int = 0,
+        minSyncVersion: Int = 0
     ) = withTimeout(OP_TIMEOUT_MS) {
         val data = mutableMapOf<String, Any>(
             "lastSyncVersion" to syncVersion,
             "lastSeen" to System.currentTimeMillis()
         )
+        if (appSyncVersion > 0) {
+            data["appSyncVersion"] = appSyncVersion
+            data["minSyncVersion"] = minSyncVersion
+        }
         if (fingerprintJson != null) {
             data["fingerprintData"] = fingerprintJson
             data["fingerprintSyncVersion"] = syncVersion
@@ -183,6 +189,20 @@ object FirestoreService {
             lastSyncVersion = doc.getLong("lastSyncVersion") ?: 0L,
             lastSeen = doc.getLong("lastSeen") ?: 0L
         )
+    }
+
+    /** Get the highest minSyncVersion posted by any device in the group.
+     *  Returns 0 if no device has posted a version (legacy devices). */
+    suspend fun getMaxMinSyncVersion(groupId: String): Int = withTimeout(OP_TIMEOUT_MS) {
+        val snapshot = db.collection("groups")
+            .document(groupId)
+            .collection("devices")
+            .get()
+            .await()
+        snapshot.documents
+            .filter { doc -> doc.getBoolean("removed") != true }
+            .maxOfOrNull { doc -> (doc.getLong("minSyncVersion") ?: 0L).toInt() }
+            ?: 0
     }
 
     /** Check if the device has been explicitly removed by the admin. */
