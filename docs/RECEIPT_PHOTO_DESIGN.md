@@ -164,7 +164,7 @@ Hash-based upload assignment does NOT apply to initial uploads. Each device uplo
 When a device sees a transaction with `receiptId` but has no local file:
 
 1. **Check cloud first** — try to download `groups/{groupId}/receipts/{receiptId}.enc` directly
-2. **If found in cloud** → download, decrypt, store locally. Done. No ledger entry needed.
+2. **If found in cloud** → download, decrypt, store locally. If a ledger entry exists for this `receiptId`, mark possession and run prune check. No new ledger entry needed.
 3. **If NOT in cloud** → check if a ledger entry already exists for this `receiptId`
    - If ledger entry exists with `uploadedAt > 0` → file may have just been re-uploaded. Try downloading from cloud again. If it fails, normal download failure handling applies (retry 3 times, then replace with request entry).
    - If ledger entry exists with `uploadedAt = 0` → another device already requested. Wait.
