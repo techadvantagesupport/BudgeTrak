@@ -76,20 +76,19 @@ data class ImageLedgerEntry(
 )
 ```
 
-### Ledger Flag Clock (Firestore)
+### Ledger Flag Clock & Cleanup Fields (on Group Document)
 ```
-Path: groups/{groupId}/imageLedgerMeta
+Path: groups/{groupId}  (existing document, already read every sync for dissolution check)
 ```
 ```kotlin
-data class ImageLedgerMeta(
-    val flagClock: Long = 0L,              // incremented on ledger entry create/update
-    val cleanupAssignee: String? = null,   // device responsible for today's cleanup
-    val cleanupAssignedAt: Long = 0L,      // when cleanup was claimed
-    val lastCleanupDate: String? = null    // "YYYY-MM-DD" — prevents re-running same day
-)
+// Added to the existing group document — zero additional Firestore reads
+val imageLedgerFlagClock: Long = 0L,       // incremented on ledger changes that need attention
+val imageCleanupAssignee: String? = null,  // device responsible for today's cleanup
+val imageCleanupAssignedAt: Long = 0L,     // when cleanup was claimed
+val imageLastCleanupDate: String? = null   // "YYYY-MM-DD" — prevents re-running same day
 ```
 
-Stored in a lightweight document that every device reads on every sync cycle. Devices compare `flagClock` to their locally stored `lastSeenFlagClock` to decide whether to pull the full ledger. This avoids reading the entire ledger collection on every sync when nothing has changed. See **Ledger Flag Clock** section for details.
+Piggybacked on the group document that every device already reads every sync cycle (for the dissolution check). Firestore returns the full document on any read, so these fields come along for free. Devices compare `imageLedgerFlagClock` to their locally stored `lastSeenFlagClock` to decide whether to pull the full ledger. See **Ledger Flag Clock** section for details.
 
 ### Cloud Storage
 ```
@@ -172,7 +171,7 @@ When a device sees a transaction with `receiptId` but has no local file:
    - If no ledger entry → create one as a request, and bump the flag clock:
      ```
      Ledger entry: possessions: {}, uploadedAt: 0, uploadAssignee: null, assignedAt: 0
-     imageLedgerMeta: flagClock++
+     group document: imageLedgerFlagClock++
      ```
 4. **Requesting device waits** — does NOT keep polling the cloud. On subsequent syncs, it checks the flag clock. Only when `flagClock > lastSeenFlagClock` does it pull the ledger to check if `uploadedAt` has been set.
 5. **Other devices** see the flag clock change on their next sync, pull the ledger, find the request entry, check if they have the file locally
@@ -378,7 +377,7 @@ Same two-tier logic as upload assignment: filter to online devices, hash picks o
 1. Each device checks on sync: "Is it past noon today, and have I not yet run (or seen results of) today's cleanup?"
 2. Compute `hash("cleanup" + todayDateString + deviceId) % 1000` among online devices
 3. Highest score wins cleanup duty
-4. If the assigned device doesn't complete cleanup within 5 minutes (based on a `cleanupAssignedAt` timestamp in `imageLedgerMeta`), any other online device can take over via CAS transaction
+4. If the assigned device doesn't complete cleanup within 5 minutes (based on `imageCleanupAssignedAt` on the group document), any other online device can take over via CAS transaction
 
 #### Cleanup procedure
 
@@ -386,7 +385,7 @@ Same two-tier logic as upload assignment: filter to online devices, hash picks o
 2. For each entry where `createdAt` is older than 14 days:
    - Delete the Cloud Storage file (`groups/{groupId}/receipts/{receiptId}.enc`)
    - Delete the ledger entry
-3. Update `imageLedgerMeta` with new `flagClock` to notify other devices the ledger changed
+3. Bump `imageLedgerFlagClock` on the group document to notify other devices the ledger changed
 
 #### After pruning
 
@@ -458,10 +457,10 @@ The full image ledger could contain dozens of entries. Reading the entire collec
 
 ### How it works
 
-1. **Every sync cycle**, the device reads `imageLedgerMeta` (a single small document, ~1 Firestore read)
-2. Compare `flagClock` to the locally stored `lastSeenFlagClock`
+1. **Every sync cycle**, the device already reads the group document (`groups/{groupId}`) for the dissolution check. The `imageLedgerFlagClock` field comes along for free — zero additional Firestore reads.
+2. Compare `imageLedgerFlagClock` to the locally stored `lastSeenFlagClock`
 3. **If equal** → ledger is unchanged, skip reading the collection entirely
-4. **If `flagClock` > `lastSeenFlagClock`** → at least one entry was created or updated since last check. Pull the full ledger, process all entries, update `lastSeenFlagClock` to match
+4. **If `imageLedgerFlagClock` > `lastSeenFlagClock`** → at least one entry was created or updated since last check. Pull the full ledger, process all entries, update `lastSeenFlagClock` to match
 
 ### When the flag clock is bumped
 
@@ -533,7 +532,7 @@ The flag clock is skipped (full ledger pulled regardless) when:
 ### Data Model
 - [ ] `receiptId1`–`receiptId5` + `receiptId1_clock`–`receiptId5_clock` fields on Transaction (5 photo slots)
 - [ ] `ImageLedgerEntry` data class
-- [ ] `ImageLedgerMeta` data class (flagClock, cleanup fields)
+- [ ] `imageLedgerFlagClock` + cleanup fields on group document (no new data class needed)
 - [ ] `ReceiptMetadata` local data class (add `downloadRetryCount` field)
 - [ ] `receiptPruneAgeDays` + clock field on SharedSettings
 
@@ -558,7 +557,7 @@ The flag clock is skipped (full ledger pulled regardless) when:
 - [ ] Prune-check transaction (all non-removed devices have file → delete ledger + cloud)
 
 ### Flag Clock
-- [ ] Read `imageLedgerMeta` every sync cycle
+- [ ] Read `imageLedgerFlagClock` from group document (already fetched every sync — no new read)
 - [ ] Compare `flagClock` to local `lastSeenFlagClock` — skip ledger read if equal
 - [ ] Pull full ledger when flag clock is newer
 - [ ] Bump flag clock on: request create, re-upload complete, cleanup, request replacement (NOT on initial entry creation)
@@ -575,7 +574,7 @@ The flag clock is skipped (full ledger pulled regardless) when:
 - [ ] 14-day stale pruning of all entry types (normal + request)
 - [ ] Noon-trigger: first sync after 12:00 local group time
 - [ ] Hash-based cleanup assignment with 5-min CAS takeover
-- [ ] `lastCleanupDate` tracking in `imageLedgerMeta`
+- [ ] `imageLastCleanupDate` tracking on group document
 
 ### Local Storage Pruning
 - [ ] `receiptPruneAgeDays` admin-only shared setting (CRDT-synced)
