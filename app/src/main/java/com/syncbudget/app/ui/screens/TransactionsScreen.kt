@@ -1,6 +1,9 @@
 package com.syncbudget.app.ui.screens
 
 import android.net.Uri
+import androidx.compose.foundation.layout.heightIn
+import com.syncbudget.app.data.BudgetCalculator
+import com.syncbudget.app.ui.components.SwipeablePhotoRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.activity.compose.BackHandler
@@ -1012,6 +1015,12 @@ fun TransactionsScreen(
                         val periods = minOf(amortElapsed, amortEntry.totalPeriods)
                         (amortEntry.amount / amortEntry.totalPeriods) * periods
                     } else null
+                    SwipeablePhotoRow(
+                        transactionId = transaction.id,
+                        photos = emptyList(), // TODO: load thumbnails from local storage
+                        onPhotosAdded = { /* TODO: save receipt metadata */ },
+                        onSwipeOpen = { expandedIds[transaction.id] = false }
+                    ) {
                     TransactionRow(
                         transaction = transaction,
                         currencySymbol = currencySymbol,
@@ -1063,6 +1072,7 @@ fun TransactionsScreen(
                         isLinkedSavingsGoal = isLinkedSavingsGoal,
                         onEffectTap = { effectExplanationTransaction = transaction }
                     )
+                    } // SwipeablePhotoRow
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
                     )
@@ -2833,11 +2843,13 @@ private fun TransactionRow(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(min = 56.dp)
                 .combinedClickable(
                     onClick = onTap,
                     onLongClick = onLongPress
                 )
-                .padding(horizontal = 12.dp, vertical = if (useExpandedLayout) 10.dp else 12.dp)
+                .padding(horizontal = 12.dp, vertical = if (useExpandedLayout) 10.dp else 8.dp),
+            verticalArrangement = Arrangement.Center
         ) {
             // Line 1: icon + source + amount (+ checkbox if expanded layout)
             Row(
@@ -3993,7 +4005,7 @@ fun TransactionDialog(
                             onClick = {
                                 if (source.isBlank() || selectedCats.isEmpty()) { showValidation = true; return@DialogPrimaryButton }
                                 val type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
-                                val catAmounts: List<CategoryAmount>
+                                var catAmounts: List<CategoryAmount>
                                 val totalAmount: Double
 
                                 if (selectedCats.size == 1) {
@@ -4019,7 +4031,17 @@ fun TransactionDialog(
                                             if (amt != null && amt > 0) CategoryAmount(cat.id, amt) else null
                                         }
                                         if (catAmounts.isEmpty()) return@DialogPrimaryButton
-                                        val catSum = catAmounts.sumOf { it.amount }
+                                        var catSum = catAmounts.sumOf { it.amount }
+                                        // Nudge the largest category to fix rounding drift
+                                        // from pie chart splits (up to 1 cent per category)
+                                        if (total != null && abs(catSum - total) in 0.005..0.10 && catAmounts.isNotEmpty()) {
+                                            val maxIdx = catAmounts.indices.maxByOrNull { catAmounts[it].amount } ?: 0
+                                            val nudged = catAmounts[maxIdx].copy(
+                                                amount = BudgetCalculator.roundCents(catAmounts[maxIdx].amount + (total - catSum))
+                                            )
+                                            catAmounts = catAmounts.toMutableList().also { it[maxIdx] = nudged }
+                                            catSum = catAmounts.sumOf { it.amount }
+                                        }
                                         if (total != null && abs(catSum - total) > 0.005) {
                                             showSumMismatchDialog = true
                                             adjustTargetId = null
@@ -4149,6 +4171,9 @@ fun TransactionDialog(
                                         } else {
                                             selectedCategoryIds[cat.id] = false
                                         }
+                                    } else if (selectedCats.size >= 7) {
+                                        // Max 7 categories per transaction
+                                        toastState.show(S.transactions.maxCategoriesReached)
                                     } else {
                                         // Transition from 1→2 categories: carry single amount to total
                                         if (selectedCats.size == 1 && singleAmountText.isNotBlank()) {

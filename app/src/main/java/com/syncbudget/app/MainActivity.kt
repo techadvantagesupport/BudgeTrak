@@ -406,7 +406,9 @@ class MainActivity : ComponentActivity() {
             var syncErrorMessage by remember { mutableStateOf<String?>(null) }
             var syncProgressMessage by remember { mutableStateOf<String?>(null) }
             var pendingAdminClaim by remember { mutableStateOf<AdminClaim?>(null) }
-            var syncRepairAlert by remember { mutableStateOf(false) }
+            var syncRepairAlert by remember { mutableStateOf(
+                com.syncbudget.app.BuildConfig.DEBUG && prefs.getBoolean("syncRepairAlert", false)
+            ) }
             // availableCash may go negative (= overspent). Guard against NaN/Infinity.
             fun persistAvailableCash() {
                 if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
@@ -1229,6 +1231,7 @@ class MainActivity : ComponentActivity() {
                             pendingAdminClaim = result.pendingAdminClaim
                             if (result.repairAttempted && com.syncbudget.app.BuildConfig.DEBUG) {
                                 syncRepairAlert = true
+                                prefs.edit().putBoolean("syncRepairAlert", true).apply()
                                 // Show notification in debug builds
                                 try {
                                     val nm = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -2045,7 +2048,10 @@ class MainActivity : ComponentActivity() {
                         syncDevices = syncDevices,
                         localDeviceId = localDeviceId,
                         syncRepairAlert = syncRepairAlert,
-                        onDismissRepairAlert = { syncRepairAlert = false },
+                        onDismissRepairAlert = {
+                            syncRepairAlert = false
+                            prefs.edit().putBoolean("syncRepairAlert", false).apply()
+                        },
                         onSyncNow = doSyncNow,
                         onSupercharge = { allocations, modes ->
                             val superClk = lamportClock.tick()

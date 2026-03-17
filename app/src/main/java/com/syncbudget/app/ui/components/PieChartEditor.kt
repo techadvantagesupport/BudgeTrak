@@ -203,6 +203,18 @@ fun PieChartEditor(
         }
         handleAngles.clear()
         handleAngles.addAll(newAngles)
+
+        // Emit initial amounts so save button works without dragging.
+        // Use cumulative rounding to ensure sum == total exactly.
+        if (!useExisting && totalAmount > 0) {
+            val initAmounts = mutableMapOf<Int, Double>()
+            for (i in 0 until n) {
+                val cumTarget = com.syncbudget.app.data.BudgetCalculator.roundCents(totalAmount * (i + 1).toDouble() / n)
+                val cumPrev = com.syncbudget.app.data.BudgetCalculator.roundCents(totalAmount * i.toDouble() / n)
+                initAmounts[categories[i].id] = cumTarget - cumPrev
+            }
+            onAmountsChanged(initAmounts)
+        }
     }
 
     // Don't render until initialized

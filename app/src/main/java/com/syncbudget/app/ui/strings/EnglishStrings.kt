@@ -309,6 +309,7 @@ object EnglishStrings : AppStrings {
         requiredMerchantExample = "Required, e.g. Grocery Store",
         moveCategoryValue = "Move Category Value",
         sumMismatch = "Sum Mismatch",
+        maxCategoriesReached = "Maximum of 7 categories per transaction",
         maxAmount2 = { max: String -> "Max: $max" },
         includeAllData = "Include all app data (full backup)",
         fullBackupNote = "All app data will be saved including settings, categories, recurring expenses, savings goals, and amortization entries.",

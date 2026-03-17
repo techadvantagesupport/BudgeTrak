@@ -333,6 +333,7 @@ data class TransactionsStrings(
     val requiredMerchantExample: String,
     val moveCategoryValue: String,
     val sumMismatch: String,
+    val maxCategoriesReached: String,
     val maxAmount2: (String) -> String,
     val includeAllData: String,
     val fullBackupNote: String,
