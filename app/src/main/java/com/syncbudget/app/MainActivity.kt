@@ -1819,6 +1819,13 @@ class MainActivity : ComponentActivity() {
                     coroutineScope.launch {
                         val gId = GroupManager.getGroupId(context) ?: return@launch
                         val key = GroupManager.getEncryptionKey(context) ?: return@launch
+                        // Reset foreground sync timer so it doesn't fire during manual sync
+                        syncTrigger++
+                        val manualLock = SyncWorker.createSyncLock(context)
+                        if (!manualLock.tryLock()) {
+                            // Another sync is in progress — skip manual sync
+                            return@launch
+                        }
                         val engine = SyncEngine(context, gId, localDeviceId, key, lamportClock)
                         syncStatus = "syncing"
                         try {
@@ -1984,7 +1991,6 @@ class MainActivity : ComponentActivity() {
                                 syncProgressMessage = null
                                 syncPrefs.edit().putBoolean("syncDirty", false).apply()
                                 lastSyncTime = "just now"
-                                syncTrigger++ // Reset foreground sync timer after manual sync
                                 pendingAdminClaim = result.pendingAdminClaim
                                 val lastSync = syncPrefs.getLong("lastSuccessfulSync", 0L)
                                 staleDays = if (lastSync > 0L) ((System.currentTimeMillis() - lastSync) / (24 * 60 * 60 * 1000L)).toInt() else 0
@@ -2011,6 +2017,8 @@ class MainActivity : ComponentActivity() {
                         } catch (_: Exception) {
                             syncStatus = "error"
                             syncProgressMessage = null
+                        } finally {
+                            manualLock.unlock()
                         }
                     }
                 }
