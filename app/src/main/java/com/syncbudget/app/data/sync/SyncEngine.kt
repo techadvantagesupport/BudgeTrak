@@ -108,6 +108,14 @@ class SyncEngine(
         get() = prefs.getLong("lastIntegrityCheckTime", 0L)
         set(value) = prefs.edit().putLong("lastIntegrityCheckTime", value).apply()
 
+    private var lastRepairSignature: String
+        get() = prefs.getString("lastRepairSignature", "") ?: ""
+        set(value) = prefs.edit().putString("lastRepairSignature", value).apply()
+
+    private var consecutiveRepairCount: Int
+        get() = prefs.getInt("consecutiveRepairCount", 0)
+        set(value) = prefs.edit().putInt("consecutiveRepairCount", value).apply()
+
     /** Create a snapshot of current data for new device bootstrapping.
      *  Call after a successful sync to ensure the snapshot is up-to-date. */
     suspend fun writeSnapshot(
@@ -742,7 +750,7 @@ class SyncEngine(
             lastSyncVersion = newSyncVersion
             val now = System.currentTimeMillis()
             val runIntegrityCheck = now - lastIntegrityCheckTime > INTEGRITY_CHECK_INTERVAL_MS &&
-                localDeltas.isEmpty()
+                localDeltas.isEmpty() && packets.isEmpty()
             val fpJson = if (runIntegrityCheck) {
                 try {
                     val fp = IntegrityChecker.computeFingerprint(
@@ -858,93 +866,139 @@ class SyncEngine(
                     // Execute surgical repair if any divergence was found
                     val merged = IntegrityChecker.mergeRepairs(allReports)
                     if (merged.isNotEmpty()) {
-                        val repairDeltas = mutableListOf<RecordDelta>()
-                        for (action in merged) {
-                            when (action.collection) {
-                                "transactions" -> {
-                                    val ids = IntegrityChecker.resolveIds(action, mergedTxns) { it.id }
-                                    for (txn in mergedTxns) {
-                                        if (txn.id in ids) {
-                                            DeltaBuilder.buildTransactionDelta(txn, 0L)?.let { repairDeltas.add(it) }
-                                        }
-                                    }
-                                    syncLog("  REPAIR transactions: ${ids.size} records (${action.reason})")
+                        // Compute repair signature to detect repeated identical repairs
+                        val repairSig = merged.joinToString("|") { action ->
+                            "${action.collection}:${action.recordIds.sorted().joinToString(",")}"
+                        }
+                        val shouldRepair = if (repairSig == lastRepairSignature) {
+                            consecutiveRepairCount++
+                            if (consecutiveRepairCount >= 3) {
+                                syncLog("  REPAIR COOLDOWN: same divergence detected $consecutiveRepairCount consecutive times, skipping")
+                                if (consecutiveRepairCount >= 5) {
+                                    // Hard reset after ~2.5 hours — retry repair fresh
+                                    consecutiveRepairCount = 0
+                                    lastRepairSignature = ""
+                                    syncLog("  REPAIR COOLDOWN reset — will retry on next check")
                                 }
-                                "recurringExpenses" -> {
-                                    val ids = IntegrityChecker.resolveIds(action, mergedRe) { it.id }
-                                    for (re in mergedRe) {
-                                        if (re.id in ids) {
-                                            DeltaBuilder.buildRecurringExpenseDelta(re, 0L)?.let { repairDeltas.add(it) }
+                                false
+                            } else {
+                                syncLog("  REPAIR: repeat #$consecutiveRepairCount of same divergence")
+                                true
+                            }
+                        } else {
+                            consecutiveRepairCount = 1
+                            lastRepairSignature = repairSig
+                            true
+                        }
+
+                        if (shouldRepair) {
+                            val repairDeltas = mutableListOf<RecordDelta>()
+                            for (action in merged) {
+                                when (action.collection) {
+                                    "transactions" -> {
+                                        val ids = IntegrityChecker.resolveIds(action, mergedTxns) { it.id }
+                                        for (txn in mergedTxns) {
+                                            if (txn.id in ids) {
+                                                DeltaBuilder.buildTransactionDelta(txn, 0L)?.let { repairDeltas.add(it) }
+                                            }
                                         }
+                                        syncLog("  REPAIR transactions: ${ids.size} records (${action.reason})")
                                     }
-                                    syncLog("  REPAIR recurringExpenses: ${ids.size} records (${action.reason})")
+                                    "recurringExpenses" -> {
+                                        val ids = IntegrityChecker.resolveIds(action, mergedRe) { it.id }
+                                        for (re in mergedRe) {
+                                            if (re.id in ids) {
+                                                DeltaBuilder.buildRecurringExpenseDelta(re, 0L)?.let { repairDeltas.add(it) }
+                                            }
+                                        }
+                                        syncLog("  REPAIR recurringExpenses: ${ids.size} records (${action.reason})")
+                                    }
+                                    "incomeSources" -> {
+                                        val ids = IntegrityChecker.resolveIds(action, mergedIs) { it.id }
+                                        for (src in mergedIs) {
+                                            if (src.id in ids) {
+                                                DeltaBuilder.buildIncomeSourceDelta(src, 0L)?.let { repairDeltas.add(it) }
+                                            }
+                                        }
+                                        syncLog("  REPAIR incomeSources: ${ids.size} records (${action.reason})")
+                                    }
+                                    "savingsGoals" -> {
+                                        val ids = IntegrityChecker.resolveIds(action, mergedSg) { it.id }
+                                        for (g in mergedSg) {
+                                            if (g.id in ids) {
+                                                DeltaBuilder.buildSavingsGoalDelta(g, 0L)?.let { repairDeltas.add(it) }
+                                            }
+                                        }
+                                        syncLog("  REPAIR savingsGoals: ${ids.size} records (${action.reason})")
+                                    }
+                                    "amortizationEntries" -> {
+                                        val ids = IntegrityChecker.resolveIds(action, mergedAe) { it.id }
+                                        for (e in mergedAe) {
+                                            if (e.id in ids) {
+                                                DeltaBuilder.buildAmortizationEntryDelta(e, 0L)?.let { repairDeltas.add(it) }
+                                            }
+                                        }
+                                        syncLog("  REPAIR amortizationEntries: ${ids.size} records (${action.reason})")
+                                    }
+                                    "categories" -> {
+                                        val ids = IntegrityChecker.resolveIds(action, mergedCat) { it.id }
+                                        for (cat in mergedCat) {
+                                            if (cat.id in ids) {
+                                                DeltaBuilder.buildCategoryDelta(cat, 0L)?.let { repairDeltas.add(it) }
+                                            }
+                                        }
+                                        syncLog("  REPAIR categories: ${ids.size} records (${action.reason})")
+                                    }
+                                    "periodLedger" -> {
+                                        val ids = IntegrityChecker.resolveIds(action, mergedPl) { it.id }
+                                        for (pl in mergedPl) {
+                                            if (pl.id in ids) {
+                                                DeltaBuilder.buildPeriodLedgerDelta(pl, 0L)?.let { repairDeltas.add(it) }
+                                            }
+                                        }
+                                        syncLog("  REPAIR periodLedger: ${ids.size} records (${action.reason})")
+                                    }
                                 }
-                                "incomeSources" -> {
-                                    val ids = IntegrityChecker.resolveIds(action, mergedIs) { it.id }
-                                    for (src in mergedIs) {
-                                        if (src.id in ids) {
-                                            DeltaBuilder.buildIncomeSourceDelta(src, 0L)?.let { repairDeltas.add(it) }
-                                        }
-                                    }
-                                    syncLog("  REPAIR incomeSources: ${ids.size} records (${action.reason})")
+                            }
+                            if (repairDeltas.isNotEmpty()) {
+                                // Safety cap: don't push more than 200 records in a single repair
+                                val capped = repairDeltas.take(200)
+                                if (capped.size < repairDeltas.size) {
+                                    syncLog("  REPAIR capped to ${capped.size}/${repairDeltas.size} records")
                                 }
-                                "savingsGoals" -> {
-                                    val ids = IntegrityChecker.resolveIds(action, mergedSg) { it.id }
-                                    for (g in mergedSg) {
-                                        if (g.id in ids) {
-                                            DeltaBuilder.buildSavingsGoalDelta(g, 0L)?.let { repairDeltas.add(it) }
-                                        }
-                                    }
-                                    syncLog("  REPAIR savingsGoals: ${ids.size} records (${action.reason})")
+                                val packet = DeltaPacket(
+                                    sourceDeviceId = deviceId,
+                                    timestamp = java.time.Instant.now(),
+                                    changes = capped
+                                )
+                                val serialized = DeltaSerializer.serialize(packet).toString().toByteArray()
+                                val encrypted = CryptoHelper.encryptWithKey(serialized, encryptionKey)
+                                val encoded = android.util.Base64.encodeToString(encrypted, android.util.Base64.NO_WRAP)
+                                syncLog("  REPAIR pushing ${capped.size} records (${encoded.length} chars)")
+                                FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded)
+                                syncLog("  REPAIR push complete")
+                                deltasPushed += capped.size
+                                didRepair = true
+
+                                // Advance lastPushedClock after repair (same as normal push)
+                                val maxRepairClock = capped
+                                    .maxOfOrNull { delta ->
+                                        delta.fields.values.maxOfOrNull { it.clock } ?: 0L
+                                    } ?: lastPushedClock
+                                if (maxRepairClock > lastPushedClock) {
+                                    lastPushedClock = maxRepairClock
                                 }
-                                "amortizationEntries" -> {
-                                    val ids = IntegrityChecker.resolveIds(action, mergedAe) { it.id }
-                                    for (e in mergedAe) {
-                                        if (e.id in ids) {
-                                            DeltaBuilder.buildAmortizationEntryDelta(e, 0L)?.let { repairDeltas.add(it) }
-                                        }
-                                    }
-                                    syncLog("  REPAIR amortizationEntries: ${ids.size} records (${action.reason})")
-                                }
-                                "categories" -> {
-                                    val ids = IntegrityChecker.resolveIds(action, mergedCat) { it.id }
-                                    for (cat in mergedCat) {
-                                        if (cat.id in ids) {
-                                            DeltaBuilder.buildCategoryDelta(cat, 0L)?.let { repairDeltas.add(it) }
-                                        }
-                                    }
-                                    syncLog("  REPAIR categories: ${ids.size} records (${action.reason})")
-                                }
-                                "periodLedger" -> {
-                                    val ids = IntegrityChecker.resolveIds(action, mergedPl) { it.id }
-                                    for (pl in mergedPl) {
-                                        if (pl.id in ids) {
-                                            DeltaBuilder.buildPeriodLedgerDelta(pl, 0L)?.let { repairDeltas.add(it) }
-                                        }
-                                    }
-                                    syncLog("  REPAIR periodLedger: ${ids.size} records (${action.reason})")
+                                if (maxRepairClock > lamportClock.value) {
+                                    lamportClock.merge(maxRepairClock)
                                 }
                             }
                         }
-                        if (repairDeltas.isNotEmpty()) {
-                            // Safety cap: don't push more than 200 records in a single repair
-                            val capped = repairDeltas.take(200)
-                            if (capped.size < repairDeltas.size) {
-                                syncLog("  REPAIR capped to ${capped.size}/${repairDeltas.size} records")
-                            }
-                            val packet = DeltaPacket(
-                                sourceDeviceId = deviceId,
-                                timestamp = java.time.Instant.now(),
-                                changes = capped
-                            )
-                            val serialized = DeltaSerializer.serialize(packet).toString().toByteArray()
-                            val encrypted = CryptoHelper.encryptWithKey(serialized, encryptionKey)
-                            val encoded = android.util.Base64.encodeToString(encrypted, android.util.Base64.NO_WRAP)
-                            syncLog("  REPAIR pushing ${capped.size} records (${encoded.length} chars)")
-                            FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded)
-                            syncLog("  REPAIR push complete")
-                            deltasPushed += capped.size
-                            didRepair = true
+                    } else {
+                        // No divergence — clear cooldown state
+                        if (consecutiveRepairCount > 0) {
+                            syncLog("  Divergence resolved after $consecutiveRepairCount repair(s)")
+                            consecutiveRepairCount = 0
+                            lastRepairSignature = ""
                         }
                     }
                     lastIntegrityCheckTime = now

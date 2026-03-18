@@ -1984,6 +1984,7 @@ class MainActivity : ComponentActivity() {
                                 syncProgressMessage = null
                                 syncPrefs.edit().putBoolean("syncDirty", false).apply()
                                 lastSyncTime = "just now"
+                                syncTrigger++ // Reset foreground sync timer after manual sync
                                 pendingAdminClaim = result.pendingAdminClaim
                                 val lastSync = syncPrefs.getLong("lastSuccessfulSync", 0L)
                                 staleDays = if (lastSync > 0L) ((System.currentTimeMillis() - lastSync) / (24 * 60 * 60 * 1000L)).toInt() else 0
