@@ -62,6 +62,16 @@ object TransactionRepository {
             obj.put("linkedSavingsGoalId_clock", t.linkedSavingsGoalId_clock)
             obj.put("linkedSavingsGoalAmount", t.linkedSavingsGoalAmount)
             obj.put("linkedSavingsGoalAmount_clock", t.linkedSavingsGoalAmount_clock)
+            obj.put("receiptId1", t.receiptId1 ?: JSONObject.NULL)
+            obj.put("receiptId1_clock", t.receiptId1_clock)
+            obj.put("receiptId2", t.receiptId2 ?: JSONObject.NULL)
+            obj.put("receiptId2_clock", t.receiptId2_clock)
+            obj.put("receiptId3", t.receiptId3 ?: JSONObject.NULL)
+            obj.put("receiptId3_clock", t.receiptId3_clock)
+            obj.put("receiptId4", t.receiptId4 ?: JSONObject.NULL)
+            obj.put("receiptId4_clock", t.receiptId4_clock)
+            obj.put("receiptId5", t.receiptId5 ?: JSONObject.NULL)
+            obj.put("receiptId5_clock", t.receiptId5_clock)
             obj.put("deleted_clock", t.deleted_clock)
             obj.put("deviceId_clock", t.deviceId_clock)
             jsonArray.put(obj)
@@ -118,6 +128,11 @@ object TransactionRepository {
                         linkedIncomeSourceAmount = SafeIO.safeDouble(obj.optDouble("linkedIncomeSourceAmount", 0.0)),
                         linkedSavingsGoalId = if (obj.has("linkedSavingsGoalId") && !obj.isNull("linkedSavingsGoalId")) obj.getInt("linkedSavingsGoalId") else null,
                         linkedSavingsGoalAmount = SafeIO.safeDouble(obj.optDouble("linkedSavingsGoalAmount", 0.0)),
+                        receiptId1 = if (obj.has("receiptId1") && !obj.isNull("receiptId1")) obj.getString("receiptId1") else null,
+                        receiptId2 = if (obj.has("receiptId2") && !obj.isNull("receiptId2")) obj.getString("receiptId2") else null,
+                        receiptId3 = if (obj.has("receiptId3") && !obj.isNull("receiptId3")) obj.getString("receiptId3") else null,
+                        receiptId4 = if (obj.has("receiptId4") && !obj.isNull("receiptId4")) obj.getString("receiptId4") else null,
+                        receiptId5 = if (obj.has("receiptId5") && !obj.isNull("receiptId5")) obj.getString("receiptId5") else null,
                         deviceId = obj.optString("deviceId", ""),
                         deleted = obj.optBoolean("deleted", false),
                         source_clock = obj.optLong("source_clock", 0L),
@@ -137,6 +152,11 @@ object TransactionRepository {
                         linkedIncomeSourceAmount_clock = obj.optLong("linkedIncomeSourceAmount_clock", 0L),
                         linkedSavingsGoalId_clock = obj.optLong("linkedSavingsGoalId_clock", 0L),
                         linkedSavingsGoalAmount_clock = obj.optLong("linkedSavingsGoalAmount_clock", 0L),
+                        receiptId1_clock = obj.optLong("receiptId1_clock", 0L),
+                        receiptId2_clock = obj.optLong("receiptId2_clock", 0L),
+                        receiptId3_clock = obj.optLong("receiptId3_clock", 0L),
+                        receiptId4_clock = obj.optLong("receiptId4_clock", 0L),
+                        receiptId5_clock = obj.optLong("receiptId5_clock", 0L),
                         deleted_clock = obj.optLong("deleted_clock", 0L),
                         deviceId_clock = obj.optLong("deviceId_clock", 0L)
                     )

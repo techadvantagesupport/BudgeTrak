@@ -11,10 +11,15 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,15 +30,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.RotateRight
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.syncbudget.app.ui.theme.AdAwareAlertDialog
+import com.syncbudget.app.ui.theme.DialogDangerButton
+import com.syncbudget.app.ui.theme.DialogSecondaryButton
+import com.syncbudget.app.ui.theme.DialogStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -54,9 +68,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.syncbudget.app.ui.strings.LocalStrings
 import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
@@ -72,15 +89,20 @@ private val PHOTO_ROW_HEIGHT = 56.dp
  * same position. The transaction row slides left via offset, revealing
  * the photo panel underneath. This avoids wide-Row layout issues.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SwipeablePhotoRow(
     transactionId: Int,
     photos: List<Bitmap?>,
+    receiptIds: List<String?> = emptyList(),  // parallel to photos, for rotation save
     onPhotosAdded: (List<File>) -> Unit,
     onSwipeOpen: () -> Unit = {},
+    onPhotoTap: ((Int) -> Unit)? = null,    // slot index (0-4) tapped
+    onPhotoDelete: ((Int) -> Unit)? = null,  // slot index (0-4) to delete
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val S = LocalStrings.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -90,6 +112,8 @@ fun SwipeablePhotoRow(
 
     var showCameraPicker by remember { mutableStateOf(false) }
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var deleteConfirmSlot by remember { mutableIntStateOf(-1) }
+    var fullScreenSlot by remember { mutableIntStateOf(-1) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
@@ -104,11 +128,12 @@ fun SwipeablePhotoRow(
         }
     }
 
+    val remainingSlots = 5 - photos.count { it != null }
+
     val galleryLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
+        ActivityResultContracts.PickMultipleVisualMedia(maxItems = maxOf(remainingSlots, 2))
     ) { uris ->
-        val remaining = 5 - photos.count { it != null }
-        val toProcess = uris.take(remaining)
+        val toProcess = uris.take(remainingSlots)
         scope.launch {
             val saved = withContext(Dispatchers.IO) {
                 toProcess.mapNotNull { uri ->
@@ -116,6 +141,48 @@ fun SwipeablePhotoRow(
                 }
             }
             if (saved.isNotEmpty()) onPhotosAdded(saved)
+        }
+    }
+
+    // Delete confirmation dialog
+    if (deleteConfirmSlot >= 0) {
+        AdAwareAlertDialog(
+            onDismissRequest = { deleteConfirmSlot = -1 },
+            title = { Text(S.settings.deletePhotoTitle) },
+            style = DialogStyle.DANGER,
+            text = { Text(S.settings.deletePhotoConfirm) },
+            confirmButton = {
+                DialogDangerButton(onClick = {
+                    onPhotoDelete?.invoke(deleteConfirmSlot)
+                    deleteConfirmSlot = -1
+                }) { Text(S.common.delete) }
+            },
+            dismissButton = {
+                DialogSecondaryButton(onClick = { deleteConfirmSlot = -1 }) {
+                    Text(S.common.cancel)
+                }
+            }
+        )
+    }
+
+    // Full-screen photo viewer
+    if (fullScreenSlot >= 0) {
+        val viewBitmap = photos.getOrNull(fullScreenSlot)
+        if (viewBitmap != null) {
+            FullScreenPhotoViewer(
+                bitmap = viewBitmap,
+                receiptId = receiptIds.getOrNull(fullScreenSlot),
+                onDismiss = { fullScreenSlot = -1 },
+                onDelete = if (onPhotoDelete != null) {
+                    {
+                        val slot = fullScreenSlot
+                        fullScreenSlot = -1
+                        deleteConfirmSlot = slot
+                    }
+                } else null
+            )
+        } else {
+            fullScreenSlot = -1
         }
     }
 
@@ -127,15 +194,13 @@ fun SwipeablePhotoRow(
             .clipToBounds()
             .onSizeChanged { containerWidthPx = it.width }
     ) {
-        // Layer 1 (back): Photo panel — always at position 0, revealed when
-        // the transaction row slides left
+        // Layer 1 (back): Photo panel
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(PHOTO_ROW_HEIGHT)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .pointerInput(Unit) {
-                    // Swipe right on the photo panel to restore transaction
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             scope.launch {
@@ -155,7 +220,7 @@ fun SwipeablePhotoRow(
                 },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Camera handle (58dp = ~60% wider than original 36dp)
+            // Camera handle
             Box(
                 modifier = Modifier
                     .width(58.dp)
@@ -166,7 +231,7 @@ fun SwipeablePhotoRow(
             ) {
                 Icon(
                     imageVector = Icons.Filled.CameraAlt,
-                    contentDescription = "Photos",
+                    contentDescription = S.settings.receiptPhotosSection,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
@@ -175,7 +240,7 @@ fun SwipeablePhotoRow(
                     onDismissRequest = { showCameraPicker = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Camera") },
+                        text = { Text(S.settings.photoCamera) },
                         leadingIcon = { Icon(Icons.Filled.PhotoCamera, null) },
                         onClick = {
                             showCameraPicker = false
@@ -187,17 +252,17 @@ fun SwipeablePhotoRow(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Gallery") },
+                        text = { Text(S.settings.photoGallery) },
                         leadingIcon = { Icon(Icons.Filled.Collections, null) },
                         onClick = {
                             showCameraPicker = false
-                            galleryLauncher.launch("image/*")
+                            galleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                         }
                     )
                 }
             }
 
-            // 5 photo frames — explicit square size
+            // 5 photo frames
             val frameSize = PHOTO_ROW_HEIGHT - 8.dp
             Row(
                 modifier = Modifier
@@ -220,6 +285,19 @@ fun SwipeablePhotoRow(
                                 1.dp,
                                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
                                 RoundedCornerShape(6.dp)
+                            )
+                            .then(
+                                if (thumb != null) {
+                                    Modifier.combinedClickable(
+                                        onClick = {
+                                            if (onPhotoTap != null) onPhotoTap(i)
+                                            else fullScreenSlot = i
+                                        },
+                                        onLongClick = {
+                                            if (onPhotoDelete != null) deleteConfirmSlot = i
+                                        }
+                                    )
+                                } else Modifier
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -243,7 +321,6 @@ fun SwipeablePhotoRow(
                     }
                 }
             }
-
         }
 
         // Layer 2 (front): Transaction row — slides left to reveal photo panel
@@ -253,13 +330,12 @@ fun SwipeablePhotoRow(
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .background(MaterialTheme.colorScheme.background)
                 .pointerInput(Unit) {
-                    // Swipe left on the transaction to reveal photos
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             scope.launch {
                                 if (offsetX.value < -widthPx * 0.3f) {
                                     offsetX.animateTo(-widthPx, tween(250))
-                                    onSwipeOpen()  // collapse expanded categories
+                                    onSwipeOpen()
                                 } else {
                                     offsetX.animateTo(0f, tween(250))
                                 }
@@ -274,6 +350,155 @@ fun SwipeablePhotoRow(
                 }
         ) {
             content()
+        }
+    }
+}
+
+/**
+ * Full-screen photo viewer with pinch-zoom, two-axis pan, and rotate.
+ * On dismiss, if the image was rotated, saves the rotated version + regenerates thumbnail.
+ */
+@Composable
+fun FullScreenPhotoViewer(
+    bitmap: Bitmap,
+    receiptId: String? = null,
+    onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null
+) {
+    val S = LocalStrings.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var scale by remember { mutableStateOf(1f) }
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+    var rotationSteps by remember { mutableIntStateOf(0) } // 0, 1, 2, 3 = 0°, 90°, 180°, 270°
+
+    val displayBitmap = remember(bitmap, rotationSteps) {
+        if (rotationSteps == 0) bitmap
+        else {
+            val matrix = android.graphics.Matrix()
+            matrix.postRotate((rotationSteps * 90).toFloat())
+            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+        }
+    }
+
+    val handleDismiss: () -> Unit = {
+        if (rotationSteps % 4 != 0 && receiptId != null) {
+            // Save rotated image and regenerate thumbnail
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val matrix = android.graphics.Matrix()
+                    matrix.postRotate((rotationSteps * 90).toFloat())
+                    val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+
+                    // Overwrite full-size file (100% to avoid cumulative compression loss)
+                    val fullFile = com.syncbudget.app.data.sync.ReceiptManager.getReceiptFile(context, receiptId)
+                    fullFile.outputStream().use { out ->
+                        rotated.compress(Bitmap.CompressFormat.JPEG, 100, out)
+                    }
+
+                    // Regenerate thumbnail
+                    val thumbSize = 200
+                    val thumbScale = thumbSize.toFloat() / maxOf(rotated.width, rotated.height)
+                    val thumb = Bitmap.createScaledBitmap(
+                        rotated,
+                        (rotated.width * thumbScale).toInt(),
+                        (rotated.height * thumbScale).toInt(),
+                        true
+                    )
+                    com.syncbudget.app.data.sync.ReceiptManager.getThumbFile(context, receiptId).outputStream().use { out ->
+                        thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
+                    }
+                    if (thumb !== rotated) rotated.recycle()
+                } catch (e: Exception) {
+                    android.util.Log.w("PhotoViewer", "Failed to save rotation: ${e.message}")
+                }
+            }
+        }
+        onDismiss()
+    }
+
+    Dialog(
+        onDismissRequest = handleDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(0.5f, 5f)
+                        offsetX += pan.x
+                        offsetY += pan.y
+                    }
+                }
+        ) {
+            Image(
+                bitmap = displayBitmap.asImageBitmap(),
+                contentDescription = "Full size receipt photo",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offsetX,
+                        translationY = offsetY
+                    )
+            )
+            // Close button (top-end)
+            IconButton(
+                onClick = handleDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = S.common.close,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            // Rotate button (top-start)
+            IconButton(
+                onClick = {
+                    rotationSteps = (rotationSteps + 1) % 4
+                    // Reset zoom/pan on rotate
+                    scale = 1f
+                    offsetX = 0f
+                    offsetY = 0f
+                },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    Icons.Filled.RotateRight,
+                    contentDescription = "Rotate",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            // Delete button (bottom-end)
+            if (onDelete != null) {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = S.settings.deletePhotoTitle,
+                        tint = Color(0xFFFF6B6B),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -296,7 +521,7 @@ private fun processAndSaveImage(
         val fileName = "receipt_${transactionId}_${UUID.randomUUID()}.jpg"
         val fullFile = File(receiptDir, fileName)
         fullFile.outputStream().use { out ->
-            resized.compress(Bitmap.CompressFormat.JPEG, 70, out)
+            resized.compress(Bitmap.CompressFormat.JPEG, 92, out)
         }
 
         val thumbDir = File(context.filesDir, "receipt_thumbs")

@@ -11,8 +11,7 @@ import kotlin.math.abs
 enum class BankFormat(val displayName: String) {
     GENERIC_CSV("Any Bank CSV"),
     US_BANK("US Bank"),
-    SECURESYNC_CSV("BudgeTrak CSV Save File"),
-    SECURESYNC_ENCRYPTED("BudgeTrak Encrypted Save File")
+    SECURESYNC_CSV("BudgeTrak CSV Save File")
 }
 
 data class CsvParseResult(
@@ -46,6 +45,11 @@ fun parseUsBank(reader: BufferedReader, existingIds: Set<Int>): CsvParseResult {
                 }
 
                 val date = LocalDate.parse(fields[0].trim())
+                if (date.year < 2000 || date.year > LocalDate.now().year + 1) {
+                    skippedRows++
+                    error = "Line $lineNumber: date out of range (${fields[0].trim()})"
+                    return@forEachLine
+                }
                 val txnType = fields[1].trim()
                 val name = fields[2].trim()
                 val amount = abs(fields[4].trim().toDouble())
@@ -95,6 +99,12 @@ fun parseCsvLine(line: String): List<String> {
         when {
             // Handle backslash-escaped quotes: \" inside quoted fields
             ch == '\\' && inQuotes && i + 1 < line.length && line[i + 1] == '"' -> {
+                current.append('"')
+                i += 2
+                continue
+            }
+            // Handle RFC 4180 doubled quotes: "" inside quoted fields → literal "
+            ch == '"' && inQuotes && i + 1 < line.length && line[i + 1] == '"' -> {
                 current.append('"')
                 i += 2
                 continue
@@ -451,6 +461,7 @@ private fun tryParseWithMapping(
             if (dateStr.isNullOrBlank()) { skipped++; continue }
             val date = parseDateFlexible(dateStr, mapping.dateFormatter)
             if (date == null) { skipped++; continue }
+            if (date.year < 2000 || date.year > LocalDate.now().year + 1) { skipped++; continue }
 
             val amount: Double
             val isDebit: Boolean?
@@ -500,12 +511,21 @@ private fun parseCsvLineWithDelimiter(line: String, delimiter: Char): List<Strin
     val fields = mutableListOf<String>()
     val current = StringBuilder()
     var inQuotes = false
-    for (ch in line) {
+    var i = 0
+    while (i < line.length) {
+        val ch = line[i]
         when {
+            // RFC 4180 doubled quotes: "" → literal "
+            ch == '"' && inQuotes && i + 1 < line.length && line[i + 1] == '"' -> {
+                current.append('"')
+                i += 2
+                continue
+            }
             ch == '"' -> inQuotes = !inQuotes
             ch == delimiter && !inQuotes -> { fields.add(current.toString()); current.clear() }
             else -> current.append(ch)
         }
+        i++
     }
     fields.add(current.toString())
     return fields

@@ -54,6 +54,8 @@ object IntegrityChecker {
         t.linkedIncomeSourceId_clock, t.amortizationAppliedAmount_clock,
         t.linkedRecurringExpenseAmount_clock, t.linkedIncomeSourceAmount_clock,
         t.linkedSavingsGoalId_clock, t.linkedSavingsGoalAmount_clock,
+        t.receiptId1_clock, t.receiptId2_clock, t.receiptId3_clock,
+        t.receiptId4_clock, t.receiptId5_clock,
         t.deleted_clock, t.deviceId_clock
     )
 
@@ -97,7 +99,7 @@ object IntegrityChecker {
         s.resetHour_clock, s.familyTimezone_clock, s.matchDays_clock,
         s.matchPercent_clock, s.matchDollar_clock, s.matchChars_clock,
         s.showAttribution_clock, s.availableCash_clock, s.incomeMode_clock,
-        s.deviceRoster_clock
+        s.deviceRoster_clock, s.receiptPruneAgeDays_clock
     )
 
     // ── Segmented collection fingerprint ─────────────────────────

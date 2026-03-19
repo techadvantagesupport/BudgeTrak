@@ -61,6 +61,7 @@ import com.syncbudget.app.data.sync.SyncWorker
 import com.syncbudget.app.data.sync.active
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.syncbudget.app.data.BackupManager
 import com.syncbudget.app.data.FullBackupSerializer
 import com.syncbudget.app.data.findAmortizationMatch
 import com.syncbudget.app.data.findBudgetIncomeMatch
@@ -100,22 +101,41 @@ import com.syncbudget.app.ui.strings.AppStrings
 import com.syncbudget.app.ui.strings.EnglishStrings
 import com.syncbudget.app.ui.strings.SpanishStrings
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
+import com.syncbudget.app.ui.theme.AdAwareDialog
+import com.syncbudget.app.ui.theme.DialogDangerButton
+import com.syncbudget.app.ui.theme.DialogFooter
+import com.syncbudget.app.ui.theme.DialogHeader
 import com.syncbudget.app.ui.theme.DialogStyle
 import com.syncbudget.app.ui.theme.DialogWarningButton
 import com.syncbudget.app.ui.theme.DialogSecondaryButton
 import com.syncbudget.app.ui.theme.SyncBudgetTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.syncbudget.app.ui.theme.LocalAppToast
@@ -145,9 +165,7 @@ class MainActivity : ComponentActivity() {
                     t = t.cause
                     if (t != null) sb.appendLine("Caused by:")
                 }
-                val dir = android.os.Environment.getExternalStoragePublicDirectory(
-                    android.os.Environment.DIRECTORY_DOWNLOADS
-                )
+                val dir = BackupManager.getSupportDir()
                 java.io.File(dir, "crash_log.txt").appendText(sb.toString())
             } catch (_: Exception) {}
             defaultHandler?.uncaughtException(thread, throwable)
@@ -208,6 +226,15 @@ class MainActivity : ComponentActivity() {
                     System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000))
             }
             var showWidgetLogo by remember { mutableStateOf(prefs.getBoolean("showWidgetLogo", true)) }
+
+            val backupPrefs = remember { context.getSharedPreferences("backup_prefs", android.content.Context.MODE_PRIVATE) }
+            var backupsEnabled by remember { mutableStateOf(backupPrefs.getBoolean("backups_enabled", false)) }
+            var backupFrequencyWeeks by remember { mutableIntStateOf(backupPrefs.getInt("backup_frequency_weeks", 1)) }
+            var backupRetention by remember { mutableIntStateOf(backupPrefs.getInt("backup_retention", 1)) }
+            var lastBackupDate by remember { mutableStateOf<String?>(backupPrefs.getString("last_backup_date", null)) }
+            var showBackupPasswordDialog by remember { mutableStateOf(false) }
+            var showDisableBackupDialog by remember { mutableStateOf(false) }
+            var showRestoreDialog by remember { mutableStateOf(false) }
 
             // Matching configuration
             var matchDays by remember { mutableIntStateOf(prefs.getInt("matchDays", 7)) }
@@ -541,6 +568,52 @@ class MainActivity : ComponentActivity() {
                 } catch (e: Exception) { android.util.Log.e("Migration", "add_savings_goal_fields failed", e) }
 
                 recomputeCash()
+
+                // Receipt local storage pruning
+                val pruneAge = sharedSettings.receiptPruneAgeDays
+                if (pruneAge != null) {
+                    try {
+                        val pruneDate = java.time.LocalDate.now().minusDays(pruneAge.toLong())
+                        var pruned = 0
+                        transactions.forEachIndexed { idx, txn ->
+                            if (txn.date.isBefore(pruneDate)) {
+                                val ids = com.syncbudget.app.data.sync.ReceiptManager.getReceiptIds(txn)
+                                if (ids.isNotEmpty()) {
+                                    for (rid in ids) {
+                                        com.syncbudget.app.data.sync.ReceiptManager.deleteLocalReceipt(context, rid)
+                                    }
+                                    val clock = lamportClock.tick()
+                                    transactions[idx] = txn.copy(
+                                        receiptId1 = null, receiptId1_clock = if (txn.receiptId1 != null) clock else txn.receiptId1_clock,
+                                        receiptId2 = null, receiptId2_clock = if (txn.receiptId2 != null) clock else txn.receiptId2_clock,
+                                        receiptId3 = null, receiptId3_clock = if (txn.receiptId3 != null) clock else txn.receiptId3_clock,
+                                        receiptId4 = null, receiptId4_clock = if (txn.receiptId4 != null) clock else txn.receiptId4_clock,
+                                        receiptId5 = null, receiptId5_clock = if (txn.receiptId5 != null) clock else txn.receiptId5_clock
+                                    )
+                                    pruned += ids.size
+                                }
+                            }
+                        }
+                        if (pruned > 0) {
+                            saveTransactions()
+                            android.util.Log.d("ReceiptPrune", "Pruned $pruned receipt references older than $pruneAge days")
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("ReceiptPrune", "Pruning failed: ${e.message}")
+                    }
+                }
+            }
+
+            LaunchedEffect(Unit) {
+                if (com.syncbudget.app.data.BackupManager.isBackupDue(context)) {
+                    val pwd = com.syncbudget.app.data.BackupManager.getPassword(context)
+                    if (pwd != null) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.syncbudget.app.data.BackupManager.performBackup(context, pwd)
+                        }
+                        lastBackupDate = backupPrefs.getString("last_backup_date", null)
+                    }
+                }
             }
 
             // Check if an expense transaction is fully accounted for in the budget
@@ -562,6 +635,7 @@ class MainActivity : ComponentActivity() {
 
             // Trigger immediate sync when app returns to foreground
             var syncTrigger by remember { mutableIntStateOf(0) }
+            var lastManualSyncTime by remember { mutableStateOf(0L) }
             val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner) {
                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -1230,8 +1304,6 @@ class MainActivity : ComponentActivity() {
                             consecutiveErrors = 0
                             pendingAdminClaim = result.pendingAdminClaim
                             if (result.repairAttempted && com.syncbudget.app.BuildConfig.DEBUG) {
-                                syncRepairAlert = true
-                                prefs.edit().putBoolean("syncRepairAlert", true).apply()
                                 // Show notification in debug builds
                                 try {
                                     val nm = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -1336,9 +1408,7 @@ class MainActivity : ComponentActivity() {
                                 if (t != null) sb.appendLine("Caused by:")
                             }
                             sb.appendLine()
-                            val dir = android.os.Environment.getExternalStoragePublicDirectory(
-                                android.os.Environment.DIRECTORY_DOWNLOADS
-                            )
+                            val dir = BackupManager.getBudgetrakDir()
                             java.io.File(dir, "crash_log.txt").appendText(sb.toString())
                         } catch (_: Exception) {}
                     } finally {
@@ -1349,9 +1419,14 @@ class MainActivity : ComponentActivity() {
                     val backoffMs = if (consecutiveErrors == 0) 60_000L
                         else minOf(60_000L * (1L shl minOf(consecutiveErrors, 3)), 300_000L)
                     val before = syncTrigger
-                    val deadline = System.currentTimeMillis() + backoffMs
+                    var deadline = System.currentTimeMillis() + backoffMs
                     while (syncTrigger == before && System.currentTimeMillis() < deadline) {
                         delay(1_000)
+                        // If a manual sync just finished, push deadline out to 60s after it
+                        if (lastManualSyncTime > 0L) {
+                            val manualDeadline = lastManualSyncTime + 60_000L
+                            if (manualDeadline > deadline) deadline = manualDeadline
+                        }
                     }
                 }
             }
@@ -1494,7 +1569,7 @@ class MainActivity : ComponentActivity() {
                         currencySymbol = currencySymbol,
                         today = budgetToday
                     )
-                    val file = java.io.File("/storage/emulated/0/Download/simulation_trace.txt")
+                    val file = java.io.File(BackupManager.getSupportDir(), "simulation_trace.txt")
                     file.writeText(trace)
                 } catch (_: Exception) { }
             }
@@ -1658,7 +1733,7 @@ class MainActivity : ComponentActivity() {
             // ── One-time CRDT state dump to Downloads ──
             remember {
                 try {
-                    val dlDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                    val dlDir = BackupManager.getSupportDir()
                     val dump = StringBuilder()
                     dump.appendLine("=== CRDT State Dump ${java.time.LocalDateTime.now()} ===")
                     dump.appendLine("DeviceId: $localDeviceId")
@@ -1748,7 +1823,7 @@ class MainActivity : ComponentActivity() {
                         android.provider.MediaStore.Files.getContentUri("external"),
                         arrayOf(android.provider.MediaStore.MediaColumns._ID),
                         "${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} = ?",
-                        arrayOf("sync_diag.txt", "Download/"),
+                        arrayOf("sync_diag.txt", "Download/BudgeTrak/support/"),
                         null
                     )
                     val uri = if (existing != null && existing.moveToFirst()) {
@@ -1762,7 +1837,7 @@ class MainActivity : ComponentActivity() {
                         val values = android.content.ContentValues().apply {
                             put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "sync_diag.txt")
                             put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/")
+                            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/BudgeTrak/support/")
                         }
                         resolver.insert(android.provider.MediaStore.Files.getContentUri("external"), values)
                     }
@@ -1819,8 +1894,6 @@ class MainActivity : ComponentActivity() {
                     coroutineScope.launch {
                         val gId = GroupManager.getGroupId(context) ?: return@launch
                         val key = GroupManager.getEncryptionKey(context) ?: return@launch
-                        // Reset foreground sync timer so it doesn't fire during manual sync
-                        syncTrigger++
                         val manualLock = SyncWorker.createSyncLock(context)
                         if (!manualLock.tryLock()) {
                             // Another sync is in progress — skip manual sync
@@ -2019,6 +2092,7 @@ class MainActivity : ComponentActivity() {
                             syncProgressMessage = null
                         } finally {
                             manualLock.unlock()
+                            lastManualSyncTime = System.currentTimeMillis()
                         }
                     }
                 }
@@ -2330,6 +2404,51 @@ class MainActivity : ComponentActivity() {
                             }
                             saveTransactions()
                         },
+                        receiptPruneAgeDays = sharedSettings.receiptPruneAgeDays,
+                        onReceiptPruneChange = { days ->
+                            val clock = lamportClock.tick()
+                            sharedSettings = sharedSettings.copy(
+                                receiptPruneAgeDays = days,
+                                receiptPruneAgeDays_clock = clock,
+                                lastChangedBy = localDeviceId
+                            )
+                            SharedSettingsRepository.save(context, sharedSettings)
+                        },
+                        receiptCacheSize = remember(isPaidUser) {
+                            com.syncbudget.app.data.sync.ReceiptManager.getTotalStorageBytes(context)
+                        },
+                        backupsEnabled = backupsEnabled,
+                        onBackupsEnabledChange = { enabled ->
+                            if (enabled) {
+                                showBackupPasswordDialog = true
+                            } else {
+                                showDisableBackupDialog = true
+                            }
+                        },
+                        backupFrequencyWeeks = backupFrequencyWeeks,
+                        onBackupFrequencyChange = { weeks ->
+                            backupFrequencyWeeks = weeks
+                            backupPrefs.edit().putInt("backup_frequency_weeks", weeks).apply()
+                        },
+                        backupRetention = backupRetention,
+                        onBackupRetentionChange = { ret ->
+                            backupRetention = ret
+                            backupPrefs.edit().putInt("backup_retention", ret).apply()
+                        },
+                        lastBackupDate = lastBackupDate,
+                        nextBackupDate = com.syncbudget.app.data.BackupManager.getNextBackupDate(context),
+                        onBackupNow = {
+                            val pwd = com.syncbudget.app.data.BackupManager.getPassword(context)
+                            if (pwd != null) {
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                    val result = com.syncbudget.app.data.BackupManager.performBackup(context, pwd)
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        lastBackupDate = backupPrefs.getString("last_backup_date", null)
+                                    }
+                                }
+                            }
+                        },
+                        onRestoreBackup = { showRestoreDialog = true },
                         onBack = { currentScreen = "main" },
                         onHelpClick = { currentScreen = "settings_help" }
                     )
@@ -2399,7 +2518,12 @@ class MainActivity : ComponentActivity() {
                                     linkedSavingsGoalAmount = if (prev.linkedSavingsGoalId != null && updated.linkedSavingsGoalId == null) 0.0
                                         else if (updated.linkedSavingsGoalId != null && prev.linkedSavingsGoalId == null) updated.linkedSavingsGoalAmount
                                         else prev.linkedSavingsGoalAmount,
-                                    linkedSavingsGoalAmount_clock = if (updated.linkedSavingsGoalId != prev.linkedSavingsGoalId) clock else prev.linkedSavingsGoalAmount_clock
+                                    linkedSavingsGoalAmount_clock = if (updated.linkedSavingsGoalId != prev.linkedSavingsGoalId) clock else prev.linkedSavingsGoalAmount_clock,
+                                    receiptId1_clock = if (updated.receiptId1 != prev.receiptId1) clock else prev.receiptId1_clock,
+                                    receiptId2_clock = if (updated.receiptId2 != prev.receiptId2) clock else prev.receiptId2_clock,
+                                    receiptId3_clock = if (updated.receiptId3 != prev.receiptId3) clock else prev.receiptId3_clock,
+                                    receiptId4_clock = if (updated.receiptId4 != prev.receiptId4) clock else prev.receiptId4_clock,
+                                    receiptId5_clock = if (updated.receiptId5 != prev.receiptId5) clock else prev.receiptId5_clock
                                 )
                                 // Handle savings goal link/unlink effects
                                 val wasLinkedToGoal = prev.linkedSavingsGoalId
@@ -3966,6 +4090,207 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
+
+                // Backup password dialog
+                if (showBackupPasswordDialog) {
+                    var pwd by remember { mutableStateOf("") }
+                    var pwdConfirm by remember { mutableStateOf("") }
+                    var pwdError by remember { mutableStateOf<String?>(null) }
+                    AdAwareAlertDialog(
+                        onDismissRequest = { showBackupPasswordDialog = false },
+                        title = { Text(strings.settings.setBackupPassword) },
+                        style = DialogStyle.WARNING,
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    strings.settings.backupPasswordWarning,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                OutlinedTextField(
+                                    value = pwd, onValueChange = { pwd = it; pwdError = null },
+                                    label = { Text(strings.settings.passwordLabel) }, singleLine = true,
+                                    visualTransformation = PasswordVisualTransformation()
+                                )
+                                OutlinedTextField(
+                                    value = pwdConfirm, onValueChange = { pwdConfirm = it; pwdError = null },
+                                    label = { Text(strings.settings.confirmPasswordLabel) }, singleLine = true,
+                                    visualTransformation = PasswordVisualTransformation()
+                                )
+                                if (pwdError != null) {
+                                    Text(pwdError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            DialogWarningButton(onClick = {
+                                when {
+                                    pwd.length < 8 -> pwdError = strings.settings.passwordTooShort
+                                    pwd != pwdConfirm -> pwdError = strings.settings.passwordMismatch
+                                    else -> {
+                                        com.syncbudget.app.data.BackupManager.savePassword(context, pwd.toCharArray())
+                                        backupsEnabled = true
+                                        backupPrefs.edit().putBoolean("backups_enabled", true).apply()
+                                        showBackupPasswordDialog = false
+                                    }
+                                }
+                            }) { Text(strings.settings.enableBackups) }
+                        },
+                        dismissButton = {
+                            DialogSecondaryButton(onClick = { showBackupPasswordDialog = false }) {
+                                Text(strings.common.cancel)
+                            }
+                        }
+                    )
+                }
+
+                // Disable backup confirmation dialog
+                if (showDisableBackupDialog) {
+                    var confirmDelete by remember { mutableStateOf(false) }
+                    AdAwareAlertDialog(
+                        onDismissRequest = { showDisableBackupDialog = false; confirmDelete = false },
+                        title = { Text(strings.settings.disableBackups) },
+                        style = if (confirmDelete) DialogStyle.DANGER else DialogStyle.DEFAULT,
+                        text = {
+                            if (!confirmDelete) {
+                                Text(strings.settings.keepOrDeletePrompt)
+                            } else {
+                                Text(
+                                    strings.settings.deleteAllConfirmMsg,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            if (!confirmDelete) {
+                                DialogDangerButton(onClick = { confirmDelete = true }) {
+                                    Text(strings.settings.deleteAllBtn)
+                                }
+                            } else {
+                                DialogDangerButton(onClick = {
+                                    com.syncbudget.app.data.BackupManager.deleteAllBackups()
+                                    backupsEnabled = false
+                                    backupPrefs.edit().putBoolean("backups_enabled", false).apply()
+                                    showDisableBackupDialog = false; confirmDelete = false
+                                }) { Text(strings.settings.confirmDeleteBtn) }
+                            }
+                        },
+                        dismissButton = {
+                            DialogSecondaryButton(onClick = {
+                                if (confirmDelete) { confirmDelete = false } else {
+                                    backupsEnabled = false
+                                    backupPrefs.edit().putBoolean("backups_enabled", false).apply()
+                                    showDisableBackupDialog = false
+                                }
+                            }) { Text(if (confirmDelete) strings.common.back else strings.settings.keepFilesBtn) }
+                        }
+                    )
+                }
+
+                // Restore backup dialog
+                if (showRestoreDialog) {
+                    val availableBackups = remember { com.syncbudget.app.data.BackupManager.listAvailableBackups() }
+                    var selectedBackup by remember { mutableStateOf<com.syncbudget.app.data.BackupManager.BackupEntry?>(null) }
+                    var restorePassword by remember { mutableStateOf("") }
+                    var restoreError by remember { mutableStateOf<String?>(null) }
+                    var restoring by remember { mutableStateOf(false) }
+                    val restoreScrollState = rememberScrollState()
+
+                    AdAwareDialog(onDismissRequest = { if (!restoring) showRestoreDialog = false }) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(0.92f).imePadding(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 6.dp
+                        ) {
+                            Column {
+                                DialogHeader(strings.settings.restoreBackup)
+
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f, fill = false)
+                                        .verticalScroll(restoreScrollState)
+                                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (availableBackups.isEmpty()) {
+                                        Text(strings.settings.noBackupsFound)
+                                    } else {
+                                        Text(strings.settings.selectBackupPrompt, style = MaterialTheme.typography.bodyMedium)
+                                        availableBackups.forEach { backup ->
+                                            val sizeMb = "%.1f".format((backup.systemSizeBytes + backup.photosSizeBytes) / (1024.0 * 1024.0))
+                                            val selected = selectedBackup?.date == backup.date
+                                            Surface(
+                                                modifier = Modifier.fillMaxWidth().clickable { selectedBackup = backup; restoreError = null },
+                                                color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                                                        else MaterialTheme.colorScheme.surface,
+                                                shape = RoundedCornerShape(8.dp),
+                                                tonalElevation = if (selected) 2.dp else 0.dp
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                    Text(backup.date, style = MaterialTheme.typography.bodyLarge)
+                                                    Text("${sizeMb} MB" + if (backup.photosFile != null) " (${strings.settings.withPhotos})" else " (${strings.settings.dataOnly})",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                                }
+                                            }
+                                        }
+                                        if (selectedBackup != null) {
+                                            Text(strings.settings.restoreWarning,
+                                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                            OutlinedTextField(
+                                                value = restorePassword, onValueChange = { restorePassword = it; restoreError = null },
+                                                label = { Text(strings.settings.backupPasswordLabel) }, singleLine = true,
+                                                visualTransformation = PasswordVisualTransformation(),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        if (restoreError != null) {
+                                            Text(restoreError!!, color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+
+                                DialogFooter {
+                                    FlowRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        if (!restoring) {
+                                            DialogSecondaryButton(onClick = { showRestoreDialog = false }) { Text(strings.common.cancel) }
+                                        }
+                                        if (selectedBackup != null && !restoring) {
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            DialogDangerButton(onClick = {
+                                                if (restorePassword.isEmpty()) { restoreError = strings.settings.enterPasswordError; return@DialogDangerButton }
+                                                restoring = true
+                                                val backup = selectedBackup!!
+                                                val pwd = restorePassword.toCharArray()
+                                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                                    val sysResult = com.syncbudget.app.data.BackupManager.restoreSystemBackup(context, backup.systemFile, pwd)
+                                                    if (sysResult.isSuccess && backup.photosFile != null) {
+                                                        com.syncbudget.app.data.BackupManager.restorePhotosBackup(context, backup.photosFile, pwd)
+                                                    }
+                                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                        restoring = false
+                                                        if (sysResult.isSuccess) {
+                                                            showRestoreDialog = false
+                                                            this@MainActivity.recreate()
+                                                        } else {
+                                                            restoreError = sysResult.exceptionOrNull()?.message ?: "Restore failed"
+                                                        }
+                                                    }
+                                                }
+                                            }) { Text(strings.settings.restoreBtn) }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 } // Box(weight)
               } // Column
             // Quick Start Guide overlay

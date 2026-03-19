@@ -81,8 +81,10 @@
 
 ## Important Feedback
 - [Preserve existing fixes](feedback_preserve_fixes.md) — Never undo previous bug fixes when working on audit items
+- [Keep .claude-memory current](feedback_claude_memory_sync.md) — Always sync memory files to .claude-memory/ in project root
 
 ## UI Design Preferences
 - HTML mockups to `/storage/emulated/0/Download/` are a great design tool for iterating on UI
 - Dialog style preferences: Option D (icon indicators) + Option E (highlighted differences)
 - Dialogs should have: colored header, colored footer with buttons, clear item distinction
+- [Dialog design guide](feedback_dialog_design_guide.md) — Full standard for all dialogs, popups, toasts, buttons

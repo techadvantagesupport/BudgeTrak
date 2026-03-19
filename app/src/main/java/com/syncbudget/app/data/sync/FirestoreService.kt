@@ -22,7 +22,10 @@ data class DeviceRecord(
     val lastSyncVersion: Long = 0L,
     val lastSeen: Long = 0L,
     val fingerprintData: String? = null,
-    val fingerprintSyncVersion: Long = 0L
+    val fingerprintSyncVersion: Long = 0L,
+    val photoCapable: Boolean = false,
+    val uploadSpeedBps: Long = 0L,
+    val uploadSpeedMeasuredAt: Long = 0L
 )
 
 data class PairingData(
@@ -150,11 +153,15 @@ object FirestoreService {
         syncVersion: Long,
         fingerprintJson: String? = null,
         appSyncVersion: Int = 0,
-        minSyncVersion: Int = 0
+        minSyncVersion: Int = 0,
+        photoCapable: Boolean = false,
+        uploadSpeedBps: Long = 0L,
+        uploadSpeedMeasuredAt: Long = 0L
     ) = withTimeout(OP_TIMEOUT_MS) {
         val data = mutableMapOf<String, Any>(
             "lastSyncVersion" to syncVersion,
-            "lastSeen" to System.currentTimeMillis()
+            "lastSeen" to System.currentTimeMillis(),
+            "photoCapable" to photoCapable
         )
         if (appSyncVersion > 0) {
             data["appSyncVersion"] = appSyncVersion
@@ -163,6 +170,10 @@ object FirestoreService {
         if (fingerprintJson != null) {
             data["fingerprintData"] = fingerprintJson
             data["fingerprintSyncVersion"] = syncVersion
+        }
+        if (uploadSpeedBps > 0) {
+            data["uploadSpeedBps"] = uploadSpeedBps
+            data["uploadSpeedMeasuredAt"] = uploadSpeedMeasuredAt
         }
         db.collection("groups")
             .document(groupId)
@@ -187,7 +198,10 @@ object FirestoreService {
             deviceName = doc.getString("deviceName") ?: "",
             isAdmin = doc.getBoolean("isAdmin") ?: false,
             lastSyncVersion = doc.getLong("lastSyncVersion") ?: 0L,
-            lastSeen = doc.getLong("lastSeen") ?: 0L
+            lastSeen = doc.getLong("lastSeen") ?: 0L,
+            photoCapable = doc.getBoolean("photoCapable") ?: false,
+            uploadSpeedBps = doc.getLong("uploadSpeedBps") ?: 0L,
+            uploadSpeedMeasuredAt = doc.getLong("uploadSpeedMeasuredAt") ?: 0L
         )
     }
 
@@ -433,7 +447,10 @@ object FirestoreService {
                     lastSyncVersion = doc.getLong("lastSyncVersion") ?: 0L,
                     lastSeen = doc.getLong("lastSeen") ?: 0L,
                     fingerprintData = doc.getString("fingerprintData"),
-                    fingerprintSyncVersion = doc.getLong("fingerprintSyncVersion") ?: 0L
+                    fingerprintSyncVersion = doc.getLong("fingerprintSyncVersion") ?: 0L,
+                    photoCapable = doc.getBoolean("photoCapable") ?: false,
+                    uploadSpeedBps = doc.getLong("uploadSpeedBps") ?: 0L,
+                    uploadSpeedMeasuredAt = doc.getLong("uploadSpeedMeasuredAt") ?: 0L
                 )
             }
     }

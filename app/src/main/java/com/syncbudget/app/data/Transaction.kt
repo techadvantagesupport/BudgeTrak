@@ -28,6 +28,12 @@ data class Transaction(
     val linkedIncomeSourceAmount: Double = 0.0,
     val linkedSavingsGoalId: Int? = null,
     val linkedSavingsGoalAmount: Double = 0.0,
+    // Receipt photo slots (up to 5 per transaction)
+    val receiptId1: String? = null,
+    val receiptId2: String? = null,
+    val receiptId3: String? = null,
+    val receiptId4: String? = null,
+    val receiptId5: String? = null,
     // Sync fields
     val deviceId: String = "",
     val deleted: Boolean = false,
@@ -48,6 +54,11 @@ data class Transaction(
     val linkedIncomeSourceAmount_clock: Long = 0L,
     val linkedSavingsGoalId_clock: Long = 0L,
     val linkedSavingsGoalAmount_clock: Long = 0L,
+    val receiptId1_clock: Long = 0L,
+    val receiptId2_clock: Long = 0L,
+    val receiptId3_clock: Long = 0L,
+    val receiptId4_clock: Long = 0L,
+    val receiptId5_clock: Long = 0L,
     val deleted_clock: Long = 0L,
     val deviceId_clock: Long = 0L
 )

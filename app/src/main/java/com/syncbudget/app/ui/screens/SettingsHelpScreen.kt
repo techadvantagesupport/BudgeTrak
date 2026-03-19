@@ -240,6 +240,64 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
+            // ─── RECEIPT PHOTOS ───
+            HelpSectionTitle(S.settingsHelp.receiptPhotosTitle)
+            HelpBodyText(S.settingsHelp.receiptPhotosBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBulletText(S.settingsHelp.receiptPhotosBullet1)
+            HelpBulletText(S.settingsHelp.receiptPhotosBullet2)
+            HelpBulletText(S.settingsHelp.receiptPhotosBullet3)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            HelpSubSectionTitle(S.settingsHelp.receiptPhotosRetentionTitle)
+            HelpBodyText(S.settingsHelp.receiptPhotosRetentionBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(S.settingsHelp.receiptPhotosRetentionNote, italic = true)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
+            // ─── BACKUPS ───
+            HelpSectionTitle(S.settingsHelp.backupsTitle)
+            HelpBodyText(S.settingsHelp.backupsBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBulletText(S.settingsHelp.backupsEnableBullet)
+            HelpBulletText(S.settingsHelp.backupsFrequencyBullet)
+            HelpBulletText(S.settingsHelp.backupsRetentionBullet)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Password warning box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFFFF3E0))
+                    .border(1.dp, Color(0xFFE65100).copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                    .padding(14.dp)
+            ) {
+                Text(
+                    S.settingsHelp.backupsPasswordWarning,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFE65100),
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 18.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            HelpSubSectionTitle(S.settingsHelp.backupsRestoreTitle)
+            HelpBodyText(S.settingsHelp.backupsRestoreBody)
+            Spacer(modifier = Modifier.height(4.dp))
+            HelpBulletText(S.settingsHelp.backupsRestoreBullet1)
+            HelpBulletText(S.settingsHelp.backupsRestoreBullet2)
+            HelpBulletText(S.settingsHelp.backupsRestoreBullet3)
+            HelpBulletText(S.settingsHelp.backupsRestoreBullet4)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(S.settingsHelp.backupsRestoreNote, italic = true)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
             // ─── SECTION 10: CATEGORIES ───
             HelpSectionTitle(S.settingsHelp.categoriesTitle)
             HelpBodyText(S.settingsHelp.categoriesBody)

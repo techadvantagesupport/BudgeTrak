@@ -3,6 +3,7 @@ package com.syncbudget.app.ui.screens
 import android.net.Uri
 import androidx.compose.foundation.layout.heightIn
 import com.syncbudget.app.data.BudgetCalculator
+import com.syncbudget.app.data.sync.ReceiptManager
 import com.syncbudget.app.ui.components.SwipeablePhotoRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,6 +45,8 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Close
@@ -52,6 +55,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoveToInbox
 import androidx.compose.material.icons.filled.Percent
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
@@ -184,8 +188,7 @@ import kotlinx.coroutines.launch
 
 private enum class SaveFormat(val label: String) {
     CSV("CSV"),
-    XLS("Excel (.xlsx)"),
-    ENCRYPTED("Encrypted")
+    XLS("Excel (.xlsx)")
 }
 
 private enum class ImportStage {
@@ -370,21 +373,17 @@ fun TransactionsScreen(
     var importSkippedRows by remember { mutableIntStateOf(0) }
     var importTotalDataRows by remember { mutableIntStateOf(0) }
     var pendingUri by remember { mutableStateOf<Uri?>(null) }
+    var processingUri by remember { mutableStateOf<Uri?>(null) }
 
     // Save state
     var showSaveDialog by remember { mutableStateOf(false) }
     var selectedSaveFormat by remember { mutableStateOf(SaveFormat.CSV) }
-    var savePassword by remember { mutableStateOf("") }
-    var savePasswordConfirm by remember { mutableStateOf("") }
     var saveError by remember { mutableStateOf<String?>(null) }
 
     // Full backup state
     var includeAllData by remember { mutableStateOf(false) }
     var pendingFullBackupContent by remember { mutableStateOf<String?>(null) }
     var showFullBackupDialog by remember { mutableStateOf(false) }
-
-    // Encrypted load password
-    var encryptedLoadPassword by remember { mutableStateOf("") }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -428,37 +427,6 @@ fun TransactionsScreen(
         }
     }
 
-    val encryptedSaveLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        try {
-            val contentToEncrypt = if (includeAllData) {
-                onSerializeFullBackup()
-            } else {
-                val toSave = if (selectionMode && selectedIds.any { it.value }) {
-                    transactions.filter { selectedIds[it.id] == true }
-                } else { transactions }
-                serializeTransactionsCsv(toSave)
-            }
-            val encrypted = CryptoHelper.encrypt(
-                contentToEncrypt.toByteArray(),
-                savePassword.toCharArray()
-            )
-            context.contentResolver.openOutputStream(uri)?.use { os ->
-                os.write(encrypted)
-            }
-            savePassword = ""
-            savePasswordConfirm = ""
-            val msg = if (includeAllData) S.transactions.fullBackupSaved
-                      else S.transactions.savedSuccessfully(transactions.size)
-            toastState.show(msg)
-            includeAllData = false
-        } catch (e: Exception) {
-            toastState.show("Encrypted save failed: ${e.message}")
-        }
-    }
-
     val jsonSaveLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
@@ -475,10 +443,15 @@ fun TransactionsScreen(
         }
     }
 
-    // Process file when URI is set — dispatch on IO thread to avoid ANR
-    LaunchedEffect(pendingUri) {
-        val uri = pendingUri ?: return@LaunchedEffect
+    // Transfer pendingUri to processingUri (outside LaunchedEffect to avoid key-change cancellation)
+    if (pendingUri != null && processingUri == null) {
+        processingUri = pendingUri
         pendingUri = null
+    }
+
+    // Process file when URI is set — dispatch on IO thread to avoid ANR
+    LaunchedEffect(processingUri) {
+        val uri = processingUri ?: return@LaunchedEffect
         importStage = ImportStage.PARSING
 
         try {
@@ -501,7 +474,16 @@ fun TransactionsScreen(
                     val reader = BufferedReader(InputStreamReader(inputStream))
                     val r = parseUsBank(reader, existingIdSet)
                     reader.close()
-                    r
+                    // Banks produce clean files — any skipped rows means wrong format.
+                    // Fall back to generic parser if the specific parser had trouble.
+                    if (r.skippedRows == 0 && r.transactions.isNotEmpty()) r else {
+                        val fallbackStream = context.contentResolver.openInputStream(uri)
+                            ?: return@withContext r
+                        val fallbackReader = BufferedReader(InputStreamReader(fallbackStream))
+                        val fallbackResult = parseGenericCsv(fallbackReader, existingIdSet)
+                        fallbackReader.close()
+                        if (fallbackResult.transactions.size > r.transactions.size) fallbackResult else r
+                    }
                 }
                 BankFormat.SECURESYNC_CSV -> {
                     val inputStream = context.contentResolver.openInputStream(uri)
@@ -517,40 +499,6 @@ fun TransactionsScreen(
                     val r = parseSyncBudgetCsv(reader, existingIdSet)
                     reader.close()
                     r
-                }
-                BankFormat.SECURESYNC_ENCRYPTED -> {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                        ?: return@withContext null
-                    try {
-                        val encryptedBytes = inputStream.readBytes()
-                        inputStream.close()
-                        val decryptedBytes = CryptoHelper.decrypt(
-                            encryptedBytes,
-                            encryptedLoadPassword.toCharArray()
-                        )
-                        encryptedLoadPassword = ""
-                        val textContent = String(decryptedBytes)
-                        if (FullBackupSerializer.isFullBackup(textContent)) {
-                            pendingFullBackupContent = textContent
-                            showFullBackupDialog = true
-                            importStage = null
-                            return@withContext null
-                        }
-                        val reader = BufferedReader(textContent.reader())
-                        val r = parseSyncBudgetCsv(reader, existingIdSet)
-                        reader.close()
-                        r
-                    } catch (e: javax.crypto.AEADBadTagException) {
-                        encryptedLoadPassword = ""
-                        importError = "Wrong password or corrupted file"
-                        importStage = ImportStage.PARSE_ERROR
-                        return@withContext null
-                    } catch (e: javax.crypto.BadPaddingException) {
-                        encryptedLoadPassword = ""
-                        importError = "Wrong password or corrupted file"
-                        importStage = ImportStage.PARSE_ERROR
-                        return@withContext null
-                    }
                 }
             } }  // close when + withContext
 
@@ -594,9 +542,13 @@ fun TransactionsScreen(
                 ignoreAllDuplicates = false
                 importStage = ImportStage.DUPLICATE_CHECK
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e  // Don't catch cancellation — let coroutine framework handle it
         } catch (e: Exception) {
             importError = "Error: ${e.message}"
             importStage = ImportStage.PARSE_ERROR
+        } finally {
+            processingUri = null
         }
     }
 
@@ -1015,64 +967,105 @@ fun TransactionsScreen(
                         val periods = minOf(amortElapsed, amortEntry.totalPeriods)
                         (amortEntry.amount / amortEntry.totalPeriods) * periods
                     } else null
-                    SwipeablePhotoRow(
-                        transactionId = transaction.id,
-                        photos = emptyList(), // TODO: load thumbnails from local storage
-                        onPhotosAdded = { /* TODO: save receipt metadata */ },
-                        onSwipeOpen = { expandedIds[transaction.id] = false }
-                    ) {
-                    TransactionRow(
-                        transaction = transaction,
-                        currencySymbol = currencySymbol,
-                        dateFormatter = dateFormatter,
-                        categoryMap = categoryMap,
-                        selectionMode = selectionMode,
-                        isSelected = selectedIds[transaction.id] == true,
-                        isExpanded = expandedIds[transaction.id] == true,
-                        onTap = {
-                            if (selectionMode) {
-                                selectedIds[transaction.id] =
-                                    !(selectedIds[transaction.id] ?: false)
-                            } else {
-                                editingTransaction = transaction
-                            }
-                        },
-                        onLongPress = {
-                            if (!selectionMode) {
-                                selectionMode = true
-                                selectedIds.clear()
-                            }
-                            selectedIds[transaction.id] = true
-                        },
-                        onToggleSelection = { checked ->
-                            selectedIds[transaction.id] = checked
-                        },
-                        onToggleExpand = {
-                            expandedIds[transaction.id] =
-                                !(expandedIds[transaction.id] ?: false)
-                        },
-                        onCategoryFilter = { catId ->
-                            categoryFilterId = catId
-                            viewFilter = ViewFilter.ALL
-                            selectionMode = false
-                            selectedIds.clear()
-                        },
-                        attributionLabel = if (showAttribution && transaction.deviceId.isNotEmpty()) {
-                            if (transaction.deviceId == localDeviceId) S.sync.you
-                            else deviceNameMap[transaction.deviceId] ?: transaction.deviceId.take(8)
-                        } else null,
-                        isLinkedRecurring = isLinkedRecurring,
-                        isLinkedAmortization = isLinkedAmortization,
-                        isAmortComplete = isAmortComplete,
-                        isLinkedIncome = isLinkedIncome,
-                        linkedRecurringAmount = linkedRecurringAmount,
-                        linkedAmortizationApplied = linkedAmortizationApplied,
-                        linkedIncomeAmount = linkedIncomeAmount,
-                        incomeMode = incomeMode,
-                        isLinkedSavingsGoal = isLinkedSavingsGoal,
-                        onEffectTap = { effectExplanationTransaction = transaction }
-                    )
-                    } // SwipeablePhotoRow
+                    val txnContext = LocalContext.current
+                    val photoScope = rememberCoroutineScope()
+                    if (isPaidUser) {
+                        val thumbnails = remember(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5) {
+                            listOf(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5)
+                                .map { id -> id?.let { ReceiptManager.loadThumbnail(txnContext, it) } }
+                        }
+                        SwipeablePhotoRow(
+                            transactionId = transaction.id,
+                            photos = thumbnails,
+                            receiptIds = listOf(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5),
+                            onPhotosAdded = { files ->
+                                photoScope.launch(Dispatchers.IO) {
+                                    var txn = transaction
+                                    for (file in files) {
+                                        val slot = ReceiptManager.nextEmptySlot(txn) ?: break
+                                        val rid = ReceiptManager.generateReceiptId()
+                                        val dest = ReceiptManager.getReceiptFile(txnContext, rid)
+                                        file.copyTo(dest, overwrite = true)
+                                        val oldThumb = java.io.File(java.io.File(txnContext.filesDir, "receipt_thumbs"), file.name)
+                                        if (oldThumb.exists()) {
+                                            oldThumb.copyTo(ReceiptManager.getThumbFile(txnContext, rid), overwrite = true)
+                                            oldThumb.delete()
+                                        }
+                                        file.delete()
+                                        ReceiptManager.addToPendingQueue(txnContext, rid)
+                                        txn = when (slot) {
+                                            1 -> txn.copy(receiptId1 = rid)
+                                            2 -> txn.copy(receiptId2 = rid)
+                                            3 -> txn.copy(receiptId3 = rid)
+                                            4 -> txn.copy(receiptId4 = rid)
+                                            5 -> txn.copy(receiptId5 = rid)
+                                            else -> txn
+                                        }
+                                    }
+                                    if (txn !== transaction) {
+                                        withContext(Dispatchers.Main) { onUpdateTransaction(txn) }
+                                    }
+                                }
+                            },
+                            onPhotoDelete = { slotIndex ->
+                                val receiptIds = listOf(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5)
+                                val rid = receiptIds.getOrNull(slotIndex) ?: return@SwipeablePhotoRow
+                                photoScope.launch(Dispatchers.IO) {
+                                    ReceiptManager.deleteLocalReceipt(txnContext, rid)
+                                    val updated = when (slotIndex) {
+                                        0 -> transaction.copy(receiptId1 = null)
+                                        1 -> transaction.copy(receiptId2 = null)
+                                        2 -> transaction.copy(receiptId3 = null)
+                                        3 -> transaction.copy(receiptId4 = null)
+                                        4 -> transaction.copy(receiptId5 = null)
+                                        else -> transaction
+                                    }
+                                    withContext(Dispatchers.Main) { onUpdateTransaction(updated) }
+                                }
+                            },
+                            onSwipeOpen = { expandedIds[transaction.id] = false }
+                        ) {
+                            TransactionRow(
+                                transaction = transaction, currencySymbol = currencySymbol,
+                                dateFormatter = dateFormatter, categoryMap = categoryMap,
+                                selectionMode = selectionMode,
+                                isSelected = selectedIds[transaction.id] == true,
+                                isExpanded = expandedIds[transaction.id] == true,
+                                onTap = { if (selectionMode) { selectedIds[transaction.id] = !(selectedIds[transaction.id] ?: false) } else { editingTransaction = transaction } },
+                                onLongPress = { if (!selectionMode) { selectionMode = true; selectedIds.clear() }; selectedIds[transaction.id] = true },
+                                onToggleSelection = { checked -> selectedIds[transaction.id] = checked },
+                                onToggleExpand = { expandedIds[transaction.id] = !(expandedIds[transaction.id] ?: false) },
+                                onCategoryFilter = { catId -> categoryFilterId = catId; viewFilter = ViewFilter.ALL; selectionMode = false; selectedIds.clear() },
+                                attributionLabel = if (showAttribution && transaction.deviceId.isNotEmpty()) { if (transaction.deviceId == localDeviceId) S.sync.you else deviceNameMap[transaction.deviceId] ?: transaction.deviceId.take(8) } else null,
+                                isLinkedRecurring = isLinkedRecurring, isLinkedAmortization = isLinkedAmortization,
+                                isAmortComplete = isAmortComplete, isLinkedIncome = isLinkedIncome,
+                                linkedRecurringAmount = linkedRecurringAmount, linkedAmortizationApplied = linkedAmortizationApplied,
+                                linkedIncomeAmount = linkedIncomeAmount, incomeMode = incomeMode,
+                                isLinkedSavingsGoal = isLinkedSavingsGoal,
+                                onEffectTap = { effectExplanationTransaction = transaction }
+                            )
+                        }
+                    } else {
+                        TransactionRow(
+                            transaction = transaction, currencySymbol = currencySymbol,
+                            dateFormatter = dateFormatter, categoryMap = categoryMap,
+                            selectionMode = selectionMode,
+                            isSelected = selectedIds[transaction.id] == true,
+                            isExpanded = expandedIds[transaction.id] == true,
+                            onTap = { if (selectionMode) { selectedIds[transaction.id] = !(selectedIds[transaction.id] ?: false) } else { editingTransaction = transaction } },
+                            onLongPress = { if (!selectionMode) { selectionMode = true; selectedIds.clear() }; selectedIds[transaction.id] = true },
+                            onToggleSelection = { checked -> selectedIds[transaction.id] = checked },
+                            onToggleExpand = { expandedIds[transaction.id] = !(expandedIds[transaction.id] ?: false) },
+                            onCategoryFilter = { catId -> categoryFilterId = catId; viewFilter = ViewFilter.ALL; selectionMode = false; selectedIds.clear() },
+                            attributionLabel = if (showAttribution && transaction.deviceId.isNotEmpty()) { if (transaction.deviceId == localDeviceId) S.sync.you else deviceNameMap[transaction.deviceId] ?: transaction.deviceId.take(8) } else null,
+                            isLinkedRecurring = isLinkedRecurring, isLinkedAmortization = isLinkedAmortization,
+                            isAmortComplete = isAmortComplete, isLinkedIncome = isLinkedIncome,
+                            linkedRecurringAmount = linkedRecurringAmount, linkedAmortizationApplied = linkedAmortizationApplied,
+                            linkedIncomeAmount = linkedIncomeAmount, incomeMode = incomeMode,
+                            isLinkedSavingsGoal = isLinkedSavingsGoal,
+                            onEffectTap = { effectExplanationTransaction = transaction }
+                        )
+                    }
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
                     )
@@ -1097,6 +1090,7 @@ fun TransactionsScreen(
             savingsGoals = savingsGoals,
             pastSources = pastSources,
             budgetPeriod = budgetPeriod,
+            isPaidUser = isPaidUser,
             onDismiss = { showAddIncome = false },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
@@ -1159,6 +1153,7 @@ fun TransactionsScreen(
             savingsGoals = savingsGoals,
             pastSources = pastSources,
             budgetPeriod = budgetPeriod,
+            isPaidUser = isPaidUser,
             onDismiss = { showAddExpense = false },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
@@ -1214,6 +1209,7 @@ fun TransactionsScreen(
             savingsGoals = savingsGoals,
             pastSources = pastSources,
             budgetPeriod = budgetPeriod,
+            isPaidUser = isPaidUser,
             onDismiss = { editingTransaction = null },
             onSave = { updated ->
                 // Only run duplicate/matching checks if merchant, date, or amount changed
@@ -1578,8 +1574,6 @@ fun TransactionsScreen(
         AdAwareDialog(
             onDismissRequest = {
                 showSaveDialog = false
-                savePassword = ""
-                savePasswordConfirm = ""
                 saveError = null
             },
         ) {
@@ -1612,8 +1606,6 @@ fun TransactionsScreen(
                                     .clickable {
                                         selectedSaveFormat = format
                                         if (format == SaveFormat.XLS) includeAllData = false
-                                        savePassword = ""
-                                        savePasswordConfirm = ""
                                         saveError = null
                                     }
                                     .padding(vertical = 4.dp, horizontal = 4.dp)
@@ -1623,24 +1615,13 @@ fun TransactionsScreen(
                                     onClick = {
                                         selectedSaveFormat = format
                                         if (format == SaveFormat.XLS) includeAllData = false
-                                        savePassword = ""
-                                        savePasswordConfirm = ""
                                         saveError = null
                                     }
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                if (format == SaveFormat.ENCRYPTED) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Lock,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                }
                                 Text(when (format) {
                                     SaveFormat.CSV -> S.transactions.csv
                                     SaveFormat.XLS -> S.transactions.xls
-                                    SaveFormat.ENCRYPTED -> S.transactions.encrypted
                                 }, style = MaterialTheme.typography.bodyLarge)
                             }
                         }
@@ -1673,43 +1654,6 @@ fun TransactionsScreen(
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
                         }
 
-                        if (selectedSaveFormat == SaveFormat.ENCRYPTED) {
-                            val pwFieldColors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                                unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                            )
-                            if (saveError != null) {
-                                Text(
-                                    text = saveError!!,
-                                    color = Color(0xFFF44336),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            OutlinedTextField(
-                                value = savePassword,
-                                onValueChange = { savePassword = it; saveError = null },
-                                label = { Text(S.transactions.passwordMinLength) },
-                                singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                colors = pwFieldColors,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = savePasswordConfirm,
-                                onValueChange = { savePasswordConfirm = it; saveError = null },
-                                label = { Text(S.transactions.confirmPassword) },
-                                singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                colors = pwFieldColors,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
                     }
 
                     DialogFooter {
@@ -1720,8 +1664,6 @@ fun TransactionsScreen(
                         ) {
                             DialogSecondaryButton(onClick = {
                                 showSaveDialog = false
-                                savePassword = ""
-                                savePasswordConfirm = ""
                                 saveError = null
                             }) { Text(S.common.cancel) }
                             Spacer(modifier = Modifier.width(8.dp))
@@ -1731,20 +1673,6 @@ fun TransactionsScreen(
                                         showSaveDialog = false
                                         jsonSaveLauncher.launch("budgetrak_backup.json")
                                     }
-                                    includeAllData && selectedSaveFormat == SaveFormat.ENCRYPTED -> {
-                                        when {
-                                            savePassword.length < 8 -> {
-                                                saveError = S.transactions.passwordMinLength
-                                            }
-                                            savePassword != savePasswordConfirm -> {
-                                                saveError = S.transactions.passwordsMustMatch
-                                            }
-                                            else -> {
-                                                showSaveDialog = false
-                                                encryptedSaveLauncher.launch("budgetrak_backup.enc")
-                                            }
-                                        }
-                                    }
                                     selectedSaveFormat == SaveFormat.CSV -> {
                                         showSaveDialog = false
                                         csvSaveLauncher.launch("budgetrak_transactions.csv")
@@ -1752,20 +1680,6 @@ fun TransactionsScreen(
                                     selectedSaveFormat == SaveFormat.XLS -> {
                                         showSaveDialog = false
                                         xlsSaveLauncher.launch("budgetrak_transactions.xlsx")
-                                    }
-                                    selectedSaveFormat == SaveFormat.ENCRYPTED -> {
-                                        when {
-                                            savePassword.length < 8 -> {
-                                                saveError = S.transactions.passwordMinLength
-                                            }
-                                            savePassword != savePasswordConfirm -> {
-                                                saveError = S.transactions.passwordsMustMatch
-                                            }
-                                            else -> {
-                                                showSaveDialog = false
-                                                encryptedSaveLauncher.launch("budgetrak_transactions.enc")
-                                            }
-                                        }
                                     }
                                 }
                             }) { Text(S.common.save) }
@@ -1872,7 +1786,6 @@ fun TransactionsScreen(
         AdAwareDialog(
             onDismissRequest = {
                 showImportFormatDialog = false
-                encryptedLoadPassword = ""
             },
         ) {
             Surface(
@@ -1903,7 +1816,6 @@ fun TransactionsScreen(
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable {
                                         selectedBankFormat = format
-                                        encryptedLoadPassword = ""
                                     }
                                     .padding(vertical = 4.dp, horizontal = 4.dp)
                             ) {
@@ -1911,7 +1823,6 @@ fun TransactionsScreen(
                                     selected = selectedBankFormat == format,
                                     onClick = {
                                         selectedBankFormat = format
-                                        encryptedLoadPassword = ""
                                     }
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -1919,30 +1830,10 @@ fun TransactionsScreen(
                                     BankFormat.GENERIC_CSV -> S.transactions.formatGenericCsv
                                     BankFormat.US_BANK -> S.transactions.formatUsBank
                                     BankFormat.SECURESYNC_CSV -> S.transactions.formatBudgeTrakCsv
-                                    BankFormat.SECURESYNC_ENCRYPTED -> S.transactions.formatBudgeTrakEncrypted
                                 }, style = MaterialTheme.typography.bodyLarge)
                             }
                         }
 
-                        if (selectedBankFormat == BankFormat.SECURESYNC_ENCRYPTED) {
-                            OutlinedTextField(
-                                value = encryptedLoadPassword,
-                                onValueChange = { encryptedLoadPassword = it },
-                                label = { Text(S.transactions.password) },
-                                singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                                    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
-                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
                     }
 
                     DialogFooter {
@@ -1953,19 +1844,13 @@ fun TransactionsScreen(
                         ) {
                             DialogSecondaryButton(onClick = {
                                 showImportFormatDialog = false
-                                encryptedLoadPassword = ""
                             }) { Text(S.common.cancel) }
                             Spacer(modifier = Modifier.width(8.dp))
-                            val canProceed = when (selectedBankFormat) {
-                                BankFormat.SECURESYNC_ENCRYPTED -> encryptedLoadPassword.length >= 8
-                                else -> true
-                            }
                             DialogPrimaryButton(
                                 onClick = {
                                     showImportFormatDialog = false
                                     filePickerLauncher.launch(arrayOf("text/*", "*/*"))
-                                },
-                                enabled = canProceed
+                                }
                             ) { Text(S.transactions.selectFile) }
                         }
                     }
@@ -3114,6 +2999,7 @@ fun TransactionDialog(
     savingsGoals: List<SavingsGoal> = emptyList(),
     pastSources: List<String> = emptyList(),
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
+    isPaidUser: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
     onDelete: (() -> Unit)? = null,
@@ -3149,6 +3035,58 @@ fun TransactionDialog(
     var pendingLinkEntry by remember { mutableStateOf<Any?>(null) }
     var showCreateAmortizationDialog by remember { mutableStateOf(false) }
     var provisionalAmortizationEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
+
+    // Dialog camera state (for header camera icon)
+    var dialogTempPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    val dialogPhotoScope = rememberCoroutineScope()
+    val dialogCameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && dialogTempPhotoUri != null && editTransaction != null) {
+            dialogPhotoScope.launch(Dispatchers.IO) {
+                val rid = ReceiptManager.processAndSaveFromCamera(context, dialogTempPhotoUri!!)
+                if (rid != null) {
+                    ReceiptManager.addToPendingQueue(context, rid)
+                    val slot = ReceiptManager.nextEmptySlot(editTransaction)
+                    if (slot != null) {
+                        val updated = when (slot) {
+                            1 -> editTransaction.copy(receiptId1 = rid)
+                            2 -> editTransaction.copy(receiptId2 = rid)
+                            3 -> editTransaction.copy(receiptId3 = rid)
+                            4 -> editTransaction.copy(receiptId4 = rid)
+                            5 -> editTransaction.copy(receiptId5 = rid)
+                            else -> editTransaction
+                        }
+                        withContext(Dispatchers.Main) { onSave(updated) }
+                    }
+                }
+            }
+        }
+    }
+    val dialogGalleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null && editTransaction != null) {
+            dialogPhotoScope.launch(Dispatchers.IO) {
+                val rid = ReceiptManager.processAndSavePhoto(context, uri)
+                if (rid != null) {
+                    ReceiptManager.addToPendingQueue(context, rid)
+                    val slot = ReceiptManager.nextEmptySlot(editTransaction)
+                    if (slot != null) {
+                        val updated = when (slot) {
+                            1 -> editTransaction.copy(receiptId1 = rid)
+                            2 -> editTransaction.copy(receiptId2 = rid)
+                            3 -> editTransaction.copy(receiptId3 = rid)
+                            4 -> editTransaction.copy(receiptId4 = rid)
+                            5 -> editTransaction.copy(receiptId5 = rid)
+                            else -> editTransaction
+                        }
+                        withContext(Dispatchers.Main) { onSave(updated) }
+                    }
+                }
+            }
+        }
+    }
 
     // Category selection
     val selectedCategoryIds = remember {
@@ -3315,8 +3253,64 @@ fun TransactionDialog(
                         indication = null
                     ) { focusManager.clearFocus() }
             ) {
-                // Title bar
-                DialogHeader(title = title)
+                // Title bar with optional camera icon
+                val headerBg = dialogHeaderColor()
+                val headerTxt = dialogHeaderTextColor()
+                var showDialogCameraPicker by remember { mutableStateOf(false) }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(headerBg, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                ) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, color = headerTxt)
+                    if (isEdit && !isPaidUser) {
+                        Icon(
+                            imageVector = Icons.Filled.CameraAlt,
+                            contentDescription = "Photos (paid feature)",
+                            tint = headerTxt.copy(alpha = 0.3f),
+                            modifier = Modifier.align(Alignment.CenterEnd).size(20.dp)
+                                .clickable { toastState.show(S.settings.upgradeForPhotos) }
+                        )
+                    }
+                    if (isEdit && isPaidUser) {
+                        Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                            Icon(
+                                imageVector = Icons.Filled.CameraAlt,
+                                contentDescription = "Add photo",
+                                tint = headerTxt,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clickable { showDialogCameraPicker = true }
+                            )
+                            DropdownMenu(
+                                expanded = showDialogCameraPicker,
+                                onDismissRequest = { showDialogCameraPicker = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Camera") },
+                                    leadingIcon = { Icon(Icons.Filled.PhotoCamera, null) },
+                                    onClick = {
+                                        showDialogCameraPicker = false
+                                        val file = java.io.File(context.cacheDir, "receipt_dialog_${java.util.UUID.randomUUID()}.jpg")
+                                        dialogTempPhotoUri = androidx.core.content.FileProvider.getUriForFile(
+                                            context, "${context.packageName}.fileprovider", file
+                                        )
+                                        dialogCameraLauncher.launch(dialogTempPhotoUri!!)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Gallery") },
+                                    leadingIcon = { Icon(Icons.Filled.Collections, null) },
+                                    onClick = {
+                                        showDialogCameraPicker = false
+                                        dialogGalleryLauncher.launch("image/*")
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
 
                 // Scrollable content
                 Column(

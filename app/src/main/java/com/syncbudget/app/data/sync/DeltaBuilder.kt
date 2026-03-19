@@ -21,7 +21,7 @@ object DeltaBuilder {
         }
     }
 
-    fun buildTransactionDelta(txn: Transaction, lastPushedClock: Long): RecordDelta? {
+    fun buildTransactionDelta(txn: Transaction, lastPushedClock: Long, pendingUploadReceiptIds: Set<String> = emptySet()): RecordDelta? {
         val fields = mutableMapOf<String, FieldDelta>()
         if (txn.source_clock > lastPushedClock) fields["source"] = FieldDelta(txn.source, txn.source_clock)
         if (txn.description_clock > lastPushedClock) fields["description"] = FieldDelta(txn.description, txn.description_clock)
@@ -49,6 +49,17 @@ object DeltaBuilder {
         if (txn.linkedIncomeSourceAmount_clock > lastPushedClock) fields["linkedIncomeSourceAmount"] = FieldDelta(txn.linkedIncomeSourceAmount, txn.linkedIncomeSourceAmount_clock)
         if (txn.linkedSavingsGoalId_clock > lastPushedClock) fields["linkedSavingsGoalId"] = FieldDelta(txn.linkedSavingsGoalId, txn.linkedSavingsGoalId_clock)
         if (txn.linkedSavingsGoalAmount_clock > lastPushedClock) fields["linkedSavingsGoalAmount"] = FieldDelta(txn.linkedSavingsGoalAmount, txn.linkedSavingsGoalAmount_clock)
+        // Receipt photo fields — hold back if the receipt is still pending upload
+        if (txn.receiptId1_clock > lastPushedClock && (txn.receiptId1 == null || txn.receiptId1 !in pendingUploadReceiptIds))
+            fields["receiptId1"] = FieldDelta(txn.receiptId1, txn.receiptId1_clock)
+        if (txn.receiptId2_clock > lastPushedClock && (txn.receiptId2 == null || txn.receiptId2 !in pendingUploadReceiptIds))
+            fields["receiptId2"] = FieldDelta(txn.receiptId2, txn.receiptId2_clock)
+        if (txn.receiptId3_clock > lastPushedClock && (txn.receiptId3 == null || txn.receiptId3 !in pendingUploadReceiptIds))
+            fields["receiptId3"] = FieldDelta(txn.receiptId3, txn.receiptId3_clock)
+        if (txn.receiptId4_clock > lastPushedClock && (txn.receiptId4 == null || txn.receiptId4 !in pendingUploadReceiptIds))
+            fields["receiptId4"] = FieldDelta(txn.receiptId4, txn.receiptId4_clock)
+        if (txn.receiptId5_clock > lastPushedClock && (txn.receiptId5 == null || txn.receiptId5 !in pendingUploadReceiptIds))
+            fields["receiptId5"] = FieldDelta(txn.receiptId5, txn.receiptId5_clock)
         if (txn.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(txn.deleted, txn.deleted_clock)
         if (txn.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(txn.deviceId, txn.deviceId_clock)
         if (fields.isEmpty()) return null
@@ -204,6 +215,7 @@ object DeltaBuilder {
         if (settings.availableCash_clock > lastPushedClock) fields["availableCash"] = FieldDelta(settings.availableCash, settings.availableCash_clock)
         if (settings.incomeMode_clock > lastPushedClock) fields["incomeMode"] = FieldDelta(settings.incomeMode, settings.incomeMode_clock)
         if (settings.deviceRoster_clock > lastPushedClock) fields["deviceRoster"] = FieldDelta(settings.deviceRoster, settings.deviceRoster_clock)
+        if (settings.receiptPruneAgeDays_clock > lastPushedClock) fields["receiptPruneAgeDays"] = FieldDelta(settings.receiptPruneAgeDays, settings.receiptPruneAgeDays_clock)
         if (fields.isEmpty()) return null
         return RecordDelta("shared_settings", "upsert", 0, settings.lastChangedBy, fields)
     }

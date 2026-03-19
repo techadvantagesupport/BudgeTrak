@@ -6,6 +6,7 @@ import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.Category
 import com.syncbudget.app.data.CryptoHelper
 import com.syncbudget.app.data.IncomeSource
+import com.syncbudget.app.data.BackupManager
 import com.syncbudget.app.data.RecurringExpense
 import com.syncbudget.app.data.SavingsGoal
 import com.syncbudget.app.data.SharedSettings
@@ -64,9 +65,7 @@ class SyncEngine(
     private val prefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
 
     private val syncLogFile: java.io.File by lazy {
-        val dir = android.os.Environment.getExternalStoragePublicDirectory(
-            android.os.Environment.DIRECTORY_DOWNLOADS
-        )
+        val dir = BackupManager.getSupportDir()
         java.io.File(dir, "sync_log.txt")
     }
 
@@ -172,6 +171,9 @@ class SyncEngine(
         try {
             progressCallback = onProgress
             syncLog("=== Sync started (device=$deviceId, syncVer=$lastSyncVersion, pushClock=$lastPushedClock) ===")
+
+            val isPaidUser = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                .getBoolean("isPaidUser", false)
 
             // Step 0: Stale check — block sync if too many days without success
             val lastSync = prefs.getLong("lastSuccessfulSync", 0L)
@@ -647,8 +649,9 @@ class SyncEngine(
 
             val localDeltas = mutableListOf<RecordDelta>()
             val pushClock = lastPushedClock
+            val pendingReceiptUploads = ReceiptManager.loadPendingUploads(context)
             for (txn in pushTxns) {
-                DeltaBuilder.buildTransactionDelta(txn, pushClock)?.let { localDeltas.add(it) }
+                DeltaBuilder.buildTransactionDelta(txn, pushClock, pendingReceiptUploads)?.let { localDeltas.add(it) }
             }
             for (re in pushRe) {
                 DeltaBuilder.buildRecurringExpenseDelta(re, pushClock)?.let { localDeltas.add(it) }
@@ -673,7 +676,17 @@ class SyncEngine(
             // SharedSettings is always pushed (shared, not per-device)
             DeltaBuilder.buildSharedSettingsDelta(pushSettings, pushClock)?.let { localDeltas.add(it) }
 
-            syncLog("Built ${localDeltas.size} local deltas to push")
+            if (localDeltas.size > 10) {
+                // Diagnostic: log types and sample max clocks to debug push loops
+                val byType = localDeltas.groupBy { it.type }
+                val typeSummary = byType.entries.joinToString(", ") { "${it.key}=${it.value.size}" }
+                val sampleClocks = localDeltas.take(3).joinToString(", ") { d ->
+                    "${d.type}#${d.id}:maxClk=${d.fields.values.maxOfOrNull { it.clock } ?: 0}"
+                }
+                syncLog("Built ${localDeltas.size} local deltas to push ($typeSummary) pushClock=$pushClock samples=[$sampleClocks]")
+            } else {
+                syncLog("Built ${localDeltas.size} local deltas to push")
+            }
             var deltasPushed = 0
             if (localDeltas.isNotEmpty()) {
                 reportProgress("Sending local changes…")
@@ -761,8 +774,14 @@ class SyncEngine(
                     IntegrityChecker.toJson(fp).toString()
                 } catch (_: Exception) { null }
             } else null
+            // Read upload speed from receipt sync prefs for reporting
+            val receiptPrefs = context.getSharedPreferences("receipt_sync_prefs", android.content.Context.MODE_PRIVATE)
+            val uploadSpeedBps = receiptPrefs.getLong("lastUploadSpeedBps", 0L)
+            val uploadSpeedMeasuredAt = receiptPrefs.getLong("lastSpeedMeasuredAt", 0L)
             FirestoreService.updateDeviceMetadata(groupId, deviceId, newSyncVersion, fpJson,
-                appSyncVersion = APP_SYNC_VERSION, minSyncVersion = MIN_SYNC_VERSION)
+                appSyncVersion = APP_SYNC_VERSION, minSyncVersion = MIN_SYNC_VERSION,
+                photoCapable = isPaidUser, uploadSpeedBps = uploadSpeedBps,
+                uploadSpeedMeasuredAt = uploadSpeedMeasuredAt)
 
             // Save merged settings if changed
             if (settingsChanged) {
@@ -873,13 +892,9 @@ class SyncEngine(
                         val shouldRepair = if (repairSig == lastRepairSignature) {
                             consecutiveRepairCount++
                             if (consecutiveRepairCount >= 3) {
-                                syncLog("  REPAIR COOLDOWN: same divergence detected $consecutiveRepairCount consecutive times, skipping")
-                                if (consecutiveRepairCount >= 5) {
-                                    // Hard reset after ~2.5 hours — retry repair fresh
-                                    consecutiveRepairCount = 0
-                                    lastRepairSignature = ""
-                                    syncLog("  REPAIR COOLDOWN reset — will retry on next check")
-                                }
+                                // Same divergence keeps reappearing — other device likely
+                                // needs a code update. Stop retrying to avoid infinite loop.
+                                syncLog("  REPAIR COOLDOWN: same divergence detected $consecutiveRepairCount consecutive times, skipping (other device may need update)")
                                 false
                             } else {
                                 syncLog("  REPAIR: repeat #$consecutiveRepairCount of same divergence")
@@ -1012,6 +1027,48 @@ class SyncEngine(
             // This ensures the highest-clock entry wins before saving.
             mergedPl = PeriodLedgerRepository.dedup(mergedPl).toMutableList()
 
+            // ── Receipt merge-time cleanup ──────────────────────────
+            // If a remote merge set any receiptIdN from non-null to null,
+            // delete the corresponding local file + thumbnail.
+            if (packets.isNotEmpty()) {
+                for (txn in mergedTxns) {
+                    val prev = transactions.find { it.id == txn.id } ?: continue
+                    val removals = listOf(
+                        prev.receiptId1 to txn.receiptId1,
+                        prev.receiptId2 to txn.receiptId2,
+                        prev.receiptId3 to txn.receiptId3,
+                        prev.receiptId4 to txn.receiptId4,
+                        prev.receiptId5 to txn.receiptId5
+                    )
+                    for ((oldId, newId) in removals) {
+                        if (oldId != null && newId == null) {
+                            ReceiptManager.deleteLocalReceipt(context, oldId)
+                            syncLog("Receipt $oldId: removed (slot cleared by remote merge)")
+                        }
+                    }
+                }
+            }
+
+            // ── Receipt photo sync ──────────────────────────────────
+            // Only run for paid users in a family group
+            if (groupId.isNotEmpty() && isPaidUser) {
+                try {
+                    val receiptSync = ReceiptSyncManager(context, groupId, deviceId, encryptionKey) { msg -> syncLog(msg) }
+                    val devices = FirestoreService.getDevices(groupId)
+                    val updatedTxns = receiptSync.syncReceipts(mergedTxns, devices)
+                    if (updatedTxns !== mergedTxns) {
+                        mergedTxns = updatedTxns.toMutableList()
+                    }
+                } catch (e: Exception) {
+                    syncLog("Receipt sync error (non-fatal): ${e.message}")
+                }
+            }
+
+            // ── Receipt orphan cleanup ──────────────────────────────
+            // Periodically clean local files not referenced by any transaction
+            val allReceiptIds = ReceiptManager.collectAllReceiptIds(mergedTxns)
+            ReceiptManager.cleanOrphans(context, allReceiptIds)
+
             val hasChanges = packets.isNotEmpty() || snapshotApplied || snapshotCatchUp
             // If remap fixed orphaned category IDs, include transactions even
             // when no new deltas arrived — otherwise the fix is never persisted.
@@ -1081,6 +1138,7 @@ class SyncEngine(
                 "availableCash" -> s = s.copy(availableCash = (fd.value as? Number)?.toDouble() ?: s.availableCash, availableCash_clock = fd.clock)
                 "incomeMode" -> s = s.copy(incomeMode = fd.value as? String ?: s.incomeMode, incomeMode_clock = fd.clock)
                 "deviceRoster" -> s = s.copy(deviceRoster = fd.value as? String ?: s.deviceRoster, deviceRoster_clock = fd.clock)
+                "receiptPruneAgeDays" -> s = s.copy(receiptPruneAgeDays = (fd.value as? Number)?.toInt(), receiptPruneAgeDays_clock = fd.clock)
             }
         }
         return s
@@ -1209,6 +1267,11 @@ class SyncEngine(
             linkedIncomeSourceAmount = (f["linkedIncomeSourceAmount"]?.value as? Number)?.toDouble() ?: 0.0,
             linkedSavingsGoalId = (f["linkedSavingsGoalId"]?.value as? Number)?.toInt(),
             linkedSavingsGoalAmount = (f["linkedSavingsGoalAmount"]?.value as? Number)?.toDouble() ?: 0.0,
+            receiptId1 = f["receiptId1"]?.value as? String,
+            receiptId2 = f["receiptId2"]?.value as? String,
+            receiptId3 = f["receiptId3"]?.value as? String,
+            receiptId4 = f["receiptId4"]?.value as? String,
+            receiptId5 = f["receiptId5"]?.value as? String,
             deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
             deleted = f["deleted"]?.value as? Boolean ?: false,
             source_clock = f["source"]?.clock ?: 0L,
@@ -1228,6 +1291,11 @@ class SyncEngine(
             linkedIncomeSourceAmount_clock = f["linkedIncomeSourceAmount"]?.clock ?: 0L,
             linkedSavingsGoalId_clock = f["linkedSavingsGoalId"]?.clock ?: 0L,
             linkedSavingsGoalAmount_clock = f["linkedSavingsGoalAmount"]?.clock ?: 0L,
+            receiptId1_clock = f["receiptId1"]?.clock ?: 0L,
+            receiptId2_clock = f["receiptId2"]?.clock ?: 0L,
+            receiptId3_clock = f["receiptId3"]?.clock ?: 0L,
+            receiptId4_clock = f["receiptId4"]?.clock ?: 0L,
+            receiptId5_clock = f["receiptId5"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L,
             deviceId_clock = f["deviceId"]?.clock ?: 0L
         )

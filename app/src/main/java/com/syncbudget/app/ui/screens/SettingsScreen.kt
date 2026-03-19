@@ -43,6 +43,7 @@ import com.syncbudget.app.ui.theme.DialogFooter
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -143,6 +144,19 @@ fun SettingsScreen(
     onNavigateToQuickStart: () -> Unit = {},
     isSyncConfigured: Boolean = false,
     isAdmin: Boolean = true,
+    receiptPruneAgeDays: Int? = null,
+    onReceiptPruneChange: (Int?) -> Unit = {},
+    receiptCacheSize: Long = 0L,
+    backupsEnabled: Boolean = false,
+    onBackupsEnabledChange: (Boolean) -> Unit = {},
+    backupFrequencyWeeks: Int = 1,
+    onBackupFrequencyChange: (Int) -> Unit = {},
+    backupRetention: Int = 1,
+    onBackupRetentionChange: (Int) -> Unit = {},
+    lastBackupDate: String? = null,
+    nextBackupDate: String? = null,
+    onBackupNow: () -> Unit = {},
+    onRestoreBackup: () -> Unit = {},
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -695,6 +709,226 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )
+                }
+            }
+
+            // Receipt photo settings (paid users only)
+            if (isPaidUser) {
+                item {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text(
+                        text = S.settings.receiptPhotosSection,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    val cacheMb = receiptCacheSize / (1024.0 * 1024.0)
+                    Text(
+                        text = S.settings.cacheSize("%.1f".format(cacheMb)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    val pruneOptions = listOf(null to S.settings.keepAll, 30 to S.settings.days30, 60 to S.settings.days60, 90 to S.settings.days90, 180 to S.settings.days180, 365 to S.settings.days365)
+                    val currentLabel = pruneOptions.find { it.first == receiptPruneAgeDays }?.second ?: S.settings.keepAll
+                    var pruneExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        OutlinedTextField(
+                            value = currentLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            enabled = isAdmin,
+                            label = { Text(S.settings.receiptRetention) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = textFieldColors
+                        )
+                        // Transparent overlay to capture clicks (readOnly TextField absorbs them)
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable(enabled = isAdmin) { pruneExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = pruneExpanded,
+                            onDismissRequest = { pruneExpanded = false }
+                        ) {
+                            pruneOptions.forEach { (days, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        pruneExpanded = false
+                                        onReceiptPruneChange(days)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    if (!isAdmin) {
+                        Text(
+                            text = S.settings.adminOnlyRetention,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
+
+            // Backups section
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text(
+                    S.settings.backupsSection,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(Modifier.height(8.dp))
+
+                // Enable checkbox
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onBackupsEnabledChange(!backupsEnabled) }
+                ) {
+                    Checkbox(
+                        checked = backupsEnabled,
+                        onCheckedChange = onBackupsEnabledChange,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
+                    )
+                    Text(
+                        S.settings.enableAutoBackups,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+
+                if (backupsEnabled) {
+                    Spacer(Modifier.height(8.dp))
+                    // Last/next backup info
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "${S.settings.lastBackupLabel}: ${lastBackupDate ?: "Never"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                        )
+                        if (nextBackupDate != null) {
+                            Text(
+                                "${S.settings.nextBackupLabel}: $nextBackupDate",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    // Frequency and Retention dropdowns side by side
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Frequency dropdown
+                        var freqExpanded by remember { mutableStateOf(false) }
+                        val freqOptions = listOf(1 to S.settings.week1, 2 to S.settings.weeks2, 4 to S.settings.weeks4)
+                        val freqLabel = freqOptions.find { it.first == backupFrequencyWeeks }?.second ?: S.settings.week1
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedTextField(
+                                value = freqLabel,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(S.settings.frequencyLabel) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = textFieldColors
+                            )
+                            Box(modifier = Modifier.matchParentSize().clickable { freqExpanded = true })
+                            DropdownMenu(
+                                expanded = freqExpanded,
+                                onDismissRequest = { freqExpanded = false }
+                            ) {
+                                freqOptions.forEach { (weeks, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            freqExpanded = false
+                                            onBackupFrequencyChange(weeks)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        // Retention dropdown
+                        var retExpanded by remember { mutableStateOf(false) }
+                        val retOptions = listOf(1 to "1", 10 to "10", -1 to S.settings.retentionAll)
+                        val retLabel = retOptions.find { it.first == backupRetention }?.second ?: "1"
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedTextField(
+                                value = retLabel,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(S.settings.retentionLabel) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = textFieldColors
+                            )
+                            Box(modifier = Modifier.matchParentSize().clickable { retExpanded = true })
+                            DropdownMenu(
+                                expanded = retExpanded,
+                                onDismissRequest = { retExpanded = false }
+                            ) {
+                                retOptions.forEach { (ret, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            retExpanded = false
+                                            onBackupRetentionChange(ret)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    // Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onBackupNow,
+                            modifier = Modifier.weight(1f)
+                        ) { Text(S.settings.backupNow) }
+                        val canRestore = !isSyncConfigured
+                        OutlinedButton(
+                            onClick = onRestoreBackup,
+                            enabled = canRestore,
+                            modifier = Modifier.weight(1f)
+                        ) { Text(S.settings.restoreBackup) }
+                    }
+                    if (isSyncConfigured) {
+                        Text(
+                            S.settings.leaveGroupToRestore,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                    }
+                } else {
+                    // Even when disabled, show restore button
+                    Spacer(Modifier.height(8.dp))
+                    val canRestore = !isSyncConfigured || isAdmin
+                    OutlinedButton(
+                        onClick = onRestoreBackup,
+                        enabled = canRestore
+                    ) { Text(S.settings.restoreBackup) }
+                    if (isSyncConfigured) {
+                        Text(
+                            S.settings.leaveGroupToRestore,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                    }
                 }
             }
 

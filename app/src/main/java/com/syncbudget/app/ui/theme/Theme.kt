@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.foundation.layout.width
@@ -510,10 +511,13 @@ fun AdAwareAlertDialog(
     val headerTxt = dialogHeaderTextColor(style)
     val footerBg = dialogFooterColor()
 
+    val bodyScrollState = scrollState ?: rememberScrollState()
+
     AdAwareDialog(onDismissRequest = onDismissRequest) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f),
+                .fillMaxWidth(0.92f)
+                .imePadding(),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
@@ -538,17 +542,18 @@ fun AdAwareAlertDialog(
                             }
                         }
                     }
-                    // Body
+                    // Body — scrollable so content is accessible when keyboard is open
                     if (text != null) {
                         Box(
                             modifier = Modifier
                                 .weight(1f, fill = false)
+                                .verticalScroll(bodyScrollState)
                                 .padding(20.dp)
                         ) {
                             text()
                         }
                     }
-                    // Divider + colored footer
+                    // Divider + colored footer — always visible at bottom
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Box(
                         modifier = Modifier
@@ -569,14 +574,12 @@ fun AdAwareAlertDialog(
                         }
                     }
                 }
-                if (scrollState != null) {
-                    PulsingScrollArrow(
-                        scrollState = scrollState,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 12.dp, bottom = 50.dp)
-                    )
-                }
+                PulsingScrollArrow(
+                    scrollState = bodyScrollState,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 12.dp, bottom = 50.dp)
+                )
             }
         }
     }

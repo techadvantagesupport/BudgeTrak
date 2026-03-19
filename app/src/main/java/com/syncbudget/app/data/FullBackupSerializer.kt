@@ -4,6 +4,7 @@ import android.content.Context
 import com.syncbudget.app.data.sync.PeriodLedgerRepository
 import org.json.JSONArray
 import org.json.JSONObject
+import com.syncbudget.app.data.BackupManager
 import java.time.LocalDateTime
 
 object FullBackupSerializer {
@@ -161,9 +162,7 @@ object FullBackupSerializer {
         val preRestoreBackup = try { backupBeforeRestore(context) } catch (_: Exception) { null }
         if (preRestoreBackup != null) {
             try {
-                val dir = android.os.Environment.getExternalStoragePublicDirectory(
-                    android.os.Environment.DIRECTORY_DOWNLOADS
-                )
+                val dir = BackupManager.getSupportDir()
                 java.io.File(dir, "pre_restore_backup.json").writeText(preRestoreBackup)
             } catch (_: Exception) { /* best effort */ }
         }

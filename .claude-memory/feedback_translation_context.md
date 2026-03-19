@@ -1,13 +1,35 @@
 ---
 name: Translation context for new strings
-description: Always add TranslationContext entries when creating new English UI strings, so translators can produce accurate translations
+description: NEVER hardcode UI strings — all user-visible text must go through the i18n system (AppStrings/EnglishStrings/SpanishStrings/TranslationContext)
 type: feedback
 ---
 
-When adding new UI strings to `EnglishStrings.kt` (and the corresponding `AppStrings.kt` data classes), always add matching translation context entries in `TranslationContext.kt`.
+**NEVER use hardcoded English strings in UI code.** Every user-visible string — dialog titles, button labels, toasts, dropdown options, error messages, help text, accessibility descriptions — must use the `S.section.key` pattern via `LocalStrings.current`.
 
-- Each new string key needs a context entry in the appropriate `val section = mapOf(...)` block
-- Context describes meaning, usage location, and disambiguation (e.g. "save" means store data, not rescue)
-- For lambda-typed strings, describe what each parameter represents
-- New data classes (e.g. `BudgetCalendarStrings`) get their own `// ── Section Name ──` and `val sectionName = mapOf(...)` block
-- File: `app/src/main/java/com/syncbudget/app/ui/strings/TranslationContext.kt`
+**Why:** The app supports multiple languages. Hardcoded strings bypass translation and create technical debt. This happened extensively during the receipt photos and backup feature implementation, producing 57 untranslated strings.
+
+**How to apply:** When writing ANY composable or dialog that displays text to the user:
+
+1. **Add the field** to the appropriate data class in `AppStrings.kt` (e.g., `SettingsStrings`, `TransactionsStrings`)
+2. **Add the English value** in `EnglishStrings.kt`
+3. **Add the Spanish translation** in `SpanishStrings.kt`, using the English string and context as reference
+4. **Add translation context** in `TranslationContext.kt` describing meaning, usage, and disambiguation
+5. **Use `S.section.key`** in the composable code — never a raw string literal
+
+All four files must stay in sync. Do this AS YOU WRITE the UI code, not as a follow-up task.
+
+This applies to:
+- Dialog titles, body text, buttons (including "Cancel", "Delete", "OK" — use `S.common.*`)
+- Dropdown option labels
+- Toast messages
+- TextField labels and placeholder text
+- Error/validation messages
+- Help/explanatory text
+- Content descriptions for accessibility
+- Section headers
+
+Files:
+- `app/src/main/java/com/syncbudget/app/ui/strings/AppStrings.kt` — data class fields
+- `app/src/main/java/com/syncbudget/app/ui/strings/EnglishStrings.kt` — English values
+- `app/src/main/java/com/syncbudget/app/ui/strings/SpanishStrings.kt` — Spanish values
+- `app/src/main/java/com/syncbudget/app/ui/strings/TranslationContext.kt` — translator context

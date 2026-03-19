@@ -52,7 +52,7 @@ object CryptoHelper {
         return cipher.doFinal(ciphertext)
     }
 
-    private fun deriveKey(password: CharArray, salt: ByteArray): ByteArray {
+    fun deriveKey(password: CharArray, salt: ByteArray): ByteArray {
         val spec = PBEKeySpec(password, salt, ITERATIONS, KEY_LENGTH)
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
         return factory.generateSecret(spec).encoded
