@@ -971,20 +971,15 @@ class MainActivity : ComponentActivity() {
                             } catch (_: Exception) { emptyMap() }
                         } else emptyMap<Int, Int>()
 
-                        // Continuous per-field rescue: re-stamp only individual
-                        // field clocks that fell behind lastPushedClock on
-                        // locally-owned records.  Unlike the old blanket approach
-                        // this preserves field clocks set by the other device,
-                        // preventing rescue from overwriting cross-device edits.
-                        // IMPORTANT: use a SINGLE clock tick for the entire batch
-                        // so that all rescued clocks == lastPushedClock after push,
-                        // preventing an infinite re-stamp → push → re-stamp loop.
-                        // Single clock tick shared by BOTH rescue and clk=0 fix.
-                        // Using two separate ticks creates sequential values where
-                        // the lower one becomes stranded next cycle → infinite loop.
-                        val rescueClk = lamportClock.tick()
+                        // One-time per-field rescue: re-stamp locally-owned records
+                        // whose field clocks fell behind lastPushedClock due to a
+                        // previous bug.  Gated by version flag — running every cycle
+                        // causes push loops and overwrites cross-device edits.
+                        // Bump the flag name (v4, v5, ...) only when a code change
+                        // is known to strand records.
                         val lpc = syncPrefs.getLong("lastPushedClock", 0L)
-                        if (lpc > 0) {
+                        if (lpc > 0 && !syncPrefs.getBoolean("rescue_stranded_ui_v3_done", false)) {
+                        val rescueClk = lamportClock.tick()
                             val stranded = { clk: Long -> clk in 1 until lpc }
                             val rc = rescueClk
                             var anyRescued = false
@@ -1117,6 +1112,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             if (anyRescued) saveCategories()
+                        syncPrefs.edit().putBoolean("rescue_stranded_ui_v3_done", true).apply()
                         }
 
                         // Continuous fix: stamp critical field clocks that are still 0
@@ -1124,11 +1120,10 @@ class MainActivity : ComponentActivity() {
                         // DeltaBuilder piggybacking can include them, preventing
                         // skeleton records on the receiving device.
                         // Runs every cycle because CSV import can re-introduce clk=0.
-                        // Uses a single clock tick for the entire batch to prevent
-                        // push loop oscillation (same fix as rescue above).
+                        // Clock tick deferred until a record actually needs fixing.
                         run {
                             var changed = false
-                            val clk0Fix = rescueClk  // same tick as rescue
+                            var clk0Fix = 0L
                             transactions.forEachIndexed { i, t ->
                                 // Only fix records in the sync system (have a deviceId)
                                 if (t.deviceId.isEmpty()) return@forEachIndexed
@@ -1142,6 +1137,7 @@ class MainActivity : ComponentActivity() {
                                 val needsBudgetIncome = t.isBudgetIncome && t.isBudgetIncome_clock == 0L
                                 if (needsSource || needsAmount || needsDate || needsType ||
                                     needsDesc || needsDeviceId || needsExclude || needsBudgetIncome) {
+                                    if (clk0Fix == 0L) clk0Fix = lamportClock.tick()
                                     changed = true
                                     transactions[i] = t.copy(
                                         source_clock = if (needsSource) clk0Fix else t.source_clock,
