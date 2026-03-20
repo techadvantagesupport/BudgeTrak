@@ -541,8 +541,8 @@ object FirestoreService {
 
         // Delete subcollections in paginated batches to avoid downloading
         // huge payloads (e.g. 600+ encrypted delta documents).
-        val labels = mapOf("deltas" to "sync history", "devices" to "devices", "snapshots" to "snapshots", "debug_files" to "debug files")
-        for (subCollection in listOf("deltas", "devices", "snapshots", "debug_files")) {
+        val labels = mapOf("deltas" to "sync history", "devices" to "devices", "snapshots" to "snapshots")
+        for (subCollection in listOf("deltas", "devices", "snapshots")) {
             onProgress?.invoke("Removing ${labels[subCollection]}…")
             deleteSubcollection(groupRef.collection(subCollection), onProgress = onProgress)
         }
@@ -672,28 +672,31 @@ object FirestoreService {
         groupId: String, deviceId: String, deviceName: String,
         syncLog: String, syncDiag: String
     ) = withTimeout(OP_TIMEOUT_MS) {
+        // Store on the device document (already permitted by Firestore rules)
+        // using merge to avoid overwriting other device fields.
         val data = mapOf(
-            "deviceName" to deviceName,
-            "syncLog" to syncLog.takeLast(400_000),
-            "syncDiag" to syncDiag.takeLast(400_000),
-            "updatedAt" to System.currentTimeMillis()
+            "debugSyncLog" to syncLog.takeLast(400_000),
+            "debugSyncDiag" to syncDiag.takeLast(400_000),
+            "debugUpdatedAt" to System.currentTimeMillis()
         )
         db.collection("groups").document(groupId)
-            .collection("debug_files").document(deviceId)
-            .set(data).await()
+            .collection("devices").document(deviceId)
+            .set(data, SetOptions.merge()).await()
     }
 
-    suspend fun downloadDebugFiles(groupId: String, myDeviceId: String): List<DebugFileSet> = withTimeout(OP_TIMEOUT_MS) {
+    suspend fun downloadDebugFiles(groupId: String, myDeviceId: String): List<DebugFileSet> = withTimeout(OP_TIMEOUT_EXTENDED_MS) {
+        // Read from device documents (already permitted)
         val snapshot = db.collection("groups").document(groupId)
-            .collection("debug_files").get().await()
+            .collection("devices").get().await()
         snapshot.documents
-            .filter { it.id != myDeviceId }
-            .mapNotNull { doc ->
+            .filter { it.id != myDeviceId && it.getBoolean("removed") != true }
+            .filter { (it.getString("debugSyncLog") ?: "").isNotEmpty() || (it.getString("debugSyncDiag") ?: "").isNotEmpty() }
+            .map { doc ->
                 DebugFileSet(
                     deviceName = doc.getString("deviceName") ?: doc.id.take(8),
-                    syncLog = doc.getString("syncLog") ?: "",
-                    syncDiag = doc.getString("syncDiag") ?: "",
-                    updatedAt = doc.getLong("updatedAt") ?: 0L
+                    syncLog = doc.getString("debugSyncLog") ?: "",
+                    syncDiag = doc.getString("debugSyncDiag") ?: "",
+                    updatedAt = doc.getLong("debugUpdatedAt") ?: 0L
                 )
             }
     }
