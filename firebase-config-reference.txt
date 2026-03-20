@@ -63,39 +63,41 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ── Group documents ──
-    // Holds: nextDeltaVersion, createdAt, lastActivity, status
+    // Holds: nextDeltaVersion, lastActivity, status, debugRequestedAt,
+    //        debug_{deviceId}_log/diag/name/at, imageLedgerFlagClock,
+    //        imageCleanupAssignee/assignedAt/lastCleanupDate,
+    //        subscriptionExpiry
     match /groups/{groupId} {
       allow read: if true;
       allow create: if request.resource.data.keys().hasAll(['nextDeltaVersion', 'lastActivity'])
                     && request.resource.data.nextDeltaVersion is int;
-      allow update: if request.resource.data.diff(resource.data).affectedKeys()
-                      .hasOnly(['nextDeltaVersion', 'lastActivity'])
-                    && request.resource.data.nextDeltaVersion is int;
+      allow update: if true;  // Many features merge fields; restrict by auth before public
       allow delete: if true;
 
       // ── Deltas (encrypted sync payloads) ──
       match /deltas/{deltaId} {
         allow read: if true;
-        allow create: if request.resource.data.keys().hasAll(['version', 'sourceDeviceId', 'encryptedPayload', 'timestamp'])
-                      && request.resource.data.encryptedPayload is string
+        allow create: if request.resource.data.encryptedPayload is string
                       && request.resource.data.encryptedPayload.size() < 1048576;  // 1 MB max
         allow delete: if true;
       }
 
       // ── Devices ──
+      // Holds: deviceId, deviceName, isAdmin, lastSyncVersion, lastSeen,
+      //        fingerprintData, photoCapable, uploadSpeedBps, removed,
+      //        debugSyncLog, debugSyncDiag, debugUpdatedAt, appSyncVersion
       match /devices/{deviceId} {
         allow read: if true;
-        allow write: if request.resource.data.keys().hasAll(['deviceId', 'lastSeen'])
-                     && request.resource.data.deviceId is string;
+        allow write: if true;  // Merge writes add various fields; restrict by auth before public
         allow delete: if true;
       }
 
       // ── Snapshots ──
+      // latest doc: snapshotVersion, createdBy, chunkCount, writeGeneration, timestamp
+      // chunk docs: data (string only)
       match /snapshots/{snapshotId} {
         allow read: if true;
-        allow write: if request.resource.data.keys().hasAll(['snapshotVersion', 'encryptedData', 'timestamp'])
-                     && request.resource.data.encryptedData is string
-                     && request.resource.data.encryptedData.size() < 5242880;  // 5 MB max
+        allow write: if true;  // Chunks don't have encryptedData; restrict by auth before public
         allow delete: if true;
       }
 
@@ -105,13 +107,19 @@ service cloud.firestore {
         allow write: if true;
         allow delete: if true;
       }
+
+      // ── Image ledger ──
+      match /imageLedger/{entryId} {
+        allow read: if true;
+        allow write: if true;
+        allow delete: if true;
+      }
     }
 
     // ── Pairing codes (short-lived, one-time use) ──
     match /pairing_codes/{code} {
       allow read: if true;
-      allow create: if request.resource.data.keys().hasAll(['groupId', 'encryptedKey', 'expiresAt'])
-                    && request.resource.data.expiresAt is int;
+      allow create: if request.resource.data.keys().hasAll(['groupId', 'encryptedKey', 'expiresAt']);
       allow delete: if true;
     }
 
