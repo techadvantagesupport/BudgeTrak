@@ -423,35 +423,39 @@ object FirestoreService {
             "expiresAt" to Timestamp(expiresAt / 1000, 0),
             "timestamp" to System.currentTimeMillis()
         )
-        db.collection("pairing_codes")
-            .document(code)
-            .set(data)
-            .await()
+        withTimeout(OP_TIMEOUT_MS) {
+            db.collection("pairing_codes")
+                .document(code)
+                .set(data)
+                .await()
+        }
     }
 
     suspend fun redeemPairingCode(code: String): PairingData? {
         val normalized = code.uppercase().trim()
         if (!normalized.matches(Regex("^[A-Z2-9]{6}$"))) return null
-        val doc = db.collection("pairing_codes")
-            .document(normalized)
-            .get()
-            .await()
+        return withTimeout(OP_TIMEOUT_MS) {
+            val doc = db.collection("pairing_codes")
+                .document(normalized)
+                .get()
+                .await()
 
-        if (!doc.exists()) return null
+            if (!doc.exists()) return@withTimeout null
 
-        // expiresAt may be a Firestore Timestamp (new) or Long (legacy)
-        val expiresAt = (doc.getTimestamp("expiresAt")?.toDate()?.time)
-            ?: doc.getLong("expiresAt")
-            ?: 0L
-        if (System.currentTimeMillis() > expiresAt) return null
+            // expiresAt may be a Firestore Timestamp (new) or Long (legacy)
+            val expiresAt = (doc.getTimestamp("expiresAt")?.toDate()?.time)
+                ?: doc.getLong("expiresAt")
+                ?: 0L
+            if (System.currentTimeMillis() > expiresAt) return@withTimeout null
 
-        val groupId = doc.getString("groupId") ?: return null
-        val key = doc.getString("encryptedKey") ?: return null
+            val groupId = doc.getString("groupId") ?: return@withTimeout null
+            val key = doc.getString("encryptedKey") ?: return@withTimeout null
 
-        // Delete the code after redemption (one-time use)
-        db.collection("pairing_codes").document(normalized).delete().await()
+            // Delete the code after redemption (one-time use)
+            db.collection("pairing_codes").document(normalized).delete().await()
 
-        return PairingData(groupId, key)
+            PairingData(groupId, key)
+        }
     }
 
     suspend fun getDevices(groupId: String): List<DeviceRecord> = withTimeout(OP_TIMEOUT_MS) {
@@ -480,12 +484,14 @@ object FirestoreService {
     }
 
     suspend fun updateDeviceName(groupId: String, deviceId: String, newName: String) {
-        db.collection("groups")
-            .document(groupId)
-            .collection("devices")
-            .document(deviceId)
-            .set(mapOf("deviceName" to newName), SetOptions.merge())
-            .await()
+        withTimeout(OP_TIMEOUT_MS) {
+            db.collection("groups")
+                .document(groupId)
+                .collection("devices")
+                .document(deviceId)
+                .set(mapOf("deviceName" to newName), SetOptions.merge())
+                .await()
+        }
     }
 
     suspend fun removeDevice(groupId: String, deviceId: String) {
@@ -493,12 +499,14 @@ object FirestoreService {
         // affirmative signal so it can auto-leave reliably instead of
         // guessing from document absence (which has false positives from
         // Firestore cache staleness and network issues).
-        db.collection("groups")
-            .document(groupId)
-            .collection("devices")
-            .document(deviceId)
-            .set(mapOf("removed" to true), SetOptions.merge())
-            .await()
+        withTimeout(OP_TIMEOUT_MS) {
+            db.collection("groups")
+                .document(groupId)
+                .collection("devices")
+                .document(deviceId)
+                .set(mapOf("removed" to true), SetOptions.merge())
+                .await()
+        }
     }
 
     suspend fun registerDevice(groupId: String, deviceId: String, deviceName: String, isAdmin: Boolean = false) {
@@ -510,12 +518,14 @@ object FirestoreService {
             "lastSyncVersion" to 0L,
             "lastSeen" to System.currentTimeMillis()
         )
-        db.collection("groups")
-            .document(groupId)
-            .collection("devices")
-            .document(deviceId)
-            .set(data)
-            .await()
+        withTimeout(OP_TIMEOUT_MS) {
+            db.collection("groups")
+                .document(groupId)
+                .collection("devices")
+                .document(deviceId)
+                .set(data)
+                .await()
+        }
         // Ensure group document exists with lastActivity for TTL
         updateGroupActivity(groupId)
     }
@@ -577,12 +587,14 @@ object FirestoreService {
             "objections" to claim.objections,
             "status" to claim.status
         )
-        db.collection("groups")
-            .document(groupId)
-            .collection("adminClaim")
-            .document("current")
-            .set(data)
-            .await()
+        withTimeout(OP_TIMEOUT_MS) {
+            db.collection("groups")
+                .document(groupId)
+                .collection("adminClaim")
+                .document("current")
+                .set(data)
+                .await()
+        }
     }
 
     suspend fun getAdminClaim(groupId: String): AdminClaim? = withTimeout(OP_TIMEOUT_MS) {
@@ -609,38 +621,48 @@ object FirestoreService {
             .document(groupId)
             .collection("adminClaim")
             .document("current")
-        db.runTransaction { transaction ->
-            val snapshot = transaction.get(ref)
-            val objections = (snapshot.get("objections") as? List<*>)?.filterIsInstance<String>()?.toMutableList() ?: mutableListOf()
-            if (!objections.contains(deviceId)) {
-                objections.add(deviceId)
-            }
-            transaction.update(ref, "objections", objections)
-        }.await()
+        withTimeout(OP_TIMEOUT_MS) {
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(ref)
+                val objections = (snapshot.get("objections") as? List<*>)?.filterIsInstance<String>()?.toMutableList() ?: mutableListOf()
+                if (!objections.contains(deviceId)) {
+                    objections.add(deviceId)
+                }
+                transaction.update(ref, "objections", objections)
+            }.await()
+        }
     }
 
     suspend fun resolveAdminClaim(groupId: String, status: String) {
-        db.collection("groups")
-            .document(groupId)
-            .collection("adminClaim")
-            .document("current")
-            .update("status", status)
-            .await()
+        withTimeout(OP_TIMEOUT_MS) {
+            db.collection("groups")
+                .document(groupId)
+                .collection("adminClaim")
+                .document("current")
+                .update("status", status)
+                .await()
+        }
     }
 
     suspend fun deleteAdminClaim(groupId: String) {
-        db.collection("groups")
-            .document(groupId)
-            .collection("adminClaim")
-            .document("current")
-            .delete()
-            .await()
+        withTimeout(OP_TIMEOUT_MS) {
+            db.collection("groups")
+                .document(groupId)
+                .collection("adminClaim")
+                .document("current")
+                .delete()
+                .await()
+        }
     }
 
-    suspend fun transferAdmin(groupId: String, fromDeviceId: String, toDeviceId: String) {
+    suspend fun transferAdmin(groupId: String, fromDeviceId: String, toDeviceId: String) = withTimeout(OP_TIMEOUT_MS) {
         val devicesRef = db.collection("groups").document(groupId).collection("devices")
-        devicesRef.document(fromDeviceId).update("isAdmin", false).await()
-        devicesRef.document(toDeviceId).update("isAdmin", true).await()
-        deleteAdminClaim(groupId)
+        val claimRef = db.collection("groups").document(groupId)
+            .collection("adminClaim").document("current")
+        db.runTransaction { transaction ->
+            transaction.update(devicesRef.document(fromDeviceId), "isAdmin", false)
+            transaction.update(devicesRef.document(toDeviceId), "isAdmin", true)
+            transaction.delete(claimRef)
+        }.await()
     }
 }

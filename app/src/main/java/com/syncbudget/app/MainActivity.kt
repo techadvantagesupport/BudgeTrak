@@ -4429,7 +4429,9 @@ class MainActivity : ComponentActivity() {
                                                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                                     val sysResult = com.syncbudget.app.data.BackupManager.restoreSystemBackup(context, backup.systemFile, pwd)
                                                     if (sysResult.isSuccess && backup.photosFile != null) {
-                                                        com.syncbudget.app.data.BackupManager.restorePhotosBackup(context, backup.photosFile, pwd)
+                                                        val photosResult = com.syncbudget.app.data.BackupManager.restorePhotosBackup(context, backup.photosFile, pwd)
+                                                        val photosRestored = photosResult.getOrNull() ?: 0
+                                                        android.util.Log.d("BackupRestore", "Photos restored: $photosRestored")
                                                     }
                                                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                                         restoring = false

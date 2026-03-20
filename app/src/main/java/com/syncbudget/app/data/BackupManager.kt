@@ -56,8 +56,18 @@ object BackupManager {
 
     // ── Backup Creation ─────────────────────────────────────────
 
+    private fun checkDiskSpace(context: Context): Boolean {
+        val backupDir = getBackupDir()
+        val usable = backupDir.usableSpace
+        // Require at least 50MB free for system backup + photos
+        return usable > 50 * 1024 * 1024
+    }
+
     fun performBackup(context: Context, password: CharArray): Result<Pair<File, File?>> {
         return try {
+            if (!checkDiskSpace(context)) {
+                return Result.failure(java.io.IOException("Insufficient storage space for backup (need 50MB free)"))
+            }
             val systemResult = createSystemBackup(context, password)
             if (systemResult.isFailure) return Result.failure(systemResult.exceptionOrNull()!!)
 
@@ -154,6 +164,8 @@ object BackupManager {
             Log.d(TAG, "Photos backup created: ${finalFile.name} (${manifestEntries.length()} photos)")
             Result.success(finalFile)
         } catch (e: Exception) {
+            // Clean up temp file on failure to prevent cache accumulation
+            try { File(context.cacheDir, "backup_entries.tmp").delete() } catch (_: Exception) {}
             Result.failure(e)
         }
     }
@@ -184,6 +196,7 @@ object BackupManager {
     fun restorePhotosBackup(context: Context, backupFile: File, password: CharArray): Result<Int> {
         return try {
             var restored = 0
+            var failed = 0
             backupFile.inputStream().buffered().use { inp ->
                 // Header
                 val magic = ByteArray(4); inp.read(magic)
@@ -240,11 +253,12 @@ object BackupManager {
                         }
                         restored++
                     } catch (ex: Exception) {
+                        failed++
                         Log.w(TAG, "Failed to restore receipt $receiptId: ${ex.message}")
                     }
                 }
             }
-            Log.d(TAG, "Photos restore complete: $restored photos")
+            Log.d(TAG, "Photos restore complete: $restored photos restored, $failed failed")
             Result.success(restored)
         } catch (e: javax.crypto.AEADBadTagException) {
             Result.failure(IllegalArgumentException("Wrong password or corrupted backup"))

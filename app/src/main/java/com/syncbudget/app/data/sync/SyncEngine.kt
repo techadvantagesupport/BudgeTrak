@@ -712,26 +712,40 @@ class SyncEngine(
 
                 // Chunk large deltas to stay under Firestore's 1MB document
                 // limit.  200 records ≈ 200-400KB encoded, well within limits.
-                // Chunk large deltas and use adaptive timeouts: first chunk
-                // gets base timeout, subsequent chunks get extended timeout
-                // since the first push proved the connection works.
-                val chunks = localDeltas.chunked(200)
-                for ((chunkIdx, chunk) in chunks.withIndex()) {
-                    if (chunks.size > 1) {
-                        reportProgress("Sending batch ${chunkIdx + 1}/${chunks.size}…")
-                    }
+                // If an encoded chunk still exceeds 900KB (e.g. records with
+                // large photo URIs), pushChunk splits it in half and retries.
+                var isFirstPush = true
+                suspend fun pushChunk(records: List<RecordDelta>, chunkLabel: String) {
                     val packet = DeltaPacket(
                         sourceDeviceId = deviceId,
                         timestamp = Instant.now(),
-                        changes = chunk
+                        changes = records
                     )
                     val serialized = DeltaSerializer.serialize(packet).toString().toByteArray()
                     val encrypted = CryptoHelper.encryptWithKey(serialized, encryptionKey)
                     val encoded = Base64.encodeToString(encrypted, Base64.NO_WRAP)
 
-                    val pushTimeout = if (chunkIdx == 0) 30_000L else 60_000L
-                    syncLog("Pushing delta chunk ${chunkIdx + 1}/${chunks.size} (${encoded.length} chars, ${chunk.size} records)")
+                    if (encoded.length > 900_000 && records.size > 1) {
+                        // Approaching 1MB limit — split in half and retry
+                        val mid = records.size / 2
+                        syncLog("Chunk $chunkLabel too large (${encoded.length} chars, ${records.size} records) — splitting")
+                        pushChunk(records.subList(0, mid), "${chunkLabel}a")
+                        pushChunk(records.subList(mid, records.size), "${chunkLabel}b")
+                        return
+                    }
+
+                    val pushTimeout = if (isFirstPush) 30_000L else 60_000L
+                    syncLog("Pushing delta chunk $chunkLabel (${encoded.length} chars, ${records.size} records)")
                     FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded, pushTimeout)
+                    isFirstPush = false
+                }
+
+                val chunks = localDeltas.chunked(200)
+                for ((chunkIdx, chunk) in chunks.withIndex()) {
+                    if (chunks.size > 1) {
+                        reportProgress("Sending batch ${chunkIdx + 1}/${chunks.size}…")
+                    }
+                    pushChunk(chunk, "${chunkIdx + 1}/${chunks.size}")
                 }
                 deltasPushed = localDeltas.size
                 syncLog("Push complete ($deltasPushed records in ${chunks.size} chunk(s))")
