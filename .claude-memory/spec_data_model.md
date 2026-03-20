@@ -65,9 +65,10 @@ Also: deviceId (String), deleted (Boolean), with clocks.
 
 ### Link to SavingsGoal
 - **Link**: Set linkedSavingsGoalId=goal.id, linkedSavingsGoalAmount=txn.amount, goal.totalSavedSoFar += amount
-- **Unlink (manual)**: Set ID=null, amount=0.0, goal.totalSavedSoFar += savedAmount (restore funds to goal)
-- **SG deleted**: Set ID=null, amount=0.0 (transactions return to budget; goal is gone so no fund restore)
-- **Cash effect**: While linked (ID or amount > 0) → SKIP entirely (money from savings, not budget). After unlink/delete (amount=0) → transaction counts as normal expense.
+- **Unlink (manual = linked-in-error)**: Set ID=null, amount=0.0, goal.totalSavedSoFar += savedAmount (restore funds to goal). Transaction becomes normal expense.
+- **SG deleted**: Set ID=null, PRESERVE linkedSavingsGoalAmount (amount stays > 0). Those expenses were already paid from savings — clearing would double-count them and drop availableCash.
+- **Cash effect**: While amount > 0 (linked or formerly-linked to deleted goal) → SKIP entirely (money from savings). After manual unlink (amount=0) → transaction counts as normal expense.
+- **KEY DESIGN RULE**: Delete preserves remembered amounts (expense already paid). Manual unlink clears them (linked-in-error). This asymmetry is intentional and applies to ALL link types (RE, IS, AE, SG).
 
 ## PeriodLedgerEntry
 

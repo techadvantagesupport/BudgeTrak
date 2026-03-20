@@ -2996,15 +2996,15 @@ class MainActivity : ComponentActivity() {
                                 savingsGoals[idx] = savingsGoals[idx].copy(deleted = true, deleted_clock = clock)
                                 saveSavingsGoals()
                                 // Unlink any transactions linked to this goal.
-                                // Clear remembered amount so transactions count toward
-                                // budget again (consistent with manual unlink behavior).
+                                // PRESERVE linkedSavingsGoalAmount — those expenses were
+                                // already paid from savings.  Clearing it would cause
+                                // availableCash to drop (double-counting the expense).
+                                // Manual unlink (linked-in-error) clears amount separately.
                                 transactions.forEachIndexed { i, txn ->
                                     if (txn.linkedSavingsGoalId == goal.id) {
                                         transactions[i] = txn.copy(
                                             linkedSavingsGoalId = null,
-                                            linkedSavingsGoalId_clock = clock,
-                                            linkedSavingsGoalAmount = 0.0,
-                                            linkedSavingsGoalAmount_clock = clock
+                                            linkedSavingsGoalId_clock = clock
                                         )
                                     }
                                 }
