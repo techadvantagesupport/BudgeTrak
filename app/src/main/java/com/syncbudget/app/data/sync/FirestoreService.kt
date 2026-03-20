@@ -541,8 +541,8 @@ object FirestoreService {
 
         // Delete subcollections in paginated batches to avoid downloading
         // huge payloads (e.g. 600+ encrypted delta documents).
-        val labels = mapOf("deltas" to "sync history", "devices" to "devices", "snapshots" to "snapshots")
-        for (subCollection in listOf("deltas", "devices", "snapshots")) {
+        val labels = mapOf("deltas" to "sync history", "devices" to "devices", "snapshots" to "snapshots", "debug_files" to "debug files")
+        for (subCollection in listOf("deltas", "devices", "snapshots", "debug_files")) {
             onProgress?.invoke("Removing ${labels[subCollection]}…")
             deleteSubcollection(groupRef.collection(subCollection), onProgress = onProgress)
         }
@@ -665,4 +665,37 @@ object FirestoreService {
             transaction.delete(claimRef)
         }.await()
     }
+
+    // ── Debug File Sync ─────────────────────────────────────────
+
+    suspend fun uploadDebugFiles(
+        groupId: String, deviceId: String, deviceName: String,
+        syncLog: String, syncDiag: String
+    ) = withTimeout(OP_TIMEOUT_MS) {
+        val data = mapOf(
+            "deviceName" to deviceName,
+            "syncLog" to syncLog.takeLast(400_000),
+            "syncDiag" to syncDiag.takeLast(400_000),
+            "updatedAt" to System.currentTimeMillis()
+        )
+        db.collection("groups").document(groupId)
+            .collection("debug_files").document(deviceId)
+            .set(data).await()
+    }
+
+    suspend fun downloadDebugFiles(groupId: String, myDeviceId: String): List<DebugFileSet> = withTimeout(OP_TIMEOUT_MS) {
+        val snapshot = db.collection("groups").document(groupId)
+            .collection("debug_files").get().await()
+        snapshot.documents
+            .filter { it.id != myDeviceId }
+            .mapNotNull { doc ->
+                DebugFileSet(
+                    deviceName = doc.getString("deviceName") ?: doc.id.take(8),
+                    syncLog = doc.getString("syncLog") ?: "",
+                    syncDiag = doc.getString("syncDiag") ?: ""
+                )
+            }
+    }
 }
+
+data class DebugFileSet(val deviceName: String, val syncLog: String, val syncDiag: String)

@@ -1842,132 +1842,150 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // ── Reusable CRDT state dump builder ──
+            fun buildDiagDump(): String {
+                val dump = StringBuilder()
+                dump.appendLine("=== CRDT State Dump ${java.time.LocalDateTime.now()} ===")
+                dump.appendLine("DeviceId: $localDeviceId")
+                dump.appendLine("isAdmin: $isSyncAdmin")
+                dump.appendLine("isSyncConfigured: $isSyncConfigured")
+                dump.appendLine()
+                dump.appendLine("── App Prefs ──")
+                dump.appendLine("availableCash (prefs): ${prefs.getDoubleCompat("availableCash")}")
+                dump.appendLine("availableCash (state): $availableCash")
+                dump.appendLine("budgetStartDate: $budgetStartDate")
+                dump.appendLine("lastRefreshDate: $lastRefreshDate")
+                dump.appendLine("budgetPeriod: $budgetPeriod")
+                dump.appendLine("budgetAmount (derived): $budgetAmount")
+                dump.appendLine("safeBudgetAmount (derived): $safeBudgetAmount")
+                dump.appendLine("isManualBudget: $isManualBudgetEnabled  manualAmount: $manualBudgetAmount")
+                dump.appendLine()
+                dump.appendLine("── SharedSettings (CRDT) ──")
+                dump.appendLine("availableCash: ${sharedSettings.availableCash}  clock: ${sharedSettings.availableCash_clock}")
+                dump.appendLine("budgetStartDate: ${sharedSettings.budgetStartDate}  clock: ${sharedSettings.budgetStartDate_clock}")
+                dump.appendLine("budgetPeriod: ${sharedSettings.budgetPeriod}  clock: ${sharedSettings.budgetPeriod_clock}")
+                dump.appendLine("manualBudgetAmount: ${sharedSettings.manualBudgetAmount}  clock: ${sharedSettings.manualBudgetAmount_clock}")
+                dump.appendLine("isManualBudgetEnabled: ${sharedSettings.isManualBudgetEnabled}  clock: ${sharedSettings.isManualBudgetEnabled_clock}")
+                dump.appendLine("currency: ${sharedSettings.currency}  clock: ${sharedSettings.currency_clock}")
+                dump.appendLine("lastChangedBy: ${sharedSettings.lastChangedBy}")
+                dump.appendLine()
+                // Sync metadata
+                dump.appendLine("── Sync Metadata ──")
+                dump.appendLine("lastPushedClock: ${syncPrefs.getLong("lastPushedClock", 0L)}")
+                dump.appendLine("lastSyncVersion: ${syncPrefs.getLong("lastSyncVersion", 0L)}")
+                val remapJsonDump = syncPrefs.getString("catIdRemap", null)
+                dump.appendLine("catIdRemap: ${remapJsonDump ?: "(empty)"}")
+                dump.appendLine()
+
+                dump.appendLine("── Categories ──")
+                val categoryMap = categories.associateBy { it.id }
+                for (cat in categories.sortedBy { it.id }) {
+                    dump.appendLine("  id=${cat.id} '${cat.name}' tag=${cat.tag} icon=${cat.iconName} dev=${cat.deviceId.take(8)}… del=${cat.deleted} nClk=${cat.name_clock} tClk=${cat.tag_clock} dIdClk=${cat.deviceId_clock}")
+                }
+                dump.appendLine()
+
+                dump.appendLine("── Recurring Expenses ──")
+                for (re in recurringExpenses.sortedBy { it.source }) {
+                    dump.appendLine("  id=${re.id} '${re.source}' amt=${re.amount} ${re.repeatType}/${re.repeatInterval} dev=${re.deviceId.take(8)}… del=${re.deleted} setAside=${re.setAsideSoFar} accel=${re.isAccelerated}")
+                }
+                dump.appendLine()
+
+                dump.appendLine("── Transactions (active, in current period) ──")
+                val activeTxns = transactions.filter { !it.deleted }
+                val periodTxns = if (budgetStartDate != null) activeTxns.filter { !it.date.isBefore(budgetStartDate) } else activeTxns
+                for (txn in periodTxns.sortedBy { it.date }) {
+                    val budgetAccounted = if (txn.type == TransactionType.EXPENSE) isBudgetAccountedExpense(txn) else false
+                    val catDesc = if (txn.categoryAmounts.isEmpty()) "cats=NONE"
+                        else txn.categoryAmounts.joinToString(",") { ca ->
+                            val name = categoryMap[ca.categoryId]?.name ?: "???"
+                            "${ca.categoryId}($name):${ca.amount}"
+                        }
+                    val linkDesc = listOfNotNull(
+                        txn.linkedRecurringExpenseId?.let { "reId=$it(clk=${txn.linkedRecurringExpenseId_clock},reAmt=${txn.linkedRecurringExpenseAmount})" },
+                        txn.linkedAmortizationEntryId?.let { "aeId=$it(clk=${txn.linkedAmortizationEntryId_clock},appl=${txn.amortizationAppliedAmount})" },
+                        txn.linkedIncomeSourceId?.let { "isId=$it(clk=${txn.linkedIncomeSourceId_clock},isAmt=${txn.linkedIncomeSourceAmount})" },
+                        txn.linkedSavingsGoalId?.let { "sgId=$it(clk=${txn.linkedSavingsGoalId_clock},sgAmt=${txn.linkedSavingsGoalAmount})" }
+                    ).joinToString(" ").ifEmpty { "" }
+                    val flagDesc = listOfNotNull(
+                        if (txn.excludeFromBudget) "ef=true(clk=${txn.excludeFromBudget_clock})" else null,
+                        if (txn.isBudgetIncome) "bi=true" else null
+                    ).joinToString(" ").let { if (it.isNotEmpty()) "$it " else "" }
+                    dump.appendLine("  ${txn.date} ${txn.type} ${txn.amount} '${txn.source}' dev=${txn.deviceId.take(8)}… ba=$budgetAccounted ${flagDesc}aClk=${txn.amount_clock} cClk=${txn.categoryAmounts_clock} dIdClk=${txn.deviceId_clock} $linkDesc $catDesc")
+                }
+                // Recompute cash using the ACTUAL BudgetCalculator logic for verification
+                val verifyLedger = periodLedger.toList()
+                val verifyTxns = activeTransactions
+                val verifyRe = activeRecurringExpenses
+                val verifyIs = activeIncomeSources
+                val verifyCash = BudgetCalculator.recomputeAvailableCash(
+                    budgetStartDate ?: java.time.LocalDate.now(),
+                    verifyLedger, verifyTxns, verifyRe, incomeMode, verifyIs
+                )
+                // Breakdown: sum period ledger credits
+                val ledgerCredits = if (budgetStartDate != null) {
+                    verifyLedger
+                        .filter { !it.periodStartDate.toLocalDate().isBefore(budgetStartDate) }
+                        .groupBy { it.periodStartDate.toLocalDate() }
+                        .values.map { entries -> entries.maxByOrNull { it.clock } ?: entries.first() }
+                        .sumOf { it.appliedAmount }
+                } else 0.0
+                dump.appendLine("── Cash Verification ──")
+                dump.appendLine("Ledger credits (sum of ${verifyLedger.size} entries): $ledgerCredits")
+                dump.appendLine("Recomputed cash (BudgetCalculator): $verifyCash")
+                dump.appendLine("Stored cash (prefs): $availableCash")
+                dump.appendLine("Match: ${kotlin.math.abs(verifyCash - availableCash) < 0.01}")
+                dump.appendLine()
+                dump.appendLine("── Period Ledger ──")
+                for (entry in periodLedger) {
+                    dump.appendLine("  ${entry.periodStartDate} applied=${entry.appliedAmount} clock=${entry.clockAtReset}")
+                }
+                dump.appendLine("=== End CRDT Dump ===")
+                return dump.toString()
+            }
+
+            /** Write text to a file in Download/BudgeTrak/support/ via MediaStore. */
+            fun writeDiagToMediaStore(fileName: String, text: String) {
+                val resolver = context.contentResolver
+                val existing = resolver.query(
+                    android.provider.MediaStore.Files.getContentUri("external"),
+                    arrayOf(android.provider.MediaStore.MediaColumns._ID),
+                    "${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} = ?",
+                    arrayOf(fileName, "Download/BudgeTrak/support/"),
+                    null
+                )
+                val uri = if (existing != null && existing.moveToFirst()) {
+                    val id = existing.getLong(0)
+                    existing.close()
+                    android.content.ContentUris.withAppendedId(
+                        android.provider.MediaStore.Files.getContentUri("external"), id
+                    )
+                } else {
+                    existing?.close()
+                    val values = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/BudgeTrak/support/")
+                    }
+                    resolver.insert(android.provider.MediaStore.Files.getContentUri("external"), values)
+                }
+                if (uri != null) {
+                    // Use "wt" (write-truncate) so the file is replaced, not appended
+                    resolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) }
+                }
+            }
+
+            fun sanitizeDeviceName(name: String): String =
+                name.replace(Regex("[^a-zA-Z0-9]"), "_").take(20)
+
             // ── One-time CRDT state dump to Downloads ──
             remember {
                 try {
-                    val dlDir = BackupManager.getSupportDir()
-                    val dump = StringBuilder()
-                    dump.appendLine("=== CRDT State Dump ${java.time.LocalDateTime.now()} ===")
-                    dump.appendLine("DeviceId: $localDeviceId")
-                    dump.appendLine("isAdmin: $isSyncAdmin")
-                    dump.appendLine("isSyncConfigured: $isSyncConfigured")
-                    dump.appendLine()
-                    dump.appendLine("── App Prefs ──")
-                    dump.appendLine("availableCash (prefs): ${prefs.getDoubleCompat("availableCash")}")
-                    dump.appendLine("availableCash (state): $availableCash")
-                    dump.appendLine("budgetStartDate: $budgetStartDate")
-                    dump.appendLine("lastRefreshDate: $lastRefreshDate")
-                    dump.appendLine("budgetPeriod: $budgetPeriod")
-                    dump.appendLine("budgetAmount (derived): $budgetAmount")
-                    dump.appendLine("safeBudgetAmount (derived): $safeBudgetAmount")
-                    dump.appendLine("isManualBudget: $isManualBudgetEnabled  manualAmount: $manualBudgetAmount")
-                    dump.appendLine()
-                    dump.appendLine("── SharedSettings (CRDT) ──")
-                    dump.appendLine("availableCash: ${sharedSettings.availableCash}  clock: ${sharedSettings.availableCash_clock}")
-                    dump.appendLine("budgetStartDate: ${sharedSettings.budgetStartDate}  clock: ${sharedSettings.budgetStartDate_clock}")
-                    dump.appendLine("budgetPeriod: ${sharedSettings.budgetPeriod}  clock: ${sharedSettings.budgetPeriod_clock}")
-                    dump.appendLine("manualBudgetAmount: ${sharedSettings.manualBudgetAmount}  clock: ${sharedSettings.manualBudgetAmount_clock}")
-                    dump.appendLine("isManualBudgetEnabled: ${sharedSettings.isManualBudgetEnabled}  clock: ${sharedSettings.isManualBudgetEnabled_clock}")
-                    dump.appendLine("currency: ${sharedSettings.currency}  clock: ${sharedSettings.currency_clock}")
-                    dump.appendLine("lastChangedBy: ${sharedSettings.lastChangedBy}")
-                    dump.appendLine()
-                    // Sync metadata
-                    dump.appendLine("── Sync Metadata ──")
-                    dump.appendLine("lastPushedClock: ${syncPrefs.getLong("lastPushedClock", 0L)}")
-                    dump.appendLine("lastSyncVersion: ${syncPrefs.getLong("lastSyncVersion", 0L)}")
-                    val remapJsonDump = syncPrefs.getString("catIdRemap", null)
-                    dump.appendLine("catIdRemap: ${remapJsonDump ?: "(empty)"}")
-                    dump.appendLine()
-
-                    dump.appendLine("── Categories ──")
-                    val categoryMap = categories.associateBy { it.id }
-                    for (cat in categories.sortedBy { it.id }) {
-                        dump.appendLine("  id=${cat.id} '${cat.name}' tag=${cat.tag} icon=${cat.iconName} dev=${cat.deviceId.take(8)}… del=${cat.deleted} nClk=${cat.name_clock} tClk=${cat.tag_clock} dIdClk=${cat.deviceId_clock}")
-                    }
-                    dump.appendLine()
-
-                    dump.appendLine("── Recurring Expenses ──")
-                    for (re in recurringExpenses.sortedBy { it.source }) {
-                        dump.appendLine("  id=${re.id} '${re.source}' amt=${re.amount} ${re.repeatType}/${re.repeatInterval} dev=${re.deviceId.take(8)}… del=${re.deleted} setAside=${re.setAsideSoFar} accel=${re.isAccelerated}")
-                    }
-                    dump.appendLine()
-
-                    dump.appendLine("── Transactions (active, in current period) ──")
-                    val activeTxns = transactions.filter { !it.deleted }
-                    val periodTxns = if (budgetStartDate != null) activeTxns.filter { !it.date.isBefore(budgetStartDate) } else activeTxns
-                    for (txn in periodTxns.sortedBy { it.date }) {
-                        val budgetAccounted = if (txn.type == TransactionType.EXPENSE) isBudgetAccountedExpense(txn) else false
-                        val catDesc = if (txn.categoryAmounts.isEmpty()) "cats=NONE"
-                            else txn.categoryAmounts.joinToString(",") { ca ->
-                                val name = categoryMap[ca.categoryId]?.name ?: "???"
-                                "${ca.categoryId}($name):${ca.amount}"
-                            }
-                        val linkDesc = listOfNotNull(
-                            txn.linkedRecurringExpenseId?.let { "reId=$it(clk=${txn.linkedRecurringExpenseId_clock},reAmt=${txn.linkedRecurringExpenseAmount})" },
-                            txn.linkedAmortizationEntryId?.let { "aeId=$it(clk=${txn.linkedAmortizationEntryId_clock},appl=${txn.amortizationAppliedAmount})" },
-                            txn.linkedIncomeSourceId?.let { "isId=$it(clk=${txn.linkedIncomeSourceId_clock},isAmt=${txn.linkedIncomeSourceAmount})" },
-                            txn.linkedSavingsGoalId?.let { "sgId=$it(clk=${txn.linkedSavingsGoalId_clock},sgAmt=${txn.linkedSavingsGoalAmount})" }
-                        ).joinToString(" ").ifEmpty { "" }
-                        val flagDesc = listOfNotNull(
-                            if (txn.excludeFromBudget) "ef=true(clk=${txn.excludeFromBudget_clock})" else null,
-                            if (txn.isBudgetIncome) "bi=true" else null
-                        ).joinToString(" ").let { if (it.isNotEmpty()) "$it " else "" }
-                        dump.appendLine("  ${txn.date} ${txn.type} ${txn.amount} '${txn.source}' dev=${txn.deviceId.take(8)}… ba=$budgetAccounted ${flagDesc}aClk=${txn.amount_clock} cClk=${txn.categoryAmounts_clock} dIdClk=${txn.deviceId_clock} $linkDesc $catDesc")
-                    }
-                    // Recompute cash using the ACTUAL BudgetCalculator logic for verification
-                    val verifyLedger = periodLedger.toList()
-                    val verifyTxns = activeTransactions
-                    val verifyRe = activeRecurringExpenses
-                    val verifyIs = activeIncomeSources
-                    val verifyCash = BudgetCalculator.recomputeAvailableCash(
-                        budgetStartDate ?: java.time.LocalDate.now(),
-                        verifyLedger, verifyTxns, verifyRe, incomeMode, verifyIs
-                    )
-                    // Breakdown: sum period ledger credits
-                    val ledgerCredits = if (budgetStartDate != null) {
-                        verifyLedger
-                            .filter { !it.periodStartDate.toLocalDate().isBefore(budgetStartDate) }
-                            .groupBy { it.periodStartDate.toLocalDate() }
-                            .values.map { entries -> entries.maxByOrNull { it.clock } ?: entries.first() }
-                            .sumOf { it.appliedAmount }
-                    } else 0.0
-                    dump.appendLine("── Cash Verification ──")
-                    dump.appendLine("Ledger credits (sum of ${verifyLedger.size} entries): $ledgerCredits")
-                    dump.appendLine("Recomputed cash (BudgetCalculator): $verifyCash")
-                    dump.appendLine("Stored cash (prefs): $availableCash")
-                    dump.appendLine("Match: ${kotlin.math.abs(verifyCash - availableCash) < 0.01}")
-                    dump.appendLine()
-                    dump.appendLine("── Period Ledger ──")
-                    for (entry in periodLedger) {
-                        dump.appendLine("  ${entry.periodStartDate} applied=${entry.appliedAmount} clock=${entry.clockAtReset}")
-                    }
-                    dump.appendLine("=== End CRDT Dump ===")
-                    // Use MediaStore to write to Downloads (works without permissions on Android 10+)
-                    val resolver = context.contentResolver
-                    val existing = resolver.query(
-                        android.provider.MediaStore.Files.getContentUri("external"),
-                        arrayOf(android.provider.MediaStore.MediaColumns._ID),
-                        "${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} = ?",
-                        arrayOf("sync_diag.txt", "Download/BudgeTrak/support/"),
-                        null
-                    )
-                    val uri = if (existing != null && existing.moveToFirst()) {
-                        val id = existing.getLong(0)
-                        existing.close()
-                        android.content.ContentUris.withAppendedId(
-                            android.provider.MediaStore.Files.getContentUri("external"), id
-                        )
-                    } else {
-                        existing?.close()
-                        val values = android.content.ContentValues().apply {
-                            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "sync_diag.txt")
-                            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/BudgeTrak/support/")
-                        }
-                        resolver.insert(android.provider.MediaStore.Files.getContentUri("external"), values)
-                    }
-                    if (uri != null) {
-                        resolver.openOutputStream(uri, "wa")?.use { it.write((dump.toString() + "\n").toByteArray()) }
+                    val diagText = buildDiagDump()
+                    writeDiagToMediaStore("sync_diag.txt", diagText)
+                    // Also write device-named copy
+                    val devName = sanitizeDeviceName(com.syncbudget.app.data.sync.GroupManager.getDeviceName(context))
+                    if (devName.isNotEmpty()) {
+                        writeDiagToMediaStore("sync_diag_${devName}.txt", diagText)
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("DiagDump", "Diag write failed: ${e.message}")
@@ -2575,6 +2593,65 @@ class MainActivity : ComponentActivity() {
                         },
                         onRestoreBackup = { showRestoreDialog = true },
                         onSavePhotos = { showSavePhotosDialog = true },
+                        onDumpDebug = {
+                            coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                try {
+                                    val devName = com.syncbudget.app.data.sync.GroupManager.getDeviceName(context)
+                                    val sanitized = sanitizeDeviceName(devName)
+                                    val supportDir = BackupManager.getSupportDir()
+
+                                    // 1. Build fresh diag dump
+                                    val diagText = buildDiagDump()
+                                    writeDiagToMediaStore("sync_diag.txt", diagText)
+                                    if (sanitized.isNotEmpty()) {
+                                        writeDiagToMediaStore("sync_diag_${sanitized}.txt", diagText)
+                                    }
+
+                                    // 2. Read sync_log.txt and copy with device name
+                                    val syncLogFile = java.io.File(supportDir, "sync_log.txt")
+                                    val syncLogText = if (syncLogFile.exists()) syncLogFile.readText() else ""
+                                    if (sanitized.isNotEmpty() && syncLogText.isNotEmpty()) {
+                                        writeDiagToMediaStore("sync_log_${sanitized}.txt", syncLogText)
+                                    }
+
+                                    // 3. Upload to Firestore if sync is configured
+                                    val gId = syncGroupId
+                                    if (gId != null) {
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            toastState.show("Syncing debug files\u2026")
+                                        }
+                                        FirestoreService.uploadDebugFiles(
+                                            groupId = gId,
+                                            deviceId = localDeviceId,
+                                            deviceName = devName,
+                                            syncLog = syncLogText,
+                                            syncDiag = diagText
+                                        )
+
+                                        // 4. Download remote debug files
+                                        val remoteFiles = FirestoreService.downloadDebugFiles(gId, localDeviceId)
+                                        for (remote in remoteFiles) {
+                                            val rName = sanitizeDeviceName(remote.deviceName)
+                                            if (remote.syncLog.isNotEmpty()) {
+                                                writeDiagToMediaStore("sync_log_${rName}.txt", remote.syncLog)
+                                            }
+                                            if (remote.syncDiag.isNotEmpty()) {
+                                                writeDiagToMediaStore("sync_diag_${rName}.txt", remote.syncDiag)
+                                            }
+                                        }
+                                    }
+
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        toastState.show("Debug files synced")
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.e("DumpDebug", "Debug sync failed: ${e.message}", e)
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        toastState.show("Debug sync failed: ${e.message?.take(60)}")
+                                    }
+                                }
+                            }
+                        },
                         onBack = { currentScreen = "main" },
                         onHelpClick = { currentScreen = "settings_help" }
                     )

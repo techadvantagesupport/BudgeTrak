@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Close
 import com.syncbudget.app.ui.theme.AdAwareAlertDialog
 import com.syncbudget.app.ui.theme.DialogStyle
@@ -158,6 +159,7 @@ fun SettingsScreen(
     onBackupNow: () -> Unit = {},
     onRestoreBackup: () -> Unit = {},
     onSavePhotos: () -> Unit = {},
+    onDumpDebug: () -> Unit = {},
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -251,6 +253,23 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(S.sync.familySync)
+                    }
+                }
+            }
+
+            if (isSyncConfigured) {
+                item {
+                    OutlinedButton(
+                        onClick = onDumpDebug,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.BugReport,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Dump & Sync Debug")
                     }
                 }
             }
