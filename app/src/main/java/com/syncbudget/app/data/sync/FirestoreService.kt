@@ -672,33 +672,40 @@ object FirestoreService {
         groupId: String, deviceId: String, deviceName: String,
         syncLog: String, syncDiag: String
     ) = withTimeout(OP_TIMEOUT_MS) {
-        // Store on the device document (already permitted by Firestore rules)
-        // using merge to avoid overwriting other device fields.
+        // Use the group document (known writable) with device-keyed fields.
+        // Keep data small (50K each) to stay well under 1MB doc limit even
+        // with multiple devices.
+        val shortId = deviceId.take(8)
         val data = mapOf(
-            "debugSyncLog" to syncLog.takeLast(400_000),
-            "debugSyncDiag" to syncDiag.takeLast(400_000),
-            "debugUpdatedAt" to System.currentTimeMillis()
+            "debug_${shortId}_name" to deviceName,
+            "debug_${shortId}_log" to syncLog.takeLast(50_000),
+            "debug_${shortId}_diag" to syncDiag.takeLast(50_000),
+            "debug_${shortId}_at" to System.currentTimeMillis()
         )
         db.collection("groups").document(groupId)
-            .collection("devices").document(deviceId)
             .set(data, SetOptions.merge()).await()
     }
 
-    suspend fun downloadDebugFiles(groupId: String, myDeviceId: String): List<DebugFileSet> = withTimeout(OP_TIMEOUT_EXTENDED_MS) {
-        // Read from device documents (already permitted)
-        val snapshot = db.collection("groups").document(groupId)
-            .collection("devices").get().await()
-        snapshot.documents
-            .filter { it.id != myDeviceId && it.getBoolean("removed") != true }
-            .filter { (it.getString("debugSyncLog") ?: "").isNotEmpty() || (it.getString("debugSyncDiag") ?: "").isNotEmpty() }
-            .map { doc ->
-                DebugFileSet(
-                    deviceName = doc.getString("deviceName") ?: doc.id.take(8),
-                    syncLog = doc.getString("debugSyncLog") ?: "",
-                    syncDiag = doc.getString("debugSyncDiag") ?: "",
-                    updatedAt = doc.getLong("debugUpdatedAt") ?: 0L
-                )
+    suspend fun downloadDebugFiles(groupId: String, myDeviceId: String): List<DebugFileSet> = withTimeout(OP_TIMEOUT_MS) {
+        // Read debug fields from group document
+        val doc = db.collection("groups").document(groupId).get().await()
+        val myShortId = myDeviceId.take(8)
+        val results = mutableListOf<DebugFileSet>()
+        // Find all debug_*_name fields for other devices
+        val data = doc.data ?: return@withTimeout emptyList()
+        val deviceIds = data.keys.filter { it.startsWith("debug_") && it.endsWith("_name") }
+            .map { it.removePrefix("debug_").removeSuffix("_name") }
+            .filter { it != myShortId }
+        for (id in deviceIds) {
+            val name = doc.getString("debug_${id}_name") ?: id
+            val log = doc.getString("debug_${id}_log") ?: ""
+            val diag = doc.getString("debug_${id}_diag") ?: ""
+            val at = doc.getLong("debug_${id}_at") ?: 0L
+            if (log.isNotEmpty() || diag.isNotEmpty()) {
+                results.add(DebugFileSet(name, log, diag, at))
             }
+        }
+        results
     }
 
     /** Read the debug request timestamp from the group document. */
