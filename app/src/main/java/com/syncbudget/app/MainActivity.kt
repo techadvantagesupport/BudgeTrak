@@ -358,13 +358,15 @@ class MainActivity : ComponentActivity() {
 
             // persistAvailableCash declared after sync state variables below
 
-            // Cached active (non-deleted) lists — avoids re-filtering on every recomposition
-            val activeTransactions: List<Transaction> by remember { derivedStateOf { transactions.filter { !it.deleted } } }
-            val activeRecurringExpenses: List<RecurringExpense> by remember { derivedStateOf { recurringExpenses.filter { !it.deleted } } }
-            val activeIncomeSources: List<IncomeSource> by remember { derivedStateOf { incomeSources.filter { !it.deleted } } }
-            val activeAmortizationEntries: List<AmortizationEntry> by remember { derivedStateOf { amortizationEntries.filter { !it.deleted } } }
-            val activeSavingsGoals: List<SavingsGoal> by remember { derivedStateOf { savingsGoals.filter { !it.deleted } } }
-            val activeCategories: List<Category> by remember { derivedStateOf { categories.filter { !it.deleted } } }
+            // Cached active lists — filters deleted AND skeleton records (incomplete
+            // CRDT records with clock==0 or empty source/name).  Uses .active from
+            // SyncFilters.kt so budget calculations never see incomplete data.
+            val activeTransactions: List<Transaction> by remember { derivedStateOf { transactions.toList().active } }
+            val activeRecurringExpenses: List<RecurringExpense> by remember { derivedStateOf { recurringExpenses.toList().active } }
+            val activeIncomeSources: List<IncomeSource> by remember { derivedStateOf { incomeSources.toList().active } }
+            val activeAmortizationEntries: List<AmortizationEntry> by remember { derivedStateOf { amortizationEntries.toList().active } }
+            val activeSavingsGoals: List<SavingsGoal> by remember { derivedStateOf { savingsGoals.toList().active } }
+            val activeCategories: List<Category> by remember { derivedStateOf { categories.toList().active } }
 
             // Budget "today" respects resetHour in DAILY mode: before resetHour
             // we're still in yesterday's period. WEEKLY/MONTHLY reset at midnight.

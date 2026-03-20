@@ -599,6 +599,8 @@ class SyncEngine(
             // 5d: Resolve transitive remap chains (A→B→C becomes A→C, B→C)
             // before applying to transactions.  Prevents orphaned references
             // when multiple dedup passes create chained remaps.
+            // Cycle detection: if A→B→A is found, resolve both to whichever
+            // ID actually exists in merged categories (prefer higher name_clock).
             if (catIdRemap.isNotEmpty()) {
                 val resolved = mutableMapOf<Int, Int>()
                 for ((source, target) in catIdRemap) {
@@ -608,8 +610,25 @@ class SyncEngine(
                         visited.add(final)
                         final = catIdRemap[final]!!
                     }
+                    if (final in visited) {
+                        // Cycle detected — resolve to the member that exists in
+                        // merged categories with the highest name_clock (most
+                        // authoritative).  If neither exists, drop the remap.
+                        val candidates = visited.mapNotNull { id ->
+                            mergedCatById[id]?.let { id to it.name_clock }
+                        }
+                        final = if (candidates.isNotEmpty()) {
+                            candidates.maxByOrNull { it.second }!!.first
+                        } else {
+                            source // no valid target — leave unmapped (identity → removed below)
+                        }
+                        syncLog("WARNING: category remap cycle detected involving IDs $visited, resolved to $final")
+                    }
                     resolved[source] = final
                 }
+                // Remove identity mappings (A→A) — they waste cycles and
+                // can arise from cycle resolution when no valid target exists.
+                resolved.entries.removeAll { it.key == it.value }
                 catIdRemap.clear()
                 catIdRemap.putAll(resolved)
             }
