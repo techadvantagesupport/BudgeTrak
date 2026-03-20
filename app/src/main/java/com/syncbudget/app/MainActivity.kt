@@ -1945,32 +1945,44 @@ class MainActivity : ComponentActivity() {
 
             /** Write text to a file in Download/BudgeTrak/support/ via MediaStore. */
             fun writeDiagToMediaStore(fileName: String, text: String) {
-                val resolver = context.contentResolver
-                val existing = resolver.query(
-                    android.provider.MediaStore.Files.getContentUri("external"),
-                    arrayOf(android.provider.MediaStore.MediaColumns._ID),
-                    "${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} = ?",
-                    arrayOf(fileName, "Download/BudgeTrak/support/"),
-                    null
-                )
-                val uri = if (existing != null && existing.moveToFirst()) {
-                    val id = existing.getLong(0)
-                    existing.close()
-                    android.content.ContentUris.withAppendedId(
-                        android.provider.MediaStore.Files.getContentUri("external"), id
-                    )
-                } else {
-                    existing?.close()
-                    val values = android.content.ContentValues().apply {
-                        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/BudgeTrak/support/")
+                // Write directly to support dir (app-created directory, no
+                // MediaStore ownership issues on Android 10+).
+                try {
+                    val file = java.io.File(BackupManager.getSupportDir(), fileName)
+                    file.writeText(text)
+                } catch (e: Exception) {
+                    android.util.Log.w("DiagDump", "Direct write failed for $fileName, trying MediaStore: ${e.message}")
+                    // Fallback to MediaStore for files the app didn't create directly
+                    try {
+                        val resolver = context.contentResolver
+                        val existing = resolver.query(
+                            android.provider.MediaStore.Files.getContentUri("external"),
+                            arrayOf(android.provider.MediaStore.MediaColumns._ID),
+                            "${android.provider.MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} = ?",
+                            arrayOf(fileName, "Download/BudgeTrak/support/"),
+                            null
+                        )
+                        val uri = if (existing != null && existing.moveToFirst()) {
+                            val id = existing.getLong(0)
+                            existing.close()
+                            android.content.ContentUris.withAppendedId(
+                                android.provider.MediaStore.Files.getContentUri("external"), id
+                            )
+                        } else {
+                            existing?.close()
+                            val values = android.content.ContentValues().apply {
+                                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/BudgeTrak/support/")
+                            }
+                            resolver.insert(android.provider.MediaStore.Files.getContentUri("external"), values)
+                        }
+                        if (uri != null) {
+                            resolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) }
+                        }
+                    } catch (e2: Exception) {
+                        android.util.Log.e("DiagDump", "MediaStore write also failed for $fileName: ${e2.message}")
                     }
-                    resolver.insert(android.provider.MediaStore.Files.getContentUri("external"), values)
-                }
-                if (uri != null) {
-                    // Use "wt" (write-truncate) so the file is replaced, not appended
-                    resolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) }
                 }
             }
 
