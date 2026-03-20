@@ -563,6 +563,41 @@ class MainActivity : ComponentActivity() {
                 } catch (e: Exception) { android.util.Log.e("Migration", "backfill_linked_amounts failed", e) }
 
                 try {
+                    if (!syncPrefs.getBoolean("migration_backfill_linked_amounts_v2", false)) {
+                        var anyChanged = false
+                        val migClock = lamportClock.tick()
+                        val reMap = recurringExpenses.associateBy { it.id }
+                        val isMap = incomeSources.associateBy { it.id }
+                        transactions.forEachIndexed { i, txn ->
+                            var updated = txn
+                            if (txn.linkedRecurringExpenseId != null && txn.linkedRecurringExpenseAmount == 0.0) {
+                                val re = reMap[txn.linkedRecurringExpenseId]
+                                if (re != null) {
+                                    updated = updated.copy(
+                                        linkedRecurringExpenseAmount = re.amount,
+                                        linkedRecurringExpenseAmount_clock = migClock
+                                    )
+                                    anyChanged = true
+                                }
+                            }
+                            if (txn.linkedIncomeSourceId != null && txn.linkedIncomeSourceAmount == 0.0) {
+                                val src = isMap[txn.linkedIncomeSourceId]
+                                if (src != null) {
+                                    updated = updated.copy(
+                                        linkedIncomeSourceAmount = src.amount,
+                                        linkedIncomeSourceAmount_clock = migClock
+                                    )
+                                    anyChanged = true
+                                }
+                            }
+                            if (updated !== txn) transactions[i] = updated
+                        }
+                        if (anyChanged) saveTransactions()
+                        syncPrefs.edit().putBoolean("migration_backfill_linked_amounts_v2", true).apply()
+                    }
+                } catch (e: Exception) { android.util.Log.e("Migration", "backfill_linked_amounts_v2 failed", e) }
+
+                try {
                     if (!syncPrefs.getBoolean("migration_add_savings_goal_fields", false)) {
                         saveTransactions()
                         syncPrefs.edit().putBoolean("migration_add_savings_goal_fields", true).apply()

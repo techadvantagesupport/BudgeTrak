@@ -243,7 +243,9 @@ object FirestoreService {
      *  under the 1MB Firestore document limit after field overhead. */
     private const val SNAPSHOT_CHUNK_SIZE = 600_000
 
-    suspend fun getSnapshot(groupId: String): SnapshotRecord? {
+    suspend fun getSnapshot(groupId: String): SnapshotRecord? = getSnapshotInternal(groupId, 0)
+
+    private suspend fun getSnapshotInternal(groupId: String, retryCount: Int): SnapshotRecord? {
         val metaDoc = withTimeout(OP_TIMEOUT_MS) {
             db.collection("groups")
                 .document(groupId)
@@ -261,6 +263,7 @@ object FirestoreService {
             // Multi-chunk snapshot: reassemble from chunk documents.
             // Metadata fetch proved connectivity; use extended timeout
             // for chunk reads on slow connections.
+            val generation = metaDoc.getLong("writeGeneration") ?: 0L
             val sb = StringBuilder()
             for (i in 0 until chunkCount) {
                 val chunkDoc = withTimeout(OP_TIMEOUT_EXTENDED_MS) {
@@ -272,6 +275,17 @@ object FirestoreService {
                         .await()
                 }
                 sb.append(chunkDoc.getString("data") ?: "")
+            }
+            // Re-read metadata to verify no concurrent write changed chunks
+            val verifyDoc = withTimeout(OP_TIMEOUT_MS) {
+                db.collection("groups").document(groupId)
+                    .collection("snapshots").document("latest")
+                    .get().await()
+            }
+            val verifyGen = verifyDoc.getLong("writeGeneration") ?: 0L
+            if (verifyGen != generation && retryCount < 2) {
+                // Snapshot was being written while we read — retry
+                return getSnapshotInternal(groupId, retryCount + 1)
             }
             encryptedData = sb.toString()
         } else {
@@ -305,12 +319,21 @@ object FirestoreService {
                     "createdBy" to createdBy,
                     "encryptedData" to encryptedData,
                     "chunkCount" to 0,
+                    "writeGeneration" to 1L,
                     "timestamp" to System.currentTimeMillis()
                 )).await()
             }
         } else {
             // Split into chunks, write chunks first, then metadata
             val chunks = encryptedData.chunked(SNAPSHOT_CHUNK_SIZE)
+
+            // Read current generation (0 if first snapshot)
+            val prevMeta = try {
+                snapshotRef.document("latest").get().await()
+            } catch (_: Exception) { null }
+            val prevGen = prevMeta?.getLong("writeGeneration") ?: 0L
+            val newGen = prevGen + 1
+
             for ((i, chunk) in chunks.withIndex()) {
                 withTimeout(OP_TIMEOUT_MS) {
                     snapshotRef.document("chunk_$i").set(mapOf(
@@ -324,6 +347,7 @@ object FirestoreService {
                     "snapshotVersion" to snapshotVersion,
                     "createdBy" to createdBy,
                     "chunkCount" to chunks.size,
+                    "writeGeneration" to newGen,
                     "timestamp" to System.currentTimeMillis()
                 )).await()
             }

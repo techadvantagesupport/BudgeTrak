@@ -2,8 +2,7 @@ package com.syncbudget.app.data
 
 import android.content.Context
 import android.util.Log
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.locks.ReentrantLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -17,12 +16,12 @@ object SafeIO {
 
     private const val TAG = "SafeIO"
 
-    /** Per-file mutexes to prevent concurrent writes to the same file.
+    /** Per-file locks to prevent concurrent writes to the same file.
      *  Protects against race conditions between user actions, sync merges,
      *  and widget updates all writing to the same repository file. */
-    private val fileMutexes = mutableMapOf<String, Mutex>()
-    private fun mutexFor(fileName: String): Mutex = synchronized(fileMutexes) {
-        fileMutexes.getOrPut(fileName) { Mutex() }
+    private val fileLocks = mutableMapOf<String, ReentrantLock>()
+    private fun lockFor(fileName: String): ReentrantLock = synchronized(fileLocks) {
+        fileLocks.getOrPut(fileName) { ReentrantLock() }
     }
 
     /**
@@ -31,23 +30,29 @@ object SafeIO {
      * if the app crashes or disk fills mid-write.
      */
     fun atomicWrite(context: Context, fileName: String, data: ByteArray) {
-        val tmpFile = File(context.filesDir, "$fileName.tmp")
+        val lock = lockFor(fileName)
+        lock.lock()
         try {
-            tmpFile.writeBytes(data)
-            val target = context.getFileStreamPath(fileName)
-            if (!tmpFile.renameTo(target)) {
-                // renameTo can fail on some filesystems; fall back to copy
-                tmpFile.inputStream().use { input ->
-                    context.openFileOutput(fileName, Context.MODE_PRIVATE).use { output ->
-                        input.copyTo(output)
+            val tmpFile = File(context.filesDir, "$fileName.tmp")
+            try {
+                tmpFile.writeBytes(data)
+                val target = context.getFileStreamPath(fileName)
+                if (!tmpFile.renameTo(target)) {
+                    // renameTo can fail on some filesystems; fall back to copy
+                    tmpFile.inputStream().use { input ->
+                        context.openFileOutput(fileName, Context.MODE_PRIVATE).use { output ->
+                            input.copyTo(output)
+                        }
                     }
+                    tmpFile.delete()
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write $fileName: ${e.message}", e)
                 tmpFile.delete()
+                throw e  // let caller handle (e.g. retry or notify user)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to write $fileName: ${e.message}", e)
-            tmpFile.delete()
-            throw e  // let caller handle (e.g. retry or notify user)
+        } finally {
+            lock.unlock()
         }
     }
 
@@ -61,25 +66,19 @@ object SafeIO {
         atomicWrite(context, fileName, json.toString().toByteArray())
     }
 
-    /**
-     * Coroutine-safe atomic write.  Acquires a per-file mutex to prevent
-     * concurrent writes from different coroutines (e.g., user action +
-     * sync merge both saving transactions simultaneously).
-     */
+    /** Delegates to [atomicWrite] which already acquires a per-file lock. */
     suspend fun atomicWriteLocked(context: Context, fileName: String, data: ByteArray) {
-        mutexFor(fileName).withLock {
-            atomicWrite(context, fileName, data)
-        }
+        atomicWrite(context, fileName, data)
     }
 
-    /** Coroutine-safe atomic write for JSONArray. */
+    /** Delegates to [atomicWriteJson] which already acquires a per-file lock. */
     suspend fun atomicWriteJsonLocked(context: Context, fileName: String, json: JSONArray) {
-        atomicWriteLocked(context, fileName, json.toString().toByteArray())
+        atomicWriteJson(context, fileName, json)
     }
 
-    /** Coroutine-safe atomic write for JSONObject. */
+    /** Delegates to [atomicWriteJson] which already acquires a per-file lock. */
     suspend fun atomicWriteJsonLocked(context: Context, fileName: String, json: JSONObject) {
-        atomicWriteLocked(context, fileName, json.toString().toByteArray())
+        atomicWriteJson(context, fileName, json)
     }
 
     /**

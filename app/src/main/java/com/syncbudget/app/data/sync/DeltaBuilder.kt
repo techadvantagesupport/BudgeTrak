@@ -81,6 +81,17 @@ object DeltaBuilder {
         ensureField(fields, "linkedSavingsGoalAmount", txn.linkedSavingsGoalAmount, txn.linkedSavingsGoalAmount_clock)
         ensureField(fields, "isBudgetIncome", txn.isBudgetIncome, txn.isBudgetIncome_clock)
         ensureField(fields, "excludeFromBudget", txn.excludeFromBudget, txn.excludeFromBudget_clock)
+        // Piggyback receipt fields so photo references are never lost
+        if (txn.receiptId1 == null || txn.receiptId1 !in pendingUploadReceiptIds)
+            ensureField(fields, "receiptId1", txn.receiptId1, txn.receiptId1_clock)
+        if (txn.receiptId2 == null || txn.receiptId2 !in pendingUploadReceiptIds)
+            ensureField(fields, "receiptId2", txn.receiptId2, txn.receiptId2_clock)
+        if (txn.receiptId3 == null || txn.receiptId3 !in pendingUploadReceiptIds)
+            ensureField(fields, "receiptId3", txn.receiptId3, txn.receiptId3_clock)
+        if (txn.receiptId4 == null || txn.receiptId4 !in pendingUploadReceiptIds)
+            ensureField(fields, "receiptId4", txn.receiptId4, txn.receiptId4_clock)
+        if (txn.receiptId5 == null || txn.receiptId5 !in pendingUploadReceiptIds)
+            ensureField(fields, "receiptId5", txn.receiptId5, txn.receiptId5_clock)
         if ("categoryAmounts" !in fields && txn.categoryAmounts_clock > 0L) {
             val catJson = JSONArray()
             for (ca in txn.categoryAmounts) {
