@@ -649,6 +649,29 @@ class SyncEngine(
                 }
             }
 
+            // Step 5e: Advance lastPushedClock past the max clock in received
+            // remote deltas BEFORE building push deltas.  The merged data (with
+            // remote clocks via maxOf) gets saved to the repo by SyncWorker.
+            // Without this pre-advancement, DeltaBuilder sees merged clocks as
+            // "dirty" (field_clock > lastPushedClock) and re-pushes them back
+            // to the sender (echo problem / push loop).
+            if (packets.isNotEmpty()) {
+                var maxReceivedClock = 0L
+                for (packet in packets) {
+                    for (change in packet.changes) {
+                        for ((_, field) in change.fields) {
+                            if (field.clock > maxReceivedClock) maxReceivedClock = field.clock
+                        }
+                    }
+                }
+                if (maxReceivedClock > lastPushedClock) {
+                    lastPushedClock = maxReceivedClock
+                    if (maxReceivedClock > lamportClock.value) {
+                        lamportClock.merge(maxReceivedClock)
+                    }
+                }
+            }
+
             // Step 6: Push records.  After a snapshot bootstrap, use the MERGED
             // data instead of the original local data.  The local data may contain
             // stale/wrong values (e.g., period ledger entries with applied=0.0 from
@@ -765,27 +788,8 @@ class SyncEngine(
                 }
             }
 
-            // Advance lastPushedClock past the max clock in received remote
-            // deltas.  The merged data (with remote clocks via maxOf) gets
-            // saved to the repo by SyncWorker.  Without this, those merged
-            // clocks appear "dirty" on the next cycle and get needlessly
-            // re-pushed back to the sender (echo problem).
-            if (packets.isNotEmpty()) {
-                var maxReceivedClock = 0L
-                for (packet in packets) {
-                    for (change in packet.changes) {
-                        for ((_, field) in change.fields) {
-                            if (field.clock > maxReceivedClock) maxReceivedClock = field.clock
-                        }
-                    }
-                }
-                if (maxReceivedClock > lastPushedClock) {
-                    lastPushedClock = maxReceivedClock
-                    if (maxReceivedClock > lamportClock.value) {
-                        lamportClock.merge(maxReceivedClock)
-                    }
-                }
-            }
+            // (lastPushedClock already advanced past received remote clocks
+            // in Step 5e above, before DeltaBuilder ran.)
 
             // Step 7: Update metadata (with optional integrity fingerprint)
             val newSyncVersion = if (remoteDeltas.isNotEmpty()) {
