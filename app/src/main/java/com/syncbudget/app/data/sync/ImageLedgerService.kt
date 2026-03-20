@@ -25,7 +25,12 @@ object ImageLedgerService {
      * Upload encrypted receipt bytes to Cloud Storage.
      * Path: groups/{groupId}/receipts/{receiptId}.enc
      */
+    /** Last upload error message, readable by callers for diagnostic logging. */
+    var lastUploadError: String? = null
+        private set
+
     suspend fun uploadToCloud(groupId: String, receiptId: String, encryptedData: ByteArray): Boolean {
+        lastUploadError = null
         return try {
             withTimeout(60_000L) {
                 val ref = storage.reference.child("groups/$groupId/receipts/$receiptId.enc")
@@ -33,7 +38,8 @@ object ImageLedgerService {
             }
             true
         } catch (e: Exception) {
-            Log.w(TAG, "Upload failed for $receiptId: ${e.message}")
+            lastUploadError = "${e.javaClass.simpleName}: ${e.message}"
+            Log.w(TAG, "Upload failed for $receiptId: $lastUploadError")
             false
         }
     }

@@ -118,7 +118,7 @@ class ReceiptSyncManager(
                     syncLog("Receipt $receiptId: uploaded but ledger creation failed, will retry")
                 }
             } else {
-                syncLog("Receipt $receiptId: upload failed, will retry next sync")
+                syncLog("Receipt $receiptId: upload failed (${ImageLedgerService.lastUploadError}), will retry next sync")
             }
         }
 
