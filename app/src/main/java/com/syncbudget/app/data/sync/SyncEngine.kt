@@ -1050,25 +1050,24 @@ class SyncEngine(
                                 }
                             }
                             if (repairDeltas.isNotEmpty()) {
-                                // Safety cap: limit repair to 500 records (uses same
-                                // adaptive chunking as normal pushes, so large repairs
-                                // are split into 200-record chunks automatically).
-                                val capped = repairDeltas.take(500)
-                                if (capped.size < repairDeltas.size) {
-                                    syncLog("  REPAIR capped to ${capped.size}/${repairDeltas.size} records")
+                                // No cap — chunk into 200-record batches (same as
+                                // normal push) so even 10K-record repairs are safe.
+                                syncLog("  REPAIR pushing ${repairDeltas.size} records in ${(repairDeltas.size + 199) / 200} chunk(s)")
+                                val repairChunks = repairDeltas.chunked(200)
+                                for ((ci, chunk) in repairChunks.withIndex()) {
+                                    val packet = DeltaPacket(
+                                        sourceDeviceId = deviceId,
+                                        timestamp = java.time.Instant.now(),
+                                        changes = chunk
+                                    )
+                                    val serialized = DeltaSerializer.serialize(packet).toString().toByteArray()
+                                    val encrypted = CryptoHelper.encryptWithKey(serialized, encryptionKey)
+                                    val encoded = android.util.Base64.encodeToString(encrypted, android.util.Base64.NO_WRAP)
+                                    syncLog("  REPAIR chunk ${ci + 1}/${repairChunks.size} (${encoded.length} chars, ${chunk.size} records)")
+                                    FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded)
                                 }
-                                val packet = DeltaPacket(
-                                    sourceDeviceId = deviceId,
-                                    timestamp = java.time.Instant.now(),
-                                    changes = capped
-                                )
-                                val serialized = DeltaSerializer.serialize(packet).toString().toByteArray()
-                                val encrypted = CryptoHelper.encryptWithKey(serialized, encryptionKey)
-                                val encoded = android.util.Base64.encodeToString(encrypted, android.util.Base64.NO_WRAP)
-                                syncLog("  REPAIR pushing ${capped.size} records (${encoded.length} chars)")
-                                FirestoreService.pushDeltaAtomically(groupId, deviceId, encoded)
                                 syncLog("  REPAIR push complete")
-                                deltasPushed += capped.size
+                                deltasPushed += repairDeltas.size
                                 didRepair = true
                                 // Skip the next integrity check to give remote device
                                 // time to merge repair deltas and update fingerprint.
@@ -1077,7 +1076,7 @@ class SyncEngine(
                                 lastIntegrityCheckTime = now + INTEGRITY_CHECK_INTERVAL_MS
 
                                 // Advance lastPushedClock after repair (same as normal push)
-                                val maxRepairClock = capped
+                                val maxRepairClock = repairDeltas
                                     .maxOfOrNull { delta ->
                                         delta.fields.values.maxOfOrNull { it.clock } ?: 0L
                                     } ?: lastPushedClock
