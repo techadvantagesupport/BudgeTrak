@@ -666,6 +666,24 @@ object FirestoreService {
         }.await()
     }
 
+    // ── FCM Token Management ────────────────────────────────────
+
+    /** Store this device's FCM token in Firestore for push notifications. */
+    suspend fun storeFcmToken(groupId: String, deviceId: String, fcmToken: String) = withTimeout(OP_TIMEOUT_MS) {
+        db.collection("groups").document(groupId)
+            .collection("devices").document(deviceId)
+            .set(mapOf("fcmToken" to fcmToken), SetOptions.merge()).await()
+    }
+
+    /** Get FCM tokens for all active devices except the given one. */
+    suspend fun getFcmTokens(groupId: String, excludeDeviceId: String): List<String> = withTimeout(OP_TIMEOUT_MS) {
+        val snapshot = db.collection("groups").document(groupId)
+            .collection("devices").get().await()
+        snapshot.documents
+            .filter { it.id != excludeDeviceId && it.getBoolean("removed") != true }
+            .mapNotNull { it.getString("fcmToken") }
+    }
+
     // ── Debug File Sync ─────────────────────────────────────────
 
     suspend fun uploadDebugFiles(

@@ -40,9 +40,12 @@ class SyncWorker(
 
     private suspend fun doSyncWork(): Result {
         val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-        // Only run background sync when there are unpushed local changes.
+        val fcmPrefs = applicationContext.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+        val fcmDebugRequested = fcmPrefs.getBoolean("fcm_debug_requested", false)
+        // Only run background sync when there are unpushed local changes
+        // OR when FCM triggered a debug request (device woken up for debug upload).
         // Pull-side sync is handled by the foreground sync loop on app resume.
-        if (!syncPrefs.getBoolean("syncDirty", false)) return Result.success()
+        if (!syncPrefs.getBoolean("syncDirty", false) && !fcmDebugRequested) return Result.success()
 
         val groupId = syncPrefs.getString("groupId", null) ?: return Result.success()
         // Read key from encrypted prefs (with plain fallback for pre-migration)

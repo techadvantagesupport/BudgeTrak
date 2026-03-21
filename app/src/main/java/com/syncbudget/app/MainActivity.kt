@@ -48,6 +48,7 @@ import com.syncbudget.app.data.generateTransactionId
 import com.syncbudget.app.data.SharedSettings
 import com.syncbudget.app.data.SharedSettingsRepository
 import com.syncbudget.app.data.sync.DeviceInfo
+import com.syncbudget.app.data.sync.FcmSender
 import com.syncbudget.app.data.sync.FirestoreService
 import com.syncbudget.app.data.sync.GroupManager
 import java.time.ZoneId
@@ -144,6 +145,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.tasks.await
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -774,6 +776,23 @@ class MainActivity : ComponentActivity() {
                     syncDevices = GroupManager.getDevices(groupId)
                 } catch (e: Exception) {
                     android.util.Log.w("SyncLoop", "Failed to fetch initial device list", e)
+                }
+
+                // Register FCM token for push notifications
+                try {
+                    val fcmPrefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+                    var fcmToken = fcmPrefs.getString("fcm_token", null)
+                    if (fcmToken == null) {
+                        fcmToken = com.google.firebase.messaging.FirebaseMessaging.getInstance()
+                            .token.await()
+                        fcmPrefs.edit().putString("fcm_token", fcmToken).apply()
+                    }
+                    if (fcmToken != null) {
+                        FirestoreService.storeFcmToken(groupId, localDeviceId, fcmToken)
+                        fcmPrefs.edit().putBoolean("token_needs_upload", false).apply()
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("FCM", "Token registration failed: ${e.message}")
                 }
 
                 // One-time migration: stamp tag_clock on categories that have
@@ -2636,6 +2655,19 @@ class MainActivity : ComponentActivity() {
 
                                         // 4. Request all devices upload fresh files
                                         FirestoreService.requestDebugDump(gId)
+
+                                        // 4b. Send FCM push to wake up remote devices
+                                        try {
+                                            val fcmTokens = FirestoreService.getFcmTokens(gId, localDeviceId)
+                                            for (token in fcmTokens) {
+                                                FcmSender.sendDebugRequest(context, token)
+                                            }
+                                            if (fcmTokens.isNotEmpty()) {
+                                                android.util.Log.d("DumpDebug", "FCM push sent to ${fcmTokens.size} device(s)")
+                                            }
+                                        } catch (e: Exception) {
+                                            android.util.Log.w("DumpDebug", "FCM push failed (non-fatal): ${e.message}")
+                                        }
 
                                         // 5. Poll for remote files (wait up to 90s for other devices)
                                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {

@@ -81,6 +81,14 @@ Properties: commutative, associative, idempotent, convergent.
 **JSON files**: transactions, recurringExpenses, incomeSources, savingsGoals, amortizationEntries, categories, periodLedger, sharedSettings
 **Firestore**: deltas (encrypted), device metadata, snapshots, admin claims
 
+## Rescue & Clock-Zero Fix
+
+**Rescue (one-time per app version):** Re-stamps locally-owned records whose field clocks fell behind lastPushedClock. Gated by version flag (e.g., `rescue_stranded_ui_v3_done`). MUST NOT run every cycle — doing so causes push loops and overwrites cross-device edits. Bump flag name only when a code change is known to strand records.
+
+**Clock-zero fix (continuous):** Stamps critical fields with clock==0 on records in the sync system. Needed because CSV import can introduce clk=0 records. Defers clock tick until a record actually needs fixing (no tick if nothing to fix). Does NOT stamp all fields — only the specific ones that are 0.
+
+**CRITICAL RULE:** Never run rescue continuously. Step 5e advances lastPushedClock past received clocks, which makes locally-owned records appear "stranded" even though they were already pushed. A continuous rescue would re-stamp them every cycle → push loop → overwrite remote edits.
+
 ## Key Invariants
 
 1. lamportClock.value >= max(all field clocks, lastPushedClock)
@@ -88,3 +96,4 @@ Properties: commutative, associative, idempotent, convergent.
 3. Merge is idempotent: re-pushing same delta is safe
 4. Tombstone deletion: deleted=true with clock, never remove from list
 5. Push threshold: only field_clock > lastPushedClock gets pushed
+6. Rescue is ONE-TIME per app version, never continuous

@@ -867,10 +867,13 @@ class SyncEngine(
 
             // Step 9b: Check if admin requested debug files. If so, upload
             // fresh logs immediately so admin gets current data within ~60s.
+            // Also check if FCM push triggered a debug request (device woken up).
             try {
                 val requestedAt = FirestoreService.getDebugRequestTime(groupId)
                 val lastUploaded = prefs.getLong("lastDebugUploadTime", 0L)
-                if (requestedAt > lastUploaded) {
+                val fcmPrefs = context.getSharedPreferences("fcm_prefs", android.content.Context.MODE_PRIVATE)
+                val fcmRequested = fcmPrefs.getBoolean("fcm_debug_requested", false)
+                if (requestedAt > lastUploaded || fcmRequested) {
                     val deviceName = context.getSharedPreferences("sync_device", Context.MODE_PRIVATE)
                         .getString("deviceName", null) ?: android.os.Build.MODEL
                     val logText = try { syncLogFile.readText() } catch (_: Exception) { "" }
@@ -879,7 +882,11 @@ class SyncEngine(
                     if (logText.isNotEmpty() || diagText.isNotEmpty()) {
                         FirestoreService.uploadDebugFiles(groupId, deviceId, deviceName, logText, diagText)
                         prefs.edit().putLong("lastDebugUploadTime", now).apply()
-                        syncLog("Debug files uploaded (admin requested)")
+                        syncLog("Debug files uploaded (admin requested, fcm=$fcmRequested)")
+                    }
+                    // Clear FCM flag after upload
+                    if (fcmRequested) {
+                        fcmPrefs.edit().putBoolean("fcm_debug_requested", false).apply()
                     }
                 }
             } catch (e: Exception) {
