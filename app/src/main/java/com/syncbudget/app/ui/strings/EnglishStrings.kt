@@ -850,6 +850,10 @@ object EnglishStrings : AppStrings {
         receiptPhotosRetentionTitle = "Photo Retention",
         receiptPhotosRetentionBody = "The admin can set a retention period to automatically delete receipt photos older than a certain number of days. This helps manage storage on all synced devices.",
         receiptPhotosRetentionNote = "When photos are pruned, the deletion syncs to all devices in the group automatically.",
+        receiptPhotosBullet4 = "Tap the camera icon or choose from gallery to attach photos",
+        receiptPhotosBullet5 = "Photos are automatically compressed for efficient storage (max 1000px, ~250KB)",
+        receiptPhotosBullet6 = "In a sync group, photos are encrypted and shared across family devices",
+        receiptPhotosBullet7 = "An admin can set a retention period \u2014 photos older than the configured days are automatically cleaned up from cloud storage",
         categoriesTitle = "Categories",
         categoriesBody = "Categories let you classify your transactions for better spending insight. " +
             "Each category has a name and an icon.",
@@ -1490,6 +1494,14 @@ object EnglishStrings : AppStrings {
         matchBullet2 = "For example, \"State Farm\" will match \"STATE FARM INSURANCE\" from your bank",
         matchBullet3 = "The match looks for common substrings, so partial matches work",
         matchBullet4 = "Amount must also be within 1% for the match to trigger",
+        linkingTitle = "Transaction Linking",
+        linkingBody = "When a bank transaction matches a recurring expense, BudgeTrak links them " +
+            "together. Linked transactions are already accounted for in your budget \u2014 they " +
+            "don't reduce your available cash because the recurring expense already reserved " +
+            "that amount.",
+        linkingBullet1 = "The app remembers the budgeted amount at the time of linking. If the actual charge differs from the budgeted amount, only the difference affects your cash.",
+        linkingBullet2 = "If you delete a recurring expense, linked transactions keep their remembered amounts so your budget stays accurate.",
+        linkingBullet3 = "You can manually link or unlink transactions in the transaction edit dialog using the link buttons.",
         tipsTitle = "Tips",
         tip1 = "Add ALL recurring expenses, even small ones like streaming subscriptions. They add up and the budget calculator needs the full picture.",
         tip2 = "If an expense amount varies slightly (like a utility bill), use the average amount.",

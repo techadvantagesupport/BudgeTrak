@@ -262,6 +262,14 @@ fun RecurringExpensesHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.recurringExpensesHelp.matchBullet2)
             HelpBulletText(S.recurringExpensesHelp.matchBullet3)
             HelpBulletText(S.recurringExpensesHelp.matchBullet4)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            HelpSubSectionTitle(S.recurringExpensesHelp.linkingTitle)
+            HelpBodyText(S.recurringExpensesHelp.linkingBody)
+            Spacer(modifier = Modifier.height(4.dp))
+            HelpBulletText(S.recurringExpensesHelp.linkingBullet1)
+            HelpBulletText(S.recurringExpensesHelp.linkingBullet2)
+            HelpBulletText(S.recurringExpensesHelp.linkingBullet3)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDividerLine()

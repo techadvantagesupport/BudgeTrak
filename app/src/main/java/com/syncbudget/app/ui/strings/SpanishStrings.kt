@@ -849,6 +849,10 @@ object SpanishStrings : AppStrings {
         receiptPhotosRetentionTitle = "Retenci\u00f3n de Fotos",
         receiptPhotosRetentionBody = "El administrador puede establecer un per\u00edodo de retenci\u00f3n para eliminar autom\u00e1ticamente las fotos de recibos con cierta antig\u00fcedad. Esto ayuda a gestionar el almacenamiento en todos los dispositivos sincronizados.",
         receiptPhotosRetentionNote = "Cuando las fotos se eliminan por antig\u00fcedad, la eliminaci\u00f3n se sincroniza autom\u00e1ticamente a todos los dispositivos del grupo.",
+        receiptPhotosBullet4 = "Toca el icono de c\u00e1mara o elige desde la galer\u00eda para adjuntar fotos",
+        receiptPhotosBullet5 = "Las fotos se comprimen autom\u00e1ticamente para almacenamiento eficiente (m\u00e1x 1000px, ~250KB)",
+        receiptPhotosBullet6 = "En un grupo de sincronizaci\u00f3n, las fotos se encriptan y comparten entre dispositivos familiares",
+        receiptPhotosBullet7 = "Un administrador puede establecer un per\u00edodo de retenci\u00f3n \u2014 las fotos m\u00e1s antiguas que los d\u00edas configurados se eliminan autom\u00e1ticamente del almacenamiento en la nube",
         categoriesTitle = "Categor\u00edas",
         categoriesBody = "Las categor\u00edas te permiten clasificar tus transacciones para un mejor an\u00e1lisis de gastos. " +
             "Cada categor\u00eda tiene un nombre y un icono.",
@@ -1489,6 +1493,13 @@ object SpanishStrings : AppStrings {
         matchBullet2 = "Por ejemplo, \"State Farm\" coincidir\u00e1 con \"STATE FARM INSURANCE\" de tu banco",
         matchBullet3 = "La coincidencia busca subcadenas en com\u00fan, as\u00ed que coincidencias parciales funcionan",
         matchBullet4 = "El monto tambi\u00e9n debe estar dentro del 1% para que se active la coincidencia",
+        linkingTitle = "Vinculaci\u00f3n de Transacciones",
+        linkingBody = "Cuando una transacci\u00f3n bancaria coincide con un gasto recurrente, BudgeTrak " +
+            "las vincula. Las transacciones vinculadas ya est\u00e1n contabilizadas en tu presupuesto \u2014 " +
+            "no reducen tu efectivo disponible porque el gasto recurrente ya reserv\u00f3 ese monto.",
+        linkingBullet1 = "La app recuerda el monto presupuestado al momento de la vinculaci\u00f3n. Si el cargo real difiere del monto presupuestado, solo la diferencia afecta tu efectivo.",
+        linkingBullet2 = "Si eliminas un gasto recurrente, las transacciones vinculadas conservan sus montos recordados para que tu presupuesto siga siendo preciso.",
+        linkingBullet3 = "Puedes vincular o desvincular transacciones manualmente en el di\u00e1logo de edici\u00f3n de transacciones usando los botones de vinculaci\u00f3n.",
         tipsTitle = "Consejos",
         tip1 = "Agrega TODOS los gastos recurrentes, incluso los peque\u00f1os como suscripciones de streaming. Se acumulan y la calculadora necesita el panorama completo.",
         tip2 = "Si el monto de un gasto var\u00eda ligeramente (como una factura de servicios), usa el monto promedio.",

@@ -247,6 +247,10 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.settingsHelp.receiptPhotosBullet1)
             HelpBulletText(S.settingsHelp.receiptPhotosBullet2)
             HelpBulletText(S.settingsHelp.receiptPhotosBullet3)
+            HelpBulletText(S.settingsHelp.receiptPhotosBullet4)
+            HelpBulletText(S.settingsHelp.receiptPhotosBullet5)
+            HelpBulletText(S.settingsHelp.receiptPhotosBullet6)
+            HelpBulletText(S.settingsHelp.receiptPhotosBullet7)
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpSubSectionTitle(S.settingsHelp.receiptPhotosRetentionTitle)
