@@ -349,6 +349,15 @@ class MainActivity : ComponentActivity() {
             }
 
             fun saveTransactions() {
+                // Dedup by ID before saving — duplicates can accumulate from
+                // widget disk merge or "added during sync" preservation.
+                val deduped = transactions.groupBy { it.id }
+                    .values.map { group -> group.maxByOrNull { it.amount_clock } ?: group.first() }
+                if (deduped.size < transactions.size) {
+                    android.util.Log.w("MainActivity", "Deduped ${transactions.size - deduped.size} duplicate transactions")
+                    transactions.clear()
+                    transactions.addAll(deduped)
+                }
                 TransactionRepository.save(context, transactions.toList())
                 markSyncDirty()
             }

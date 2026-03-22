@@ -170,7 +170,8 @@ class SyncEngine(
     ): SyncResult {
         try {
             progressCallback = onProgress
-            syncLog("=== Sync started (device=$deviceId, syncVer=$lastSyncVersion, pushClock=$lastPushedClock) ===")
+            val inputClockSum = transactions.sumOf { IntegrityChecker.maxClock(it) }
+            syncLog("=== Sync started (device=$deviceId, syncVer=$lastSyncVersion, pushClock=$lastPushedClock, inputTxnClockSum=$inputClockSum) ===")
 
             val appPrefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
             val isPaidUser = appPrefs.getBoolean("isPaidUser", false) || appPrefs.getBoolean("isSubscriber", false)
@@ -490,7 +491,19 @@ class SyncEngine(
             // duplicate entries for the same epoch day.
             mergedPl = PeriodLedgerRepository.dedup(mergedPl).toMutableList()
 
-            syncLog("Merge complete: ${mergedTxns.size} txns, ${mergedRe.size} RE, ${mergedIs.size} IS, ${mergedCat.size} cats")
+            val postMergeClockSum = mergedTxns.sumOf { IntegrityChecker.maxClock(it) }
+            syncLog("Merge complete: ${mergedTxns.size} txns, ${mergedRe.size} RE, ${mergedIs.size} IS, ${mergedCat.size} cats (txnClockSum=$postMergeClockSum)")
+            // One-time: dump per-transaction maxClock to identify exactly which differ
+            if (!prefs.getBoolean("clock_dump_done", false)) {
+                val clockDump = mergedTxns.sortedBy { it.id }.joinToString("\n") { t ->
+                    "id=${t.id} max=${IntegrityChecker.maxClock(t)} src=${t.source_clock} amt=${t.amount_clock} dev=${t.deviceId.take(8)}"
+                }
+                try {
+                    java.io.File(BackupManager.getSupportDir(), "clock_dump.txt")
+                        .writeText("=== Clock dump ${java.time.LocalDateTime.now()} device=$deviceId ===\n$clockDump\n")
+                } catch (_: Exception) {}
+                prefs.edit().putBoolean("clock_dump_done", true).apply()
+            }
 
             // Step 5: Remap category IDs in transactions (handles different random IDs per device)
             // Only Transaction has categoryAmounts with categoryId references.

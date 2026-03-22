@@ -117,7 +117,14 @@ object IntegrityChecker {
         var totalIdXor = 0
         var totalClockSum = 0L
 
-        for (item in list) {
+        // Dedup by ID — keep the entry with the highest maxClock.
+        // Duplicates in the in-memory list (from widget merge or
+        // "added during sync" preservation) would inflate the clock
+        // sum and cause permanent phantom divergence.
+        val deduped = list.groupBy { getId(it) }
+            .values.map { group -> group.maxByOrNull { getMaxClock(it) } ?: group.first() }
+
+        for (item in deduped) {
             val id = getId(item)
             val clk = getMaxClock(item)
             val seg = (id and 0x7FFFFFFF) % SEGMENT_COUNT  // non-negative modulo
