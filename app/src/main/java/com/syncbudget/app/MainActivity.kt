@@ -639,6 +639,29 @@ class MainActivity : ComponentActivity() {
                     }
                 } catch (e: Exception) { android.util.Log.e("Migration", "dedup_transactions failed", e) }
 
+                // One-time migration: stamp clocks on categories with clock=0
+                // (created by earlier builds before clock-stamping was added)
+                try {
+                    if (!syncPrefs.getBoolean("migration_stamp_category_clocks", false)) {
+                        val catClk = lamportClock.tick()
+                        val devId = SyncIdGenerator.getOrCreateDeviceId(context)
+                        var catChanged = false
+                        categories.forEachIndexed { i, cat ->
+                            if (cat.name_clock == 0L && cat.name.isNotEmpty()) {
+                                categories[i] = cat.copy(
+                                    deviceId = if (cat.deviceId.isEmpty()) devId else cat.deviceId,
+                                    name_clock = catClk, iconName_clock = catClk, tag_clock = catClk,
+                                    charted_clock = catClk, widgetVisible_clock = catClk,
+                                    deviceId_clock = catClk, deleted_clock = catClk
+                                )
+                                catChanged = true
+                            }
+                        }
+                        if (catChanged) saveCategories()
+                        syncPrefs.edit().putBoolean("migration_stamp_category_clocks", true).apply()
+                    }
+                } catch (e: Exception) { android.util.Log.e("Migration", "stamp_category_clocks failed", e) }
+
                 // One-time migration: assign "supercharge" category to existing
                 // savings goal deposit transactions (identified by "Savings: " source prefix).
                 try {
