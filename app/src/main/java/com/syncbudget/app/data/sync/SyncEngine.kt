@@ -802,24 +802,25 @@ class SyncEngine(
             // One-time cooldown reset after rescue gating fix (v3).
             // Previous continuous rescue caused clock divergences that put
             // repair into permanent cooldown. Reset so repair can try again.
-            if (!prefs.getBoolean("repair_cooldown_reset_v5", false)) {
+            if (!prefs.getBoolean("repair_cooldown_reset_v6", false)) {
                 consecutiveRepairCount = 0
                 lastRepairSignature = ""
-                prefs.edit().putBoolean("repair_cooldown_reset_v5", true).apply()
+                prefs.edit().putBoolean("repair_cooldown_reset_v6", true).apply()
                 syncLog("Repair cooldown reset (post-rescue-gating)")
             }
             val runIntegrityCheck = now - lastIntegrityCheckTime > INTEGRITY_CHECK_INTERVAL_MS &&
                 localDeltas.isEmpty() && packets.isEmpty()
-            val fpJson = if (runIntegrityCheck) {
-                try {
-                    val fp = IntegrityChecker.computeFingerprint(
-                        deviceId, newSyncVersion,
-                        mergedTxns, mergedRe, mergedIs, mergedSg,
-                        mergedAe, mergedCat, mergedPl, mergedSettings
-                    )
-                    IntegrityChecker.toJson(fp).toString()
-                } catch (_: Exception) { null }
-            } else null
+            // Always publish fingerprint so other devices see current state
+            // after merging repair deltas.  The 30min gate only controls
+            // whether we COMPARE fingerprints, not whether we publish ours.
+            val fpJson = try {
+                val fp = IntegrityChecker.computeFingerprint(
+                    deviceId, newSyncVersion,
+                    mergedTxns, mergedRe, mergedIs, mergedSg,
+                    mergedAe, mergedCat, mergedPl, mergedSettings
+                )
+                IntegrityChecker.toJson(fp).toString()
+            } catch (_: Exception) { null }
             // Read upload speed from receipt sync prefs for reporting
             val receiptPrefs = context.getSharedPreferences("receipt_sync_prefs", android.content.Context.MODE_PRIVATE)
             val uploadSpeedBps = receiptPrefs.getLong("lastUploadSpeedBps", 0L)
