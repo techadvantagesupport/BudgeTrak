@@ -815,12 +815,30 @@ class SyncEngine(
                     .apply()
                 syncLog("Full re-sync: lastPushedClock reset to 0 + cooldown cleared (v7)")
             }
-            // Run integrity check every cycle UNLESS we just pushed deltas
-            // (other device needs one cycle to merge before comparison).
-            // After a repair, don't re-check until the remote device's
-            // fingerprint changes (proves they synced and merged our repair).
-            val lastRemoteFpSig = prefs.getString("lastRemoteFpSignature", "") ?: ""
-            val runIntegrityCheck = deltasPushed == 0
+            // Run integrity check every cycle UNLESS:
+            // 1. We just pushed normal deltas (other device hasn't merged)
+            // 2. We're waiting for remote to process our last repair
+            //    (tracked by lastRemoteFpSignature — cleared when their fp changes)
+            var lastRemoteFpSig = prefs.getString("lastRemoteFpSignature", "") ?: ""
+            // If waiting for remote to process our repair, check if their
+            // fingerprint has changed (meaning they synced).
+            if (lastRemoteFpSig.isNotEmpty() && deltasPushed == 0) {
+                try {
+                    val devices = FirestoreService.getDevices(groupId)
+                    for (device in devices) {
+                        if (device.deviceId == deviceId || device.fingerprintData == null) continue
+                        val currentSig = "${device.deviceId}:${device.fingerprintSyncVersion}:${device.fingerprintData.hashCode()}"
+                        if (currentSig != lastRemoteFpSig) {
+                            syncLog("Remote fingerprint changed — re-enabling integrity check")
+                            lastRemoteFpSig = ""
+                            prefs.edit().putString("lastRemoteFpSignature", "").apply()
+                        }
+                        break
+                    }
+                } catch (_: Exception) {}
+            }
+            val waitingForRemoteRepair = lastRemoteFpSig.isNotEmpty()
+            val runIntegrityCheck = deltasPushed == 0 && !waitingForRemoteRepair
             // Always publish fingerprint so other devices see current state
             // after merging repair deltas.  The 30min gate only controls
             // whether we COMPARE fingerprints, not whether we publish ours.
