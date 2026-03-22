@@ -5,6 +5,7 @@ object EnglishStrings : AppStrings {
     override val defaultCategoryNames = DefaultCategoryNames(
         other = "Other",
         recurringIncome = "Recurring Income",
+        supercharge = "Supercharge",
         transportation = "Transportation/Gas",
         groceries = "Groceries",
         entertainment = "Entertainment",
@@ -863,10 +864,11 @@ object EnglishStrings : AppStrings {
             "Uncheck categories you wouldn't normally enter from the widget (e.g., Recurring Income, Mortgage) " +
             "to keep the category picker clean and fast.",
         defaultCategoriesTitle = "Default Categories",
-        defaultCategoriesBody = "Two categories are protected and cannot be deleted or renamed:",
+        defaultCategoriesBody = "Three categories are protected and cannot be deleted or renamed:",
         catOther = "Other \u2014 the default fallback category for uncategorized transactions",
         catRecurring = "Recurring Income \u2014 auto-assigned to transactions matched as budget income",
         catAmortization = "",
+        catSupercharge = "Supercharge \u2014 auto-assigned to savings goal deposit transactions. Hidden from the category picker.",
         addCategoryTitle = "Adding a Category",
         addCategoryBody = "Tap \"Add Category\" to create a new category. Enter a name and choose an icon " +
             "from the icon grid. Icons are displayed as a visual grid you can scroll through.",

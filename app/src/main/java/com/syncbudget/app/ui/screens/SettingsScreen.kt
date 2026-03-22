@@ -1022,7 +1022,7 @@ fun SettingsScreen(
             }
 
             items(categories) { category ->
-                val isProtected = category.tag in setOf("other", "recurring_income")
+                val isProtected = category.tag in setOf("other", "recurring_income", "supercharge")
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1056,8 +1056,9 @@ fun SettingsScreen(
                         )
                     )
                     Checkbox(
-                        checked = category.widgetVisible,
-                        onCheckedChange = { onToggleWidgetVisible(category) },
+                        checked = if (category.tag == "supercharge") false else category.widgetVisible,
+                        onCheckedChange = if (category.tag == "supercharge") null else ({ onToggleWidgetVisible(category) }),
+                        enabled = category.tag != "supercharge",
                         colors = CheckboxDefaults.colors(
                             checkedColor = MaterialTheme.colorScheme.primary,
                             uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
@@ -1305,7 +1306,7 @@ private fun EditCategoryDialog(
                         .verticalScroll(editScrollState)
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
-                    if (category.tag !in setOf("other", "recurring_income")) {
+                    if (category.tag !in setOf("other", "recurring_income", "supercharge")) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End

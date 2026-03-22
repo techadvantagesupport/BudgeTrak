@@ -4,11 +4,17 @@ import com.syncbudget.app.ui.strings.AppStrings
 import com.syncbudget.app.ui.strings.EnglishStrings
 import com.syncbudget.app.ui.strings.SpanishStrings
 
-data class DefaultCategoryDef(val tag: String, val iconName: String)
+data class DefaultCategoryDef(
+    val tag: String,
+    val iconName: String,
+    val charted: Boolean = true,
+    val widgetVisible: Boolean = true
+)
 
 val DEFAULT_CATEGORY_DEFS = listOf(
     DefaultCategoryDef("other", "CreditCard"),
     DefaultCategoryDef("recurring_income", "Payments"),
+    DefaultCategoryDef("supercharge", "Bolt", charted = true, widgetVisible = false),
     DefaultCategoryDef("transportation", "DirectionsCar"),
     DefaultCategoryDef("groceries", "LocalGroceryStore"),
     DefaultCategoryDef("entertainment", "SportsEsports"),
@@ -23,6 +29,7 @@ fun getDefaultCategoryName(tag: String, strings: AppStrings): String? {
     return when (tag) {
         "other" -> names.other
         "recurring_income" -> names.recurringIncome
+        "supercharge" -> names.supercharge
         "transportation" -> names.transportation
         "groceries" -> names.groceries
         "entertainment" -> names.entertainment

@@ -3,6 +3,7 @@ package com.syncbudget.app.ui.strings
 data class DefaultCategoryNames(
     val other: String,
     val recurringIncome: String,
+    val supercharge: String,
     val transportation: String,
     val groceries: String,
     val entertainment: String,
@@ -813,6 +814,7 @@ data class SettingsHelpStrings(
     val catOther: String,
     val catRecurring: String,
     val catAmortization: String,
+    val catSupercharge: String,
     val addCategoryTitle: String,
     val addCategoryBody: String,
     val editCategoryTitle: String,

@@ -5,6 +5,7 @@ object SpanishStrings : AppStrings {
     override val defaultCategoryNames = DefaultCategoryNames(
         other = "Otros",
         recurringIncome = "Ingreso Recurrente",
+        supercharge = "Supercharge",
         transportation = "Transporte/Gasolina",
         groceries = "Supermercado",
         entertainment = "Entretenimiento",
@@ -862,10 +863,11 @@ object SpanishStrings : AppStrings {
             "Desmarca categor\u00edas que normalmente no ingresar\u00edas desde el widget (ej. Ingreso Recurrente, Hipoteca) " +
             "para mantener el selector de categor\u00edas limpio y r\u00e1pido.",
         defaultCategoriesTitle = "Categor\u00edas predeterminadas",
-        defaultCategoriesBody = "Dos categor\u00edas est\u00e1n protegidas y no se pueden eliminar ni renombrar:",
+        defaultCategoriesBody = "Tres categor\u00edas est\u00e1n protegidas y no se pueden eliminar ni renombrar:",
         catOther = "Otros \u2014 la categor\u00eda predeterminada para transacciones sin clasificar",
         catRecurring = "Ingreso recurrente \u2014 asignada autom\u00e1ticamente a transacciones reconocidas como ingreso presupuestado",
         catAmortization = "",
+        catSupercharge = "Supercharge \u2014 asignada autom\u00e1ticamente a transacciones de dep\u00f3sito de metas de ahorro. Oculta del selector de categor\u00edas.",
         addCategoryTitle = "Agregar una categor\u00eda",
         addCategoryBody = "Toca \"Agregar categor\u00eda\" para crear una nueva. Escribe un nombre y elige un icono " +
             "de la cuadr\u00edcula de iconos. Los iconos se muestran en una cuadr\u00edcula visual por la que puedes desplazarte.",

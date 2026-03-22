@@ -317,6 +317,9 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             if (S.settingsHelp.catRecurring.isNotEmpty()) {
                 HelpBulletText(S.settingsHelp.catRecurring)
             }
+            if (S.settingsHelp.catSupercharge.isNotEmpty()) {
+                HelpBulletText(S.settingsHelp.catSupercharge)
+            }
             Spacer(modifier = Modifier.height(10.dp))
 
             HelpSubSectionTitle(S.settingsHelp.addCategoryTitle)

@@ -318,7 +318,8 @@ val CATEGORY_ICON_MAP: Map<String, ImageVector> = linkedMapOf(
     "Category" to Icons.Filled.Category,
     "MoreHoriz" to Icons.Filled.MoreHoriz,
     "AllInclusive" to Icons.Filled.AllInclusive,
-    "Key" to Icons.Filled.Key
+    "Key" to Icons.Filled.Key,
+    "Bolt" to Icons.Filled.Bolt
 )
 
 fun getCategoryIcon(iconName: String): ImageVector {

@@ -23,7 +23,8 @@ object TranslationContext {
         "homeSupplies" to "Budget category label for household items (cleaning products, paper goods). Noun phrase, used as a category name.",
         "restaurants" to "Budget category label for dining out at restaurants or ordering food delivery. Noun, used as a category name.",
         "charity" to "Budget category label for charitable donations and giving. Noun, used as a category name.",
-        "clothes" to "Budget category label for clothing and apparel purchases. Noun, used as a category name."
+        "clothes" to "Budget category label for clothing and apparel purchases. Noun, used as a category name.",
+        "supercharge" to "Brand feature name for savings goal accelerator deposits. Do not translate."
     )
 
     // ── Common Strings ──

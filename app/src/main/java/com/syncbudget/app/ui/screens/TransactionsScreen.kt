@@ -620,7 +620,7 @@ fun TransactionsScreen(
 
     // Filter and sort transactions (no remember — SnapshotStateList mutations trigger recomposition)
     val filteredTransactions = run {
-        var list = transactions.filter { !it.source.startsWith("Savings: ") }
+        var list = transactions.toList()
         list = when (viewFilter) {
             ViewFilter.EXPENSES -> list.filter { it.type == TransactionType.EXPENSE }
             ViewFilter.INCOME -> list.filter { it.type == TransactionType.INCOME }
@@ -3030,6 +3030,9 @@ fun TransactionDialog(
     val context = LocalContext.current
     val toastState = LocalAppToast.current
     val isEdit = editTransaction != null
+    val isSupercharge = editTransaction?.categoryAmounts?.any { ca ->
+        categories.find { it.id == ca.categoryId }?.tag == "supercharge"
+    } ?: false
     var selectedDate by remember {
         mutableStateOf(editTransaction?.date ?: LocalDate.now())
     }
@@ -3623,6 +3626,7 @@ fun TransactionDialog(
                             value = source,
                             onValueChange = { source = it },
                             label = { Text(sourceLabel) },
+                            enabled = !isSupercharge,
                             isError = showValidation && source.isBlank(),
                             supportingText = if (showValidation && source.isBlank()) ({
                                 Text(S.transactions.requiredMerchantExample, color = Color(0xFFF44336))
@@ -3670,7 +3674,10 @@ fun TransactionDialog(
                     )
 
                     // Link to recurring/amortization/income entry
-                    if (isExpense) {
+                    // Hidden entirely for supercharge transactions (linking is locked)
+                    if (isSupercharge) {
+                        // No linking UI for supercharge transactions
+                    } else if (isExpense) {
                         if (linkedRecurringId != null) {
                             val linkedName = recurringExpenses.find { it.id == linkedRecurringId }?.source ?: "?"
                             Row(
@@ -3801,7 +3808,8 @@ fun TransactionDialog(
 
                     // Category selector — button that opens picker dialog
                     // Hidden when linked to income (auto-set to recurring_income)
-                    if (categories.isNotEmpty() && linkedIncomeId == null) {
+                    // Hidden for supercharge transactions (category is locked)
+                    if (categories.isNotEmpty() && linkedIncomeId == null && !isSupercharge) {
                         val categoryError = showValidation && selectedCats.isEmpty()
                         Row(
                             modifier = Modifier
@@ -4202,39 +4210,41 @@ fun TransactionDialog(
                                 )
                             }
                         }
-                        var thumbYPx by remember { mutableIntStateOf(0) }
-                        IconButton(
-                            onClick = {
-                                verified = !verified
-                                val msg = if (verified) S.transactions.verifiedToast else S.transactions.unverifiedToast
-                                toastState.show(msg, thumbYPx)
-                            },
-                            modifier = Modifier.onGloballyPositioned { coords ->
-                                thumbYPx = coords.positionInWindow().y.toInt()
+                        if (!isSupercharge) {
+                            var thumbYPx by remember { mutableIntStateOf(0) }
+                            IconButton(
+                                onClick = {
+                                    verified = !verified
+                                    val msg = if (verified) S.transactions.verifiedToast else S.transactions.unverifiedToast
+                                    toastState.show(msg, thumbYPx)
+                                },
+                                modifier = Modifier.onGloballyPositioned { coords ->
+                                    thumbYPx = coords.positionInWindow().y.toInt()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (verified) Icons.Filled.ThumbUpAlt else Icons.Filled.QuestionMark,
+                                    contentDescription = S.transactions.verifiedToast,
+                                    tint = if (verified) Color(0xFF2E7D32) else Color(0xFFF44336)
+                                )
                             }
-                        ) {
-                            Icon(
-                                imageVector = if (verified) Icons.Filled.ThumbUpAlt else Icons.Filled.QuestionMark,
-                                contentDescription = S.transactions.verifiedToast,
-                                tint = if (verified) Color(0xFF2E7D32) else Color(0xFFF44336)
-                            )
-                        }
-                        var excludeYPx by remember { mutableIntStateOf(0) }
-                        IconButton(
-                            onClick = {
-                                excludeFromBudget = !excludeFromBudget
-                                val msg = if (excludeFromBudget) S.transactions.excludedToast else S.transactions.includedToast
-                                toastState.show(msg, excludeYPx)
-                            },
-                            modifier = Modifier.onGloballyPositioned { coords ->
-                                excludeYPx = coords.positionInWindow().y.toInt()
+                            var excludeYPx by remember { mutableIntStateOf(0) }
+                            IconButton(
+                                onClick = {
+                                    excludeFromBudget = !excludeFromBudget
+                                    val msg = if (excludeFromBudget) S.transactions.excludedToast else S.transactions.includedToast
+                                    toastState.show(msg, excludeYPx)
+                                },
+                                modifier = Modifier.onGloballyPositioned { coords ->
+                                    excludeYPx = coords.positionInWindow().y.toInt()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (excludeFromBudget) Icons.Filled.Block else Icons.Filled.Check,
+                                    contentDescription = S.transactions.excludedToast,
+                                    tint = if (excludeFromBudget) Color(0xFFF44336) else Color(0xFF2E7D32)
+                                )
                             }
-                        ) {
-                            Icon(
-                                imageVector = if (excludeFromBudget) Icons.Filled.Block else Icons.Filled.Check,
-                                contentDescription = S.transactions.excludedToast,
-                                tint = if (excludeFromBudget) Color(0xFFF44336) else Color(0xFF2E7D32)
-                            )
                         }
                         Spacer(modifier = Modifier.weight(1f))
                         DialogSecondaryButton(onClick = dismissWithCleanup) { Text(S.common.cancel) }
@@ -4384,7 +4394,7 @@ fun TransactionDialog(
                     modifier = Modifier.verticalScroll(catPickerScrollState),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    categories.forEach { cat ->
+                    categories.filter { it.tag != "supercharge" }.forEach { cat ->
                         val isSelected = selectedCategoryIds[cat.id] == true
                         Row(
                             modifier = Modifier

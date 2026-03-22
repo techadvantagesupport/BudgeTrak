@@ -300,7 +300,7 @@ class MainActivity : ComponentActivity() {
                     var id: Int
                     do { id = (0..65535).random() } while (id in usedIds)
                     val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
-                    loaded.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag))
+                    loaded.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag, charted = def.charted, widgetVisible = def.widgetVisible))
                     changed = true
                 }
                 if (changed) CategoryRepository.save(context, loaded)
@@ -631,6 +631,29 @@ class MainActivity : ComponentActivity() {
                         syncPrefs.edit().putBoolean("migration_dedup_transactions", true).apply()
                     }
                 } catch (e: Exception) { android.util.Log.e("Migration", "dedup_transactions failed", e) }
+
+                // One-time migration: assign "supercharge" category to existing
+                // savings goal deposit transactions (identified by "Savings: " source prefix).
+                try {
+                    if (!syncPrefs.getBoolean("migration_supercharge_category", false)) {
+                        val superchargeCatId = categories.find { it.tag == "supercharge" }?.id
+                        if (superchargeCatId != null) {
+                            var changed = false
+                            val migClock = lamportClock.tick()
+                            transactions.forEachIndexed { i, txn ->
+                                if (txn.source.startsWith("Savings: ") && txn.categoryAmounts.isEmpty()) {
+                                    transactions[i] = txn.copy(
+                                        categoryAmounts = listOf(CategoryAmount(superchargeCatId, txn.amount)),
+                                        categoryAmounts_clock = migClock
+                                    )
+                                    changed = true
+                                }
+                            }
+                            if (changed) saveTransactions()
+                        }
+                        syncPrefs.edit().putBoolean("migration_supercharge_category", true).apply()
+                    }
+                } catch (e: Exception) { android.util.Log.e("Migration", "supercharge_category failed", e) }
 
                 recomputeCash()
 
@@ -2383,8 +2406,9 @@ class MainActivity : ComponentActivity() {
                             if (deposits.isNotEmpty()) {
                                 saveSavingsGoals()
                                 // Create internal expense transactions so recomputeAvailableCash
-                                // reflects the immediate cash outflow. These are hidden from the
-                                // transaction list (filtered by "Savings: " source prefix).
+                                // reflects the immediate cash outflow. Categorized as "supercharge"
+                                // so they are visible via the category but hidden from the category picker.
+                                val superchargeCatId = categories.find { it.tag == "supercharge" }?.id
                                 val currentIds = transactions.map { it.id }.toSet()
                                 for ((goalName, depositAmount) in deposits) {
                                     val txn = Transaction(
@@ -2392,7 +2416,8 @@ class MainActivity : ComponentActivity() {
                                         source = "Savings: $goalName",
                                         amount = depositAmount,
                                         date = LocalDate.now(),
-                                        type = TransactionType.EXPENSE
+                                        type = TransactionType.EXPENSE,
+                                        categoryAmounts = if (superchargeCatId != null) listOf(CategoryAmount(superchargeCatId, depositAmount)) else emptyList()
                                     )
                                     addTransactionWithBudgetEffect(txn)
                                 }

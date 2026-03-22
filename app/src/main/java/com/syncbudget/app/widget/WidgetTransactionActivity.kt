@@ -450,7 +450,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    categories.forEach { cat ->
+                                    categories.filter { it.tag != "supercharge" }.forEach { cat ->
                                         val isSelected = selectedCategoryIds[cat.id] == true
                                         Box(
                                             modifier = Modifier
