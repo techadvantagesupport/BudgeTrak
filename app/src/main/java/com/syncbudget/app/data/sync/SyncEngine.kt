@@ -852,21 +852,17 @@ class SyncEngine(
             // Always publish fingerprint so other devices see current state
             // after merging repair deltas.  The 30min gate only controls
             // whether we COMPARE fingerprints, not whether we publish ours.
-            // Dedup categories by tag for fingerprint — when two devices
-            // independently create the same tagged category (different IDs),
-            // keep only one per tag (lowest ID) so both devices compute the
-            // same fingerprint regardless of which ID they kept locally.
-            val fpCategories = mergedCat
-                .filter { it.id !in catIdRemap }  // exclude remapped duplicates
-                .let { cats ->
-                    // For tagged categories, keep only the lowest-ID one per tag
-                    // so both devices agree on which ID represents each tag.
-                    val tagSeen = mutableSetOf<String>()
-                    val byTag = cats.filter { it.tag.isNotEmpty() }
-                        .groupBy { it.tag }
-                        .flatMap { (_, group) -> listOf(group.minByOrNull { it.id }!!) }
-                    val untagged = cats.filter { it.tag.isEmpty() }
-                    byTag + untagged
+            // For category fingerprint: exclude remapped duplicates and use
+            // tag hash as stable ID for tagged categories.  This ensures both
+            // devices produce the same fingerprint even if they assigned
+            // different random IDs to the same tagged category.
+            val fpCategories = mergedCat.filter { it.id !in catIdRemap }
+                .map { cat ->
+                    if (cat.tag.isNotEmpty()) {
+                        // Replace random ID with deterministic tag hash so both
+                        // devices use the same ID for the same tagged category
+                        cat.copy(id = cat.tag.hashCode() and 0x7FFFFFFF)
+                    } else cat
                 }
             val fpJson = try {
                 val fp = IntegrityChecker.computeFingerprint(
