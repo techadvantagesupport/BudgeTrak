@@ -300,7 +300,14 @@ class MainActivity : ComponentActivity() {
                     var id: Int
                     do { id = (0..65535).random() } while (id in usedIds)
                     val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
-                    loaded.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag, charted = def.charted, widgetVisible = def.widgetVisible))
+                    val defClock = lamportClock.tick()
+                    val devId = SyncIdGenerator.getOrCreateDeviceId(context)
+                    loaded.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag,
+                        charted = def.charted, widgetVisible = def.widgetVisible,
+                        deviceId = devId,
+                        name_clock = defClock, iconName_clock = defClock, tag_clock = defClock,
+                        charted_clock = defClock, widgetVisible_clock = defClock,
+                        deviceId_clock = defClock, deleted_clock = defClock))
                     changed = true
                 }
                 if (changed) CategoryRepository.save(context, loaded)
