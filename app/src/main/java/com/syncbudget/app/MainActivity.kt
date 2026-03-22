@@ -2649,6 +2649,16 @@ class MainActivity : ComponentActivity() {
                                         writeDiagToMediaStore("sync_log_${sanitized}.txt", syncLogText)
                                     }
 
+                                    // 2b. Capture logcat to file (app can read its own logs)
+                                    try {
+                                        val logcatProcess = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "1000"))
+                                        val logcatText = logcatProcess.inputStream.bufferedReader().readText()
+                                        logcatProcess.waitFor()
+                                        writeDiagToMediaStore("logcat_${sanitized}.txt", logcatText)
+                                    } catch (e: Exception) {
+                                        android.util.Log.w("DumpDebug", "Logcat capture failed: ${e.message}")
+                                    }
+
                                     val gId = syncGroupId
                                     if (gId != null) {
                                         // 3. Upload own files
@@ -2663,14 +2673,21 @@ class MainActivity : ComponentActivity() {
                                         // 4b. Send FCM push to wake up remote devices
                                         try {
                                             val fcmTokens = FirestoreService.getFcmTokens(gId, localDeviceId)
+                                            val supportDir = BackupManager.getSupportDir()
+                                            val debugLog = java.io.File(supportDir, "fcm_debug.txt")
+                                            debugLog.appendText("[${java.time.LocalDateTime.now()}] FCM tokens found: ${fcmTokens.size}\n")
                                             for (token in fcmTokens) {
-                                                FcmSender.sendDebugRequest(context, token)
+                                                debugLog.appendText("  token: ${token.take(20)}...\n")
+                                                val sent = FcmSender.sendDebugRequest(context, token)
+                                                debugLog.appendText("  result: $sent, error: ${FcmSender.lastError}\n")
                                             }
-                                            if (fcmTokens.isNotEmpty()) {
-                                                android.util.Log.d("DumpDebug", "FCM push sent to ${fcmTokens.size} device(s)")
+                                            if (fcmTokens.isEmpty()) {
+                                                debugLog.appendText("  No FCM tokens found for remote devices\n")
                                             }
                                         } catch (e: Exception) {
-                                            android.util.Log.w("DumpDebug", "FCM push failed (non-fatal): ${e.message}")
+                                            val supportDir = BackupManager.getSupportDir()
+                                            java.io.File(supportDir, "fcm_debug.txt")
+                                                .appendText("[${java.time.LocalDateTime.now()}] FCM exception: ${e.javaClass.simpleName}: ${e.message}\n")
                                         }
 
                                         // 5. Poll for remote files (wait up to 90s for other devices)

@@ -815,8 +815,12 @@ class SyncEngine(
                     .apply()
                 syncLog("Full re-sync: lastPushedClock reset to 0 + cooldown cleared (v7)")
             }
-            val runIntegrityCheck = now - lastIntegrityCheckTime > INTEGRITY_CHECK_INTERVAL_MS &&
-                localDeltas.isEmpty() && packets.isEmpty()
+            // Run integrity check every cycle UNLESS we just pushed deltas
+            // (other device needs one cycle to merge before comparison).
+            // After a repair, don't re-check until the remote device's
+            // fingerprint changes (proves they synced and merged our repair).
+            val lastRemoteFpSig = prefs.getString("lastRemoteFpSignature", "") ?: ""
+            val runIntegrityCheck = deltasPushed == 0
             // Always publish fingerprint so other devices see current state
             // after merging repair deltas.  The 30min gate only controls
             // whether we COMPARE fingerprints, not whether we publish ours.
@@ -935,7 +939,10 @@ class SyncEngine(
                 android.util.Log.w("SyncEngine", "Failed to check/resolve admin claim", e)
             }
 
-            // Step 10.5: Periodic integrity check — compare fingerprints
+            // Step 10.5: Integrity check — compare fingerprints every cycle
+            // Skip only when we just pushed deltas (other device hasn't merged).
+            // After a repair, wait until the remote's fingerprint changes (proves
+            // they synced) before re-checking — replaces the old cooldown timer.
             var didRepair = false
             if (runIntegrityCheck && fpJson != null) {
                 try {
@@ -947,7 +954,17 @@ class SyncEngine(
                         if (device.deviceId == deviceId) continue
                         val name = device.deviceName.ifEmpty { device.deviceId.take(8) }
                         if (device.fingerprintData == null) continue
+                        // Build a signature of this device's remote fingerprint
+                        // to detect when they've synced since our last repair.
+                        val remoteFpSig = "${device.deviceId}:${device.fingerprintSyncVersion}:${device.fingerprintData.hashCode()}"
                         if (device.fingerprintSyncVersion != newSyncVersion) {
+                            // Remote is at a different sync version — check if
+                            // their fingerprint changed since our last repair.
+                            // If unchanged, they haven't synced yet — skip.
+                            if (lastRemoteFpSig.isNotEmpty() && remoteFpSig == lastRemoteFpSig) {
+                                syncLog("Integrity wait $name: fingerprint unchanged since last repair")
+                                continue
+                            }
                             syncLog("Integrity skip $name: syncVer mismatch " +
                                 "(local=$newSyncVersion, remote=${device.fingerprintSyncVersion})")
                             continue
@@ -961,34 +978,14 @@ class SyncEngine(
                         } else {
                             syncLog("Integrity OK with $name")
                             anyOk = true
+                            // Clear saved signature — divergence resolved
+                            prefs.edit().putString("lastRemoteFpSignature", "").apply()
                         }
                     }
 
                     // Execute surgical repair if any divergence was found
                     val merged = IntegrityChecker.mergeRepairs(allReports)
                     if (merged.isNotEmpty()) {
-                        // Compute repair signature to detect repeated identical repairs
-                        val repairSig = merged.joinToString("|") { action ->
-                            "${action.collection}:${action.recordIds.sorted().joinToString(",")}"
-                        }
-                        val shouldRepair = if (repairSig == lastRepairSignature) {
-                            consecutiveRepairCount++
-                            if (consecutiveRepairCount >= 3) {
-                                // Same divergence keeps reappearing — other device likely
-                                // needs a code update. Stop retrying to avoid infinite loop.
-                                syncLog("  REPAIR COOLDOWN: same divergence detected $consecutiveRepairCount consecutive times, skipping (other device may need update)")
-                                false
-                            } else {
-                                syncLog("  REPAIR: repeat #$consecutiveRepairCount of same divergence")
-                                true
-                            }
-                        } else {
-                            consecutiveRepairCount = 1
-                            lastRepairSignature = repairSig
-                            true
-                        }
-
-                        if (shouldRepair) {
                             val repairDeltas = mutableListOf<RecordDelta>()
                             for (action in merged) {
                                 when (action.collection) {
@@ -1058,8 +1055,7 @@ class SyncEngine(
                                 }
                             }
                             if (repairDeltas.isNotEmpty()) {
-                                // No cap — chunk into 200-record batches (same as
-                                // normal push) so even 10K-record repairs are safe.
+                                // No cap — chunk into 200-record batches
                                 syncLog("  REPAIR pushing ${repairDeltas.size} records in ${(repairDeltas.size + 199) / 200} chunk(s)")
                                 val repairChunks = repairDeltas.chunked(200)
                                 for ((ci, chunk) in repairChunks.withIndex()) {
@@ -1077,13 +1073,18 @@ class SyncEngine(
                                 syncLog("  REPAIR push complete")
                                 deltasPushed += repairDeltas.size
                                 didRepair = true
-                                // Skip the next integrity check to give remote device
-                                // time to merge repair deltas and update fingerprint.
-                                // Without this, the same stale fingerprint triggers
-                                // cooldown before repair has a chance to converge.
-                                lastIntegrityCheckTime = now + INTEGRITY_CHECK_INTERVAL_MS
 
-                                // Advance lastPushedClock after repair (same as normal push)
+                                // Save remote fingerprint signature so we don't
+                                // re-check until they've actually synced and updated.
+                                for (device in devices) {
+                                    if (device.deviceId != deviceId && device.fingerprintData != null) {
+                                        val sig = "${device.deviceId}:${device.fingerprintSyncVersion}:${device.fingerprintData.hashCode()}"
+                                        prefs.edit().putString("lastRemoteFpSignature", sig).apply()
+                                        break
+                                    }
+                                }
+
+                                // Advance lastPushedClock after repair
                                 val maxRepairClock = repairDeltas
                                     .maxOfOrNull { delta ->
                                         delta.fields.values.maxOfOrNull { it.clock } ?: 0L
@@ -1095,16 +1096,13 @@ class SyncEngine(
                                     lamportClock.merge(maxRepairClock)
                                 }
                             }
-                        }
                     } else {
-                        // No divergence — clear cooldown state
-                        if (consecutiveRepairCount > 0) {
-                            syncLog("  Divergence resolved after $consecutiveRepairCount repair(s)")
-                            consecutiveRepairCount = 0
-                            lastRepairSignature = ""
+                        // No divergence — clear saved fingerprint signature
+                        if (lastRemoteFpSig.isNotEmpty()) {
+                            syncLog("  Divergence resolved")
+                            prefs.edit().putString("lastRemoteFpSignature", "").apply()
                         }
                     }
-                    lastIntegrityCheckTime = now
                 } catch (e: Exception) {
                     syncLog("Integrity check failed: ${e.message}")
                 }

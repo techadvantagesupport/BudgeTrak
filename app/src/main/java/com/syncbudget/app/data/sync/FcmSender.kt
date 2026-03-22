@@ -21,7 +21,11 @@ object FcmSender {
     private var tokenExpiry: Long = 0L
 
     /** Send a data-only FCM message to wake up a device for debug upload. */
+    var lastError: String? = null
+        private set
+
     suspend fun sendDebugRequest(context: Context, targetFcmToken: String): Boolean {
+        lastError = null
         return try {
             val accessToken = getAccessToken(context)
             val message = JSONObject().apply {
@@ -51,10 +55,12 @@ object FcmSender {
                 true
             } else {
                 val error = conn.errorStream?.bufferedReader()?.readText() ?: "unknown"
+                lastError = "HTTP $code: $error"
                 Log.w(TAG, "FCM send failed ($code): $error")
                 false
             }
         } catch (e: Exception) {
+            lastError = "${e.javaClass.simpleName}: ${e.message}"
             Log.e(TAG, "FCM send error: ${e.message}")
             false
         }
