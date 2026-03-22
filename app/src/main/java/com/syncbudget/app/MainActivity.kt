@@ -618,6 +618,20 @@ class MainActivity : ComponentActivity() {
                     }
                 } catch (e: Exception) { android.util.Log.e("Migration", "add_savings_goal_fields failed", e) }
 
+                // One-time dedup: remove duplicate transactions that accumulated
+                // from widget disk merge or "added during sync" preservation.
+                try {
+                    if (!syncPrefs.getBoolean("migration_dedup_transactions", false)) {
+                        val before = transactions.size
+                        saveTransactions() // saveTransactions() includes dedup
+                        val after = transactions.size
+                        if (before != after) {
+                            android.util.Log.d("Migration", "Deduped transactions: $before -> $after")
+                        }
+                        syncPrefs.edit().putBoolean("migration_dedup_transactions", true).apply()
+                    }
+                } catch (e: Exception) { android.util.Log.e("Migration", "dedup_transactions failed", e) }
+
                 recomputeCash()
 
                 // Ensure BudgeTrak directory tree exists so users can find it for backup recovery
