@@ -109,6 +109,15 @@ All transaction add paths must check for existing ID:
 - `saveTransactions()`: dedup by ID before writing to disk (safety net)
 - `IntegrityChecker.fingerprint()`: dedup by ID before computing (prevents phantom divergence)
 
+## Category Fingerprinting
+
+Tagged categories (e.g., "supercharge", "other") may have different random numeric IDs on each device. Before computing the fingerprint:
+1. Exclude categories whose IDs are in `catIdRemap` (remapped duplicates)
+2. Replace tagged category IDs with `tag.hashCode()` — deterministic, same on all devices
+3. Untagged categories keep their original IDs
+
+This ensures both devices produce identical fingerprints regardless of local ID assignment.
+
 ## Key Invariants
 
 1. lamportClock.value >= max(all field clocks, lastPushedClock)
