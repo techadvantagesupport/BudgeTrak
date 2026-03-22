@@ -927,7 +927,9 @@ class WidgetTransactionActivity : ComponentActivity() {
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
 
         val transactions = TransactionRepository.load(context).toMutableList()
-        transactions.add(txn)
+        if (transactions.none { it.id == txn.id }) {
+            transactions.add(txn)
+        }
         TransactionRepository.save(context, transactions)
 
         // Update available cash — mirror BudgetCalculator.recomputeAvailableCash logic

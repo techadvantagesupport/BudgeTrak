@@ -1201,11 +1201,12 @@ class MainActivity : ComponentActivity() {
                         // sync loop would overwrite disk with the stale in-memory
                         // list, silently erasing widget-added transactions.
                         val diskTxns = TransactionRepository.load(context)
-                        val memTxnIds = transactions.map { it.id }.toSet()
+                        val memTxnIds = transactions.map { it.id }.toMutableSet()
                         var diskMerged = false
                         for (dt in diskTxns) {
                             if (dt.id !in memTxnIds) {
                                 transactions.add(dt)
+                                memTxnIds.add(dt.id) // prevent duplicates within disk batch
                                 diskMerged = true
                             }
                         }
@@ -1634,7 +1635,10 @@ class MainActivity : ComponentActivity() {
                         saveSavingsGoals()
                     }
                 }
-                transactions.add(stamped)
+                // Guard against duplicate IDs (e.g., double-tap or recomposition replay)
+                if (transactions.none { it.id == stamped.id }) {
+                    transactions.add(stamped)
+                }
                 saveTransactions()
                 recomputeCash()
             }
@@ -2688,7 +2692,26 @@ class MainActivity : ComponentActivity() {
                                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                             toastState.show("Uploading local debug files\u2026")
                                         }
-                                        FirestoreService.uploadDebugFiles(gId, localDeviceId, devName, syncLogText, diagText)
+                                        // Append extra debug files to the diag upload
+                                        val extraDebug = StringBuilder(diagText)
+                                        for (extraName in listOf("clock_dump.txt", "fcm_debug.txt")) {
+                                            val f = java.io.File(supportDir, extraName)
+                                            if (f.exists()) {
+                                                extraDebug.appendLine("\n=== $extraName ===")
+                                                extraDebug.appendLine(f.readText())
+                                            }
+                                        }
+                                        // Append logcat if captured
+                                        try {
+                                            val lp = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "500"))
+                                            val lt = lp.inputStream.bufferedReader().readText()
+                                            lp.waitFor()
+                                            if (lt.isNotEmpty()) {
+                                                extraDebug.appendLine("\n=== logcat (last 500) ===")
+                                                extraDebug.appendLine(lt)
+                                            }
+                                        } catch (_: Exception) {}
+                                        FirestoreService.uploadDebugFiles(gId, localDeviceId, devName, syncLogText, extraDebug.toString())
 
                                         // 4. Request all devices upload fresh files
                                         FirestoreService.requestDebugDump(gId)
