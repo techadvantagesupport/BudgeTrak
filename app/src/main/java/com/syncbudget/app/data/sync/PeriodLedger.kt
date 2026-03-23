@@ -10,7 +10,7 @@ import java.time.LocalDateTime
 data class PeriodLedgerEntry(
     val periodStartDate: LocalDateTime,
     val appliedAmount: Double,
-    val clockAtReset: Long,
+    val clockAtReset: Long = 0L,
     val corrected: Boolean = false,  // unused — kept for JSON backward compatibility
     // CRDT sync fields
     val deviceId: String = "",

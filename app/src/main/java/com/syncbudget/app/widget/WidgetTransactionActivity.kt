@@ -82,7 +82,6 @@ import com.syncbudget.app.data.findDuplicate
 import com.syncbudget.app.data.findRecurringExpenseMatch
 import com.syncbudget.app.data.generateTransactionId
 import com.syncbudget.app.data.getCategoryIcon
-import com.syncbudget.app.data.sync.LamportClock
 import com.syncbudget.app.data.sync.SyncIdGenerator
 import com.syncbudget.app.data.sync.active
 import com.syncbudget.app.data.getDoubleCompat
@@ -524,9 +523,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                             if (catAmt > 0) CategoryAmount(id, catAmt) else null
                                         }
                                     }
-                                    val lamportClock = LamportClock(context)
                                     val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
-                                    val clock = lamportClock.tick()
                                     val transactions = TransactionRepository.load(context)
                                     val existingIds = transactions.map { it.id }.toSet()
                                     val txn = Transaction(
@@ -538,25 +535,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                         amount = pa,
                                         categoryAmounts = catAmounts,
                                         isUserCategorized = catAmounts.isNotEmpty(),
-                                        deviceId = deviceId,
-                                        source_clock = clock,
-                                        description_clock = clock,
-                                        amount_clock = clock,
-                                        date_clock = clock,
-                                        type_clock = clock,
-                                        categoryAmounts_clock = clock,
-                                        isUserCategorized_clock = clock,
-                                        excludeFromBudget_clock = clock,
-                                        isBudgetIncome_clock = clock,
-                                        linkedRecurringExpenseId_clock = clock,
-                                        linkedAmortizationEntryId_clock = clock,
-                                        linkedIncomeSourceId_clock = clock,
-                                        amortizationAppliedAmount_clock = clock,
-                                        linkedRecurringExpenseAmount_clock = clock,
-                                        linkedIncomeSourceAmount_clock = clock,
-                                        linkedSavingsGoalId_clock = clock,
-                                        linkedSavingsGoalAmount_clock = clock,
-                                        deviceId_clock = clock
+                                        deviceId = deviceId
                                     )
                                     runMatchingChain(txn, catAmounts)
                                 },
@@ -661,9 +640,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                             val existing = TransactionRepository.load(context).toMutableList()
                                             val idx = existing.indexOfFirst { it.id == dup.id }
                                             if (idx >= 0) {
-                                                val lamportClock = LamportClock(context)
-                                                val clk = lamportClock.tick()
-                                                existing[idx] = existing[idx].copy(deleted = true, deleted_clock = clk)
+                                                existing[idx] = existing[idx].copy(deleted = true)
                                                 TransactionRepository.save(context, existing)
                                             }
                                             val t = pendingTxn!!
@@ -748,12 +725,9 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     ) { Text(W.recurringNoLink, color = Color(0xFFCCCCCC)) }
                                     Button(
                                         onClick = {
-                                            val linkClk = LamportClock(context).tick()
                                             saveTransaction(context, pendingTxn!!.copy(
                                                 linkedRecurringExpenseId = re.id,
-                                                linkedRecurringExpenseId_clock = linkClk,
-                                                linkedRecurringExpenseAmount = re.amount,
-                                                linkedRecurringExpenseAmount_clock = linkClk
+                                                linkedRecurringExpenseAmount = re.amount
                                             ))
                                             prefs.edit()
                                                 .putString("widgetTxDate", today)
@@ -828,10 +802,8 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     ) { Text(W.amortizationNoLink, color = Color(0xFFCCCCCC)) }
                                     Button(
                                         onClick = {
-                                            val linkClk = LamportClock(context).tick()
                                             saveTransaction(context, pendingTxn!!.copy(
-                                                linkedAmortizationEntryId = am.id,
-                                                linkedAmortizationEntryId_clock = linkClk
+                                                linkedAmortizationEntryId = am.id
                                             ))
                                             prefs.edit()
                                                 .putString("widgetTxDate", today)
@@ -906,23 +878,17 @@ class WidgetTransactionActivity : ComponentActivity() {
                                     ) { Text(W.budgetIncomeNoLink, color = Color(0xFFCCCCCC)) }
                                     Button(
                                         onClick = {
-                                            val linkClk = LamportClock(context).tick()
                                             val recurringIncomeCatId = CategoryRepository.load(context)
                                                 .active.find { it.tag == "recurring_income" }?.id
                                             val baseTxn = pendingTxn!!
                                             val linked = baseTxn.copy(
                                                 isBudgetIncome = true,
-                                                isBudgetIncome_clock = linkClk,
                                                 linkedIncomeSourceId = inc.id,
-                                                linkedIncomeSourceId_clock = linkClk,
                                                 linkedIncomeSourceAmount = inc.amount,
-                                                linkedIncomeSourceAmount_clock = linkClk,
                                                 categoryAmounts = if (recurringIncomeCatId != null)
                                                     listOf(CategoryAmount(recurringIncomeCatId, baseTxn.amount))
                                                 else baseTxn.categoryAmounts,
-                                                categoryAmounts_clock = linkClk,
-                                                isUserCategorized = true,
-                                                isUserCategorized_clock = linkClk
+                                                isUserCategorized = true
                                             )
                                             saveTransaction(context, linked)
                                             prefs.edit()
@@ -993,11 +959,8 @@ class WidgetTransactionActivity : ComponentActivity() {
                         val sources = IncomeSourceRepository.load(context).toMutableList()
                         val idx = sources.indexOfFirst { it.id == srcId }
                         if (idx >= 0 && sources[idx].amount != txn.amount) {
-                            val lamportClock = LamportClock(context)
-                            val clk = lamportClock.tick()
                             sources[idx] = sources[idx].copy(
-                                amount = txn.amount,
-                                amount_clock = clk
+                                amount = txn.amount
                             )
                             IncomeSourceRepository.save(context, sources)
                         }
