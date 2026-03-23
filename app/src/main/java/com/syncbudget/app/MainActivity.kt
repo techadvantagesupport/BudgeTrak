@@ -2438,6 +2438,7 @@ class MainActivity : ComponentActivity() {
                         dateFormatPattern = dateFormatPattern,
                         budgetPeriod = budgetPeriod,
                         syncStatus = syncStatus,
+                        showUpdateBanner = syncErrorMessage == strings.sync.updateRequiredNotice,
                         staleDays = staleDays,
                         syncDevices = syncDevices,
                         localDeviceId = localDeviceId,

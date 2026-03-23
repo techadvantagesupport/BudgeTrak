@@ -1231,6 +1231,10 @@ class SyncEngine(
             // and NOT_FOUND are treated as transient/config errors.
             val errorCode = when {
                 e is javax.crypto.AEADBadTagException -> "encryption_error"
+                // PERMISSION_DENIED from Firestore means the app lacks Firebase
+                // Auth (old version) — map to update_required so the UI shows
+                // a helpful message instead of a raw error.
+                e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED -> "update_required"
                 else -> e.message
             }
             syncLog("=== Sync FAILED: $errorCode — ${e.javaClass.simpleName}: ${e.message} ===")

@@ -14,6 +14,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -281,6 +282,7 @@ fun MainScreen(
     dateFormatPattern: String = "yyyy-MM-dd",
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     syncStatus: String = "off",
+    showUpdateBanner: Boolean = false,
     staleDays: Int = 0,
     syncDevices: List<DeviceInfo> = emptyList(),
     localDeviceId: String = "",
@@ -389,6 +391,21 @@ fun MainScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // Update required banner — overlaid at top
+            if (showUpdateBanner) {
+                val S = LocalStrings.current
+                androidx.compose.material3.Surface(
+                    color = Color(0xFFF44336),
+                    modifier = Modifier.fillMaxWidth().zIndex(10f)
+                ) {
+                    Text(
+                        text = S.sync.updateRequiredNotice,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
             // Bottom bars: nav icons ~72dp + tx buttons ~56dp = ~128dp
             val contentSpace = maxHeight - 128.dp
             val showChart = contentSpace >= 180.dp
