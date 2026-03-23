@@ -80,6 +80,17 @@ Properties: commutative, associative, idempotent, convergent.
 **SharedPreferences (sync_engine)**: lastSyncVersion, lastPushedClock, lastSnapshotVersion, lastIntegrityCheckTime, catIdRemap, migration flags
 **JSON files**: transactions, recurringExpenses, incomeSources, savingsGoals, amortizationEntries, categories, periodLedger, sharedSettings
 **Firestore**: deltas (encrypted), device metadata, snapshots, admin claims
+**Authentication**: Firebase Anonymous Auth (invisible to user). Required by Firestore/Storage security rules (`request.auth != null`). Sign-in happens on app launch (MainActivity) and before background sync (SyncWorker).
+
+## Security
+
+- All Firestore/Storage access requires `request.auth != null` (anonymous auth)
+- Sync deltas encrypted with group 256-bit key (ChaCha20-Poly1305)
+- Pairing code key encrypted with code as PBKDF2 password before Firestore storage
+- Debug features (dump button, file uploads, sync_log file, FCM sender) gated behind `BuildConfig.DEBUG`
+- Debug uploads encrypted with group key before Firestore storage
+- Service account key in debug-only assets (gitignored, never in release APKs)
+- Encryption key stored in EncryptedSharedPreferences (Android KeyStore-backed)
 
 ## Rescue & Clock-Zero Fix
 

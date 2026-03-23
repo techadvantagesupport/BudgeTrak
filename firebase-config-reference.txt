@@ -3,7 +3,7 @@
   Generated: March 15, 2026
   Project ID: sync-23ce9
   Project Name: SecureSync (Prod)
-  Plan: Spark (No-cost / free tier)
+  Plan: Blaze (pay-as-you-go)
 ================================================================================
 
 This file is a verified snapshot of the live Firebase configuration for the
@@ -16,7 +16,10 @@ developer. Always verify against the live console after major Firebase changes.
   AUDIT SUMMARY (verified March 15, 2026)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  [✓] Security rules published and verified (matches spec below)
+  [✓] Security rules published with request.auth != null (March 23, 2026)
+  [✓] Firebase Anonymous Auth enabled (March 23, 2026)
+  [✓] Firebase Storage enabled with auth-required rules (March 21, 2026)
+  [✓] TTL policies active: groups/lastActivity (90d), pairing_codes/expiresAt
   [✓] lastActivity field uses FieldValue.serverTimestamp() in FirestoreService.kt
       (pushDeltaAtomically + updateGroupActivity — TTL-compatible)
   [✓] Automatic indexes enabled (Ascending, Descending, Arrays)

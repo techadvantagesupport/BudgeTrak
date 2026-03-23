@@ -16,7 +16,9 @@ type: reference
 ## Pairing Code
 - 6 chars from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no ambiguous 0/O, 1/I)
 - Expires in 10 minutes, one-time use (deleted on redemption)
-- Stored in Firestore `pairing_codes/{code}` with groupId + Base64 encryption key
+- Stored in Firestore `pairing_codes/{code}` with groupId + encrypted key blob
+- The sync encryption key is encrypted using the 6-char code as a PBKDF2 password (ChaCha20-Poly1305). The raw key is NEVER stored in Firestore.
+- Joining device decrypts the key using the entered code. Wrong code = decrypt failure = join rejected.
 - ExpiresAt stored as Firestore Timestamp (required for TTL policy)
 
 ## Device Join
