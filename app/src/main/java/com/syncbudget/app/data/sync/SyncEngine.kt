@@ -690,7 +690,23 @@ class SyncEngine(
                     }
                 }
                 if (maxReceivedClock > lastPushedClock) {
-                    lastPushedClock = maxReceivedClock
+                    // Don't advance past locally-owned unpushed records.
+                    // Find the min maxClock among local records that haven't
+                    // been pushed yet (clock > oldPushClock, owned by us).
+                    val oldPushClock = lastPushedClock
+                    var minLocalUnpushed = Long.MAX_VALUE
+                    for (t in baseTxns) { if (t.deviceId == deviceId) { val mc = IntegrityChecker.maxClock(t); if (mc > oldPushClock && mc < minLocalUnpushed) minLocalUnpushed = mc } }
+                    for (r in baseRe) { if (r.deviceId == deviceId) { val mc = IntegrityChecker.maxClock(r); if (mc > oldPushClock && mc < minLocalUnpushed) minLocalUnpushed = mc } }
+                    for (s in baseIs) { if (s.deviceId == deviceId) { val mc = IntegrityChecker.maxClock(s); if (mc > oldPushClock && mc < minLocalUnpushed) minLocalUnpushed = mc } }
+                    for (g in baseSg) { if (g.deviceId == deviceId) { val mc = IntegrityChecker.maxClock(g); if (mc > oldPushClock && mc < minLocalUnpushed) minLocalUnpushed = mc } }
+                    for (e in baseAe) { if (e.deviceId == deviceId) { val mc = IntegrityChecker.maxClock(e); if (mc > oldPushClock && mc < minLocalUnpushed) minLocalUnpushed = mc } }
+                    // Cap advancement: don't jump past unpushed local records
+                    val safeClock = if (minLocalUnpushed < Long.MAX_VALUE) {
+                        minOf(maxReceivedClock, minLocalUnpushed - 1)
+                    } else {
+                        maxReceivedClock
+                    }
+                    lastPushedClock = safeClock
                     if (maxReceivedClock > lamportClock.value) {
                         lamportClock.merge(maxReceivedClock)
                     }
