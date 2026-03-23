@@ -1112,8 +1112,11 @@ class MainActivity : ComponentActivity() {
                                     stranded(t.linkedAmortizationEntryId_clock) || stranded(t.linkedIncomeSourceId_clock) ||
                                     stranded(t.amortizationAppliedAmount_clock) || stranded(t.linkedRecurringExpenseAmount_clock) ||
                                     stranded(t.linkedIncomeSourceAmount_clock) || stranded(t.linkedSavingsGoalId_clock) ||
-                                    stranded(t.linkedSavingsGoalAmount_clock) || stranded(t.deviceId_clock) ||
-                                    stranded(t.deleted_clock)) {
+                                    stranded(t.linkedSavingsGoalAmount_clock) ||
+                                    stranded(t.receiptId1_clock) || stranded(t.receiptId2_clock) ||
+                                    stranded(t.receiptId3_clock) || stranded(t.receiptId4_clock) ||
+                                    stranded(t.receiptId5_clock) ||
+                                    stranded(t.deviceId_clock) || stranded(t.deleted_clock)) {
                                     anyRescued = true
                                     transactions[i] = t.copy(
                                         source_clock = rc, description_clock = rc,
@@ -1124,8 +1127,11 @@ class MainActivity : ComponentActivity() {
                                         linkedAmortizationEntryId_clock = rc, linkedIncomeSourceId_clock = rc,
                                         amortizationAppliedAmount_clock = rc, linkedRecurringExpenseAmount_clock = rc,
                                         linkedIncomeSourceAmount_clock = rc, linkedSavingsGoalId_clock = rc,
-                                        linkedSavingsGoalAmount_clock = rc, deviceId_clock = rc,
-                                        deleted_clock = rc)
+                                        linkedSavingsGoalAmount_clock = rc,
+                                        receiptId1_clock = rc, receiptId2_clock = rc,
+                                        receiptId3_clock = rc, receiptId4_clock = rc,
+                                        receiptId5_clock = rc,
+                                        deviceId_clock = rc, deleted_clock = rc)
                                 }
                             }
                             if (anyRescued) saveTransactions()
@@ -1249,8 +1255,16 @@ class MainActivity : ComponentActivity() {
                                 val needsDeviceId = t.deviceId_clock == 0L
                                 val needsExclude = t.excludeFromBudget && t.excludeFromBudget_clock == 0L
                                 val needsBudgetIncome = t.isBudgetIncome && t.isBudgetIncome_clock == 0L
+                                val needsSgId = t.linkedSavingsGoalId != null && t.linkedSavingsGoalId_clock == 0L
+                                val needsSgAmt = t.linkedSavingsGoalAmount != 0.0 && t.linkedSavingsGoalAmount_clock == 0L
+                                val needsR1 = t.receiptId1 != null && t.receiptId1_clock == 0L
+                                val needsR2 = t.receiptId2 != null && t.receiptId2_clock == 0L
+                                val needsR3 = t.receiptId3 != null && t.receiptId3_clock == 0L
+                                val needsR4 = t.receiptId4 != null && t.receiptId4_clock == 0L
+                                val needsR5 = t.receiptId5 != null && t.receiptId5_clock == 0L
                                 if (needsSource || needsAmount || needsDate || needsType ||
-                                    needsDesc || needsDeviceId || needsExclude || needsBudgetIncome) {
+                                    needsDesc || needsDeviceId || needsExclude || needsBudgetIncome ||
+                                    needsSgId || needsSgAmt || needsR1 || needsR2 || needsR3 || needsR4 || needsR5) {
                                     if (clk0Fix == 0L) clk0Fix = lamportClock.tick()
                                     changed = true
                                     transactions[i] = t.copy(
@@ -1261,7 +1275,14 @@ class MainActivity : ComponentActivity() {
                                         description_clock = if (needsDesc) clk0Fix else t.description_clock,
                                         deviceId_clock = if (needsDeviceId) clk0Fix else t.deviceId_clock,
                                         excludeFromBudget_clock = if (needsExclude) clk0Fix else t.excludeFromBudget_clock,
-                                        isBudgetIncome_clock = if (needsBudgetIncome) clk0Fix else t.isBudgetIncome_clock
+                                        isBudgetIncome_clock = if (needsBudgetIncome) clk0Fix else t.isBudgetIncome_clock,
+                                        linkedSavingsGoalId_clock = if (needsSgId) clk0Fix else t.linkedSavingsGoalId_clock,
+                                        linkedSavingsGoalAmount_clock = if (needsSgAmt) clk0Fix else t.linkedSavingsGoalAmount_clock,
+                                        receiptId1_clock = if (needsR1) clk0Fix else t.receiptId1_clock,
+                                        receiptId2_clock = if (needsR2) clk0Fix else t.receiptId2_clock,
+                                        receiptId3_clock = if (needsR3) clk0Fix else t.receiptId3_clock,
+                                        receiptId4_clock = if (needsR4) clk0Fix else t.receiptId4_clock,
+                                        receiptId5_clock = if (needsR5) clk0Fix else t.receiptId5_clock
                                     )
                                 }
                             }
@@ -1388,6 +1409,11 @@ class MainActivity : ComponentActivity() {
                                             amortizationAppliedAmount_clock = clk,
                                             linkedRecurringExpenseAmount_clock = clk,
                                             linkedIncomeSourceAmount_clock = clk,
+                                            linkedSavingsGoalId_clock = clk,
+                                            linkedSavingsGoalAmount_clock = clk,
+                                            receiptId1_clock = clk, receiptId2_clock = clk,
+                                            receiptId3_clock = clk, receiptId4_clock = clk,
+                                            receiptId5_clock = clk,
                                             deviceId_clock = clk, deleted_clock = clk
                                         )
                                     }
@@ -1825,7 +1851,8 @@ class MainActivity : ComponentActivity() {
                         val currentPeriod = BudgetCalculator.currentPeriodStart(
                             budgetPeriod, resetDayOfWeek, resetDayOfMonth, refreshTz, resetHour
                         )
-                        val missedPeriods = BudgetCalculator.countPeriodsCompleted(lastRefreshDate!!, currentPeriod, budgetPeriod)
+                        val refreshDate = lastRefreshDate ?: continue
+                        val missedPeriods = BudgetCalculator.countPeriodsCompleted(refreshDate, currentPeriod, budgetPeriod)
                         if (missedPeriods > 0) {
                             lastRefreshDate = currentPeriod
 
@@ -2235,6 +2262,11 @@ class MainActivity : ComponentActivity() {
                                                 amortizationAppliedAmount_clock = clk,
                                                 linkedRecurringExpenseAmount_clock = clk,
                                                 linkedIncomeSourceAmount_clock = clk,
+                                                linkedSavingsGoalId_clock = clk,
+                                                linkedSavingsGoalAmount_clock = clk,
+                                                receiptId1_clock = clk, receiptId2_clock = clk,
+                                                receiptId3_clock = clk, receiptId4_clock = clk,
+                                                receiptId5_clock = clk,
                                                 deviceId_clock = clk, deleted_clock = clk)
                                         }
                                     }
@@ -3082,6 +3114,7 @@ class MainActivity : ComponentActivity() {
                                         description_clock = 0L,
                                         amount_clock = 0L, date_clock = 0L, type_clock = 0L,
                                         categoryAmounts_clock = 0L, isUserCategorized_clock = 0L,
+                                        excludeFromBudget_clock = 0L,
                                         isBudgetIncome_clock = 0L,
                                         linkedRecurringExpenseId_clock = 0L,
                                         linkedAmortizationEntryId_clock = 0L,
@@ -3089,6 +3122,11 @@ class MainActivity : ComponentActivity() {
                                         amortizationAppliedAmount_clock = 0L,
                                         linkedRecurringExpenseAmount_clock = 0L,
                                         linkedIncomeSourceAmount_clock = 0L,
+                                        linkedSavingsGoalId_clock = 0L,
+                                        linkedSavingsGoalAmount_clock = 0L,
+                                        receiptId1_clock = 0L, receiptId2_clock = 0L,
+                                        receiptId3_clock = 0L, receiptId4_clock = 0L,
+                                        receiptId5_clock = 0L,
                                         deleted_clock = 0L,
                                         deviceId_clock = 0L)
                                 }
@@ -3846,6 +3884,12 @@ class MainActivity : ComponentActivity() {
                                                 amortizationAppliedAmount_clock = stampClock,
                                                 linkedRecurringExpenseAmount_clock = stampClock,
                                                 linkedIncomeSourceAmount_clock = stampClock,
+                                                linkedSavingsGoalId_clock = stampClock,
+                                                linkedSavingsGoalAmount_clock = stampClock,
+                                                receiptId1_clock = stampClock, receiptId2_clock = stampClock,
+                                                receiptId3_clock = stampClock, receiptId4_clock = stampClock,
+                                                receiptId5_clock = stampClock,
+                                                deleted_clock = stampClock,
                                                 deviceId_clock = stampClock
                                             )
                                         }
@@ -3976,6 +4020,12 @@ class MainActivity : ComponentActivity() {
                                                     amortizationAppliedAmount_clock = stampClock,
                                                     linkedRecurringExpenseAmount_clock = stampClock,
                                                     linkedIncomeSourceAmount_clock = stampClock,
+                                                    linkedSavingsGoalId_clock = stampClock,
+                                                    linkedSavingsGoalAmount_clock = stampClock,
+                                                    receiptId1_clock = stampClock, receiptId2_clock = stampClock,
+                                                    receiptId3_clock = stampClock, receiptId4_clock = stampClock,
+                                                    receiptId5_clock = stampClock,
+                                                    deleted_clock = stampClock,
                                                     deviceId_clock = stampClock
                                                 )
                                             }

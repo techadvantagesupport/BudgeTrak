@@ -139,7 +139,7 @@ object IntegrityChecker {
             SegmentFingerprint(segCounts[i], segIdXor[i], segClockSum[i])
         }
         return CollectionFingerprint(
-            count = list.size, idXor = totalIdXor,
+            count = deduped.size, idXor = totalIdXor,
             clockSum = totalClockSum, segments = segments
         )
     }

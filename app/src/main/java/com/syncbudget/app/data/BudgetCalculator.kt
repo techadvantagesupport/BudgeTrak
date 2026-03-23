@@ -212,13 +212,16 @@ object BudgetCalculator {
         return roundCents(maxOf(0.0, (totalAnnualIncome - totalAnnualExpenses) / periodsPerYear))
     }
 
-    fun theoreticalAnnualOccurrences(repeatType: RepeatType, repeatInterval: Int): Double = when (repeatType) {
-        RepeatType.DAYS -> 365.25 / repeatInterval
-        RepeatType.WEEKS -> 365.25 / (repeatInterval * 7)
-        RepeatType.BI_WEEKLY -> 365.25 / 14
-        RepeatType.MONTHS -> 12.0 / repeatInterval
-        RepeatType.BI_MONTHLY -> 24.0
-        RepeatType.ANNUAL -> 1.0
+    fun theoreticalAnnualOccurrences(repeatType: RepeatType, repeatInterval: Int): Double {
+        if (repeatInterval <= 0) return 0.0
+        return when (repeatType) {
+            RepeatType.DAYS -> 365.25 / repeatInterval
+            RepeatType.WEEKS -> 365.25 / (repeatInterval * 7)
+            RepeatType.BI_WEEKLY -> 365.25 / 14
+            RepeatType.MONTHS -> 12.0 / repeatInterval
+            RepeatType.BI_MONTHLY -> 24.0
+            RepeatType.ANNUAL -> 1.0
+        }
     }
 
     fun countPeriodsCompleted(from: LocalDate, to: LocalDate, budgetPeriod: BudgetPeriod): Int {

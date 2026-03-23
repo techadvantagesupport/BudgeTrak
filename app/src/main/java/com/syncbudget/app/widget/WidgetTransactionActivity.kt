@@ -98,6 +98,30 @@ class WidgetTransactionActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Crash logger — writes stack trace to BudgeTrak/support/crash_log.txt
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val sb = StringBuilder()
+                sb.appendLine("=== WidgetCrash ${java.time.LocalDateTime.now()} ===")
+                sb.appendLine("Thread: ${thread.name}")
+                sb.appendLine("Android: ${android.os.Build.VERSION.SDK_INT} (${android.os.Build.VERSION.RELEASE})")
+                sb.appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                sb.appendLine()
+                var t: Throwable? = throwable
+                while (t != null) {
+                    sb.appendLine("${t.javaClass.name}: ${t.message}")
+                    for (el in t.stackTrace) sb.appendLine("  at $el")
+                    t = t.cause
+                    if (t != null) sb.appendLine("Caused by:")
+                }
+                val dir = com.syncbudget.app.data.BackupManager.getSupportDir()
+                java.io.File(dir, "crash_log.txt").appendText(sb.toString())
+            } catch (_: Exception) {}
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
         setFinishOnTouchOutside(false)
 
         val isExpense = intent?.action == BudgetWidgetProvider.ACTION_ADD_EXPENSE

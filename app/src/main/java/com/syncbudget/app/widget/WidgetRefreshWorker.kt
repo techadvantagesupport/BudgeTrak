@@ -23,6 +23,7 @@ import com.syncbudget.app.data.sync.SecurePrefs
 import com.syncbudget.app.data.sync.SyncEngine
 import com.syncbudget.app.data.sync.SyncFileLock
 import com.syncbudget.app.data.sync.SyncIdGenerator
+import com.syncbudget.app.data.sync.active
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
@@ -143,9 +144,9 @@ class WidgetRefreshWorker(
             IncomeMode.valueOf(prefs.getString("incomeMode", null) ?: "FIXED")
         } catch (_: Exception) { IncomeMode.FIXED }
 
-        val activeTxns = transactions.filter { !it.deleted }
-        val activeRE = recurringExpenses.filter { !it.deleted }
-        val activeIS = incomeSources.filter { !it.deleted }
+        val activeTxns = transactions.active
+        val activeRE = recurringExpenses.active
+        val activeIS = incomeSources.active
 
         val cash = BudgetCalculator.recomputeAvailableCash(
             budgetStartDate, periodLedger, activeTxns, activeRE,

@@ -386,9 +386,9 @@ class SyncWorker(
             }
             if (budgetStartDate != null) {
                 val mergedLedger = result.mergedPeriodLedgerEntries ?: periodLedger
-                val activeTxns = (result.mergedTransactions ?: transactions).filter { !it.deleted }
-                val activeRE = (result.mergedRecurringExpenses ?: recurringExpenses).filter { !it.deleted }
-                val activeIS = (result.mergedIncomeSources ?: incomeSources).filter { !it.deleted }
+                val activeTxns = (result.mergedTransactions ?: transactions).active
+                val activeRE = (result.mergedRecurringExpenses ?: recurringExpenses).active
+                val activeIS = (result.mergedIncomeSources ?: incomeSources).active
                 val incomeMode = try {
                     com.syncbudget.app.data.IncomeMode.valueOf(
                         appPrefs.getString("incomeMode", null) ?: "FIXED"
