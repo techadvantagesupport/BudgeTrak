@@ -688,37 +688,72 @@ object FirestoreService {
 
     suspend fun uploadDebugFiles(
         groupId: String, deviceId: String, deviceName: String,
-        syncLog: String, syncDiag: String
+        syncLog: String, syncDiag: String,
+        encryptionKey: ByteArray? = null
     ) = withTimeout(OP_TIMEOUT_MS) {
-        // Use the group document (known writable) with device-keyed fields.
-        // Keep data small (50K each) to stay well under 1MB doc limit even
-        // with multiple devices.
+        // Encrypt debug data before storing in Firestore.
+        // Even in debug builds, financial data should not be plaintext.
         val shortId = deviceId.take(8)
+        val logData = if (encryptionKey != null) {
+            android.util.Base64.encodeToString(
+                com.syncbudget.app.data.CryptoHelper.encryptWithKey(
+                    syncLog.takeLast(50_000).toByteArray(), encryptionKey
+                ), android.util.Base64.NO_WRAP
+            )
+        } else syncLog.takeLast(50_000)
+        val diagData = if (encryptionKey != null) {
+            android.util.Base64.encodeToString(
+                com.syncbudget.app.data.CryptoHelper.encryptWithKey(
+                    syncDiag.takeLast(50_000).toByteArray(), encryptionKey
+                ), android.util.Base64.NO_WRAP
+            )
+        } else syncDiag.takeLast(50_000)
         val data = mapOf(
             "debug_${shortId}_name" to deviceName,
-            "debug_${shortId}_log" to syncLog.takeLast(50_000),
-            "debug_${shortId}_diag" to syncDiag.takeLast(50_000),
+            "debug_${shortId}_log" to logData,
+            "debug_${shortId}_diag" to diagData,
+            "debug_${shortId}_enc" to (encryptionKey != null),
             "debug_${shortId}_at" to System.currentTimeMillis()
         )
         db.collection("groups").document(groupId)
             .set(data, SetOptions.merge()).await()
     }
 
-    suspend fun downloadDebugFiles(groupId: String, myDeviceId: String): List<DebugFileSet> = withTimeout(OP_TIMEOUT_MS) {
-        // Read debug fields from group document
+    suspend fun downloadDebugFiles(
+        groupId: String, myDeviceId: String,
+        encryptionKey: ByteArray? = null
+    ): List<DebugFileSet> = withTimeout(OP_TIMEOUT_MS) {
         val doc = db.collection("groups").document(groupId).get().await()
         val myShortId = myDeviceId.take(8)
         val results = mutableListOf<DebugFileSet>()
-        // Find all debug_*_name fields for other devices
         val data = doc.data ?: return@withTimeout emptyList()
         val deviceIds = data.keys.filter { it.startsWith("debug_") && it.endsWith("_name") }
             .map { it.removePrefix("debug_").removeSuffix("_name") }
             .filter { it != myShortId }
         for (id in deviceIds) {
             val name = doc.getString("debug_${id}_name") ?: id
-            val log = doc.getString("debug_${id}_log") ?: ""
-            val diag = doc.getString("debug_${id}_diag") ?: ""
+            var log = doc.getString("debug_${id}_log") ?: ""
+            var diag = doc.getString("debug_${id}_diag") ?: ""
+            val encrypted = doc.getBoolean("debug_${id}_enc") ?: false
             val at = doc.getLong("debug_${id}_at") ?: 0L
+            // Decrypt if encrypted and we have the key
+            if (encrypted && encryptionKey != null) {
+                try {
+                    if (log.isNotEmpty()) log = String(
+                        com.syncbudget.app.data.CryptoHelper.decryptWithKey(
+                            android.util.Base64.decode(log, android.util.Base64.NO_WRAP), encryptionKey
+                        )
+                    )
+                    if (diag.isNotEmpty()) diag = String(
+                        com.syncbudget.app.data.CryptoHelper.decryptWithKey(
+                            android.util.Base64.decode(diag, android.util.Base64.NO_WRAP), encryptionKey
+                        )
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.w("FirestoreService", "Debug file decrypt failed: ${e.message}")
+                    continue
+                }
+            }
             if (log.isNotEmpty() || diag.isNotEmpty()) {
                 results.add(DebugFileSet(name, log, diag, at))
             }

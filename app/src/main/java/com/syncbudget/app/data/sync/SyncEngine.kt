@@ -75,6 +75,7 @@ class SyncEngine(
         val ts = LocalDateTime.now().toString()
         val line = "[$ts] $msg\n"
         android.util.Log.d("SyncEngine", msg)
+        if (!com.syncbudget.app.BuildConfig.DEBUG) return  // No file logging in release
         try {
             // Rotate log at 1MB to prevent unbounded growth
             if (syncLogFile.exists() && syncLogFile.length() > 1_000_000L) {
@@ -932,29 +933,32 @@ class SyncEngine(
             // Step 9b: Check if admin requested debug files. If so, upload
             // fresh logs immediately so admin gets current data within ~60s.
             // Also check if FCM push triggered a debug request (device woken up).
-            try {
-                val requestedAt = FirestoreService.getDebugRequestTime(groupId)
-                val lastUploaded = prefs.getLong("lastDebugUploadTime", 0L)
-                val fcmPrefs = context.getSharedPreferences("fcm_prefs", android.content.Context.MODE_PRIVATE)
-                val fcmRequested = fcmPrefs.getBoolean("fcm_debug_requested", false)
-                if (requestedAt > lastUploaded || fcmRequested) {
-                    val deviceName = context.getSharedPreferences("sync_device", Context.MODE_PRIVATE)
-                        .getString("deviceName", null) ?: android.os.Build.MODEL
-                    val logText = try { syncLogFile.readText() } catch (_: Exception) { "" }
-                    val diagFile = java.io.File(BackupManager.getSupportDir(), "sync_diag.txt")
-                    val diagText = try { if (diagFile.exists()) diagFile.readText() else "" } catch (_: Exception) { "" }
-                    if (logText.isNotEmpty() || diagText.isNotEmpty()) {
-                        FirestoreService.uploadDebugFiles(groupId, deviceId, deviceName, logText, diagText)
-                        prefs.edit().putLong("lastDebugUploadTime", now).apply()
-                        syncLog("Debug files uploaded (admin requested, fcm=$fcmRequested)")
+            // Debug-only: not included in release builds.
+            if (com.syncbudget.app.BuildConfig.DEBUG) {
+                try {
+                    val requestedAt = FirestoreService.getDebugRequestTime(groupId)
+                    val lastUploaded = prefs.getLong("lastDebugUploadTime", 0L)
+                    val fcmPrefs = context.getSharedPreferences("fcm_prefs", android.content.Context.MODE_PRIVATE)
+                    val fcmRequested = fcmPrefs.getBoolean("fcm_debug_requested", false)
+                    if (requestedAt > lastUploaded || fcmRequested) {
+                        val deviceName = context.getSharedPreferences("sync_device", Context.MODE_PRIVATE)
+                            .getString("deviceName", null) ?: android.os.Build.MODEL
+                        val logText = try { syncLogFile.readText() } catch (_: Exception) { "" }
+                        val diagFile = java.io.File(BackupManager.getSupportDir(), "sync_diag.txt")
+                        val diagText = try { if (diagFile.exists()) diagFile.readText() else "" } catch (_: Exception) { "" }
+                        if (logText.isNotEmpty() || diagText.isNotEmpty()) {
+                            FirestoreService.uploadDebugFiles(groupId, deviceId, deviceName, logText, diagText, encryptionKey)
+                            prefs.edit().putLong("lastDebugUploadTime", now).apply()
+                            syncLog("Debug files uploaded (admin requested, fcm=$fcmRequested)")
+                        }
+                        // Clear FCM flag after upload
+                        if (fcmRequested) {
+                            fcmPrefs.edit().putBoolean("fcm_debug_requested", false).apply()
+                        }
                     }
-                    // Clear FCM flag after upload
-                    if (fcmRequested) {
-                        fcmPrefs.edit().putBoolean("fcm_debug_requested", false).apply()
-                    }
+                } catch (e: Exception) {
+                    syncLog("Debug file upload check failed (non-fatal): ${e.message}")
                 }
-            } catch (e: Exception) {
-                syncLog("Debug file upload check failed (non-fatal): ${e.message}")
             }
 
             // Step 10: Check admin claim status

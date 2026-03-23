@@ -10,5 +10,6 @@
 /build
 /captures
 /local.properties
+app/src/debug/assets/service-account.json
 app/src/main/assets/service-account.json
 local.properties

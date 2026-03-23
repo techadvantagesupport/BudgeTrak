@@ -257,7 +257,7 @@ fun SettingsScreen(
                 }
             }
 
-            if (isSyncConfigured) {
+            if (isSyncConfigured && com.syncbudget.app.BuildConfig.DEBUG) {
                 item {
                     OutlinedButton(
                         onClick = onDumpDebug,

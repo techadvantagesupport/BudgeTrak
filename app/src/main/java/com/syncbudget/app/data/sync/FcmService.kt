@@ -25,6 +25,7 @@ class FcmService : FirebaseMessagingService() {
         val type = message.data["type"] ?: return
         Log.d(TAG, "FCM message received: type=$type")
         if (type == "debug_request") {
+            if (!com.syncbudget.app.BuildConfig.DEBUG) return  // Ignore debug requests in release
             // Wake up and trigger immediate sync with debug upload
             CoroutineScope(Dispatchers.IO).launch {
                 try {

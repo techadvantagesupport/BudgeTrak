@@ -2092,20 +2092,22 @@ class MainActivity : ComponentActivity() {
             fun sanitizeDeviceName(name: String): String =
                 name.replace(Regex("[^a-zA-Z0-9]"), "_").take(20)
 
-            // ── One-time CRDT state dump to Downloads ──
-            remember {
-                try {
-                    val diagText = buildDiagDump()
-                    writeDiagToMediaStore("sync_diag.txt", diagText)
-                    // Also write device-named copy
-                    val devName = sanitizeDeviceName(com.syncbudget.app.data.sync.GroupManager.getDeviceName(context))
-                    if (devName.isNotEmpty()) {
-                        writeDiagToMediaStore("sync_diag_${devName}.txt", diagText)
+            // ── One-time CRDT state dump to Downloads (debug only) ──
+            if (com.syncbudget.app.BuildConfig.DEBUG) {
+                remember {
+                    try {
+                        val diagText = buildDiagDump()
+                        writeDiagToMediaStore("sync_diag.txt", diagText)
+                        // Also write device-named copy
+                        val devName = sanitizeDeviceName(com.syncbudget.app.data.sync.GroupManager.getDeviceName(context))
+                        if (devName.isNotEmpty()) {
+                            writeDiagToMediaStore("sync_diag_${devName}.txt", diagText)
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("DiagDump", "Diag write failed: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    android.util.Log.e("DiagDump", "Diag write failed: ${e.message}")
+                    true
                 }
-                true
             }
 
             val adBannerHeight = if (!isPaidUser) 50.dp else 0.dp
@@ -2731,14 +2733,16 @@ class MainActivity : ComponentActivity() {
                                         writeDiagToMediaStore("sync_log_${sanitized}.txt", syncLogText)
                                     }
 
-                                    // 2b. Capture logcat to file (app can read its own logs)
-                                    try {
-                                        val logcatProcess = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "1000"))
-                                        val logcatText = logcatProcess.inputStream.bufferedReader().readText()
-                                        logcatProcess.waitFor()
-                                        writeDiagToMediaStore("logcat_${sanitized}.txt", logcatText)
-                                    } catch (e: Exception) {
-                                        android.util.Log.w("DumpDebug", "Logcat capture failed: ${e.message}")
+                                    // 2b. Capture logcat to file (app can read its own logs) — debug only
+                                    if (com.syncbudget.app.BuildConfig.DEBUG) {
+                                        try {
+                                            val logcatProcess = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-t", "1000"))
+                                            val logcatText = logcatProcess.inputStream.bufferedReader().readText()
+                                            logcatProcess.waitFor()
+                                            writeDiagToMediaStore("logcat_${sanitized}.txt", logcatText)
+                                        } catch (e: Exception) {
+                                            android.util.Log.w("DumpDebug", "Logcat capture failed: ${e.message}")
+                                        }
                                     }
 
                                     val gId = syncGroupId
@@ -2766,7 +2770,8 @@ class MainActivity : ComponentActivity() {
                                                 extraDebug.appendLine(lt)
                                             }
                                         } catch (_: Exception) {}
-                                        FirestoreService.uploadDebugFiles(gId, localDeviceId, devName, syncLogText, extraDebug.toString())
+                                        val debugKey = com.syncbudget.app.data.sync.GroupManager.getEncryptionKey(context)
+                                        FirestoreService.uploadDebugFiles(gId, localDeviceId, devName, syncLogText, extraDebug.toString(), debugKey)
 
                                         // 4. Request all devices upload fresh files
                                         FirestoreService.requestDebugDump(gId)
@@ -2799,7 +2804,7 @@ class MainActivity : ComponentActivity() {
                                         var gotFreshRemote = false
                                         for (attempt in 1..18) { // 18 × 5s = 90s max
                                             kotlinx.coroutines.delay(5_000)
-                                            val remoteFiles = FirestoreService.downloadDebugFiles(gId, localDeviceId)
+                                            val remoteFiles = FirestoreService.downloadDebugFiles(gId, localDeviceId, debugKey)
                                             // Check if any remote file was updated AFTER our request
                                             val fresh = remoteFiles.filter { it.updatedAt > requestTime - 5000 }
                                             if (fresh.isNotEmpty()) {

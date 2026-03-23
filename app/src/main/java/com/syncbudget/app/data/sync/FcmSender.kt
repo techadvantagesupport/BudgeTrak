@@ -25,6 +25,7 @@ object FcmSender {
         private set
 
     suspend fun sendDebugRequest(context: Context, targetFcmToken: String): Boolean {
+        if (!com.syncbudget.app.BuildConfig.DEBUG) return false
         lastError = null
         return try {
             val accessToken = getAccessToken(context)

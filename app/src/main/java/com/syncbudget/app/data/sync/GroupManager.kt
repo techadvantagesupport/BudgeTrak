@@ -93,14 +93,24 @@ object GroupManager {
     suspend fun joinGroup(context: Context, pairingCode: String): Boolean {
         val pairingData = FirestoreService.redeemPairingCode(pairingCode) ?: return false
 
+        // Decrypt the sync encryption key using the pairing code as password
+        val encryptedKeyBytes = Base64.decode(pairingData.encryptedKey, Base64.NO_WRAP)
+        val decryptedKey = try {
+            com.syncbudget.app.data.CryptoHelper.decrypt(encryptedKeyBytes, pairingCode.uppercase().trim().toCharArray())
+        } catch (e: Exception) {
+            android.util.Log.w("GroupManager", "Pairing code decrypt failed: ${e.message}")
+            return false
+        }
+        val keyBase64 = Base64.encodeToString(decryptedKey, Base64.NO_WRAP)
+
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .putString("groupId", pairingData.groupId)
             .putBoolean("isAdmin", false)
             .apply()
-        // Store encryption key in encrypted prefs
+        // Store decrypted encryption key in encrypted prefs
         SecurePrefs.get(context).edit()
-            .putString("encryptionKey", pairingData.encryptedKey)
+            .putString("encryptionKey", keyBase64)
             .commit()
 
         // Register this device in the group
@@ -150,10 +160,14 @@ object GroupManager {
         val codeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // no ambiguous chars
         val code = (1..6).map { codeChars[random.nextInt(codeChars.length)] }.joinToString("")
 
-        val keyBase64 = Base64.encodeToString(encryptionKey, Base64.NO_WRAP)
+        // Encrypt the sync key with the pairing code as password.
+        // The code is never stored in Firestore — only the encrypted key is.
+        // The joining device must know the code to decrypt the key.
+        val encryptedKeyBytes = com.syncbudget.app.data.CryptoHelper.encrypt(encryptionKey, code.toCharArray())
+        val encryptedKeyBase64 = Base64.encodeToString(encryptedKeyBytes, Base64.NO_WRAP)
         val expiresAt = System.currentTimeMillis() + 10 * 60 * 1000 // 10 minutes
 
-        FirestoreService.createPairingCode(groupId, code, keyBase64, expiresAt)
+        FirestoreService.createPairingCode(groupId, code, encryptedKeyBase64, expiresAt)
 
         return code
     }
