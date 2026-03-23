@@ -117,14 +117,10 @@ object DeltaBuilder {
         if (re.monthDay2_clock > lastPushedClock) fields["monthDay2"] = FieldDelta(re.monthDay2, re.monthDay2_clock)
         if (re.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(re.deleted, re.deleted_clock)
         if (re.deviceId_clock > lastPushedClock) fields["deviceId"] = FieldDelta(re.deviceId, re.deviceId_clock)
-        if (re.setAsideSoFar_clock > lastPushedClock) fields["setAsideSoFar"] = FieldDelta(re.setAsideSoFar, re.setAsideSoFar_clock)
-        if (re.isAccelerated_clock > lastPushedClock) fields["isAccelerated"] = FieldDelta(re.isAccelerated, re.isAccelerated_clock)
         if (fields.isEmpty()) return null
         ensureField(fields, "source", re.source, re.source_clock)
         ensureField(fields, "amount", re.amount, re.amount_clock)
         ensureField(fields, "deviceId", re.deviceId, re.deviceId_clock)
-        ensureField(fields, "setAsideSoFar", re.setAsideSoFar, re.setAsideSoFar_clock)
-        ensureField(fields, "isAccelerated", re.isAccelerated, re.isAccelerated_clock)
         return RecordDelta("recurring_expense", "upsert", re.id, re.deviceId, fields)
     }
 
@@ -152,7 +148,6 @@ object DeltaBuilder {
         if (goal.name_clock > lastPushedClock) fields["name"] = FieldDelta(goal.name, goal.name_clock)
         if (goal.targetAmount_clock > lastPushedClock) fields["targetAmount"] = FieldDelta(goal.targetAmount, goal.targetAmount_clock)
         if (goal.targetDate_clock > lastPushedClock) fields["targetDate"] = FieldDelta(goal.targetDate?.toString(), goal.targetDate_clock)
-        if (goal.totalSavedSoFar_clock > lastPushedClock) fields["totalSavedSoFar"] = FieldDelta(goal.totalSavedSoFar, goal.totalSavedSoFar_clock)
         if (goal.contributionPerPeriod_clock > lastPushedClock) fields["contributionPerPeriod"] = FieldDelta(goal.contributionPerPeriod, goal.contributionPerPeriod_clock)
         if (goal.isPaused_clock > lastPushedClock) fields["isPaused"] = FieldDelta(goal.isPaused, goal.isPaused_clock)
         if (goal.deleted_clock > lastPushedClock) fields["deleted"] = FieldDelta(goal.deleted, goal.deleted_clock)

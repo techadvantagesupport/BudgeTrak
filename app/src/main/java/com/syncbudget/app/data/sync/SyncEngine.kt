@@ -878,10 +878,13 @@ class SyncEngine(
                 tagged + untagged
             }
             val fpJson = try {
+                val appPrefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                val currentCash = appPrefs.getString("availableCash", "0.0")?.toDoubleOrNull() ?: 0.0
                 val fp = IntegrityChecker.computeFingerprint(
                     deviceId, newSyncVersion,
                     mergedTxns, mergedRe, mergedIs, mergedSg,
-                    mergedAe, fpCategories, mergedPl, mergedSettings
+                    mergedAe, fpCategories, mergedPl, mergedSettings,
+                    availableCash = currentCash
                 )
                 IntegrityChecker.toJson(fp).toString()
             } catch (_: Exception) { null }
@@ -1479,10 +1482,10 @@ class SyncEngine(
             monthDay2_clock = f["monthDay2"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L,
             deviceId_clock = f["deviceId"]?.clock ?: 0L,
-            setAsideSoFar = (f["setAsideSoFar"]?.value as? Number)?.toDouble() ?: 0.0,
-            isAccelerated = f["isAccelerated"]?.value as? Boolean ?: false,
-            setAsideSoFar_clock = f["setAsideSoFar"]?.clock ?: 0L,
-            isAccelerated_clock = f["isAccelerated"]?.clock ?: 0L
+            setAsideSoFar = 0.0,  // computed locally, not synced
+            isAccelerated = false,  // computed locally, not synced
+            setAsideSoFar_clock = 0L,
+            isAccelerated_clock = 0L
         )
     }
 
@@ -1520,7 +1523,7 @@ class SyncEngine(
             name = f["name"]?.value as? String ?: "",
             targetAmount = (f["targetAmount"]?.value as? Number)?.toDouble() ?: 0.0,
             targetDate = try { LocalDate.parse(f["targetDate"]?.value as? String) } catch (_: Exception) { null },
-            totalSavedSoFar = (f["totalSavedSoFar"]?.value as? Number)?.toDouble() ?: 0.0,
+            totalSavedSoFar = 0.0,  // computed locally, not synced
             contributionPerPeriod = (f["contributionPerPeriod"]?.value as? Number)?.toDouble() ?: 0.0,
             isPaused = f["isPaused"]?.value as? Boolean ?: false,
             deviceId = f["deviceId"]?.value as? String ?: change.deviceId,
@@ -1528,7 +1531,7 @@ class SyncEngine(
             name_clock = f["name"]?.clock ?: 0L,
             targetAmount_clock = f["targetAmount"]?.clock ?: 0L,
             targetDate_clock = f["targetDate"]?.clock ?: 0L,
-            totalSavedSoFar_clock = f["totalSavedSoFar"]?.clock ?: 0L,
+            totalSavedSoFar_clock = 0L,  // computed locally, not synced
             contributionPerPeriod_clock = f["contributionPerPeriod"]?.clock ?: 0L,
             isPaused_clock = f["isPaused"]?.clock ?: 0L,
             deleted_clock = f["deleted"]?.clock ?: 0L,

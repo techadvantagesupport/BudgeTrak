@@ -28,7 +28,8 @@ object IntegrityChecker {
         val syncVersion: Long,
         val timestamp: Long,
         val collections: Map<String, CollectionFingerprint>,
-        val settingsMaxClock: Long
+        val settingsMaxClock: Long,
+        val cashValue: Double = 0.0  // availableCash for value-based comparison
     )
 
     /** A single repair action: re-push specific records from one collection. */
@@ -68,8 +69,7 @@ object IntegrityChecker {
     fun maxClock(r: RecurringExpense): Long = maxOf(
         r.source_clock, r.description_clock, r.amount_clock,
         r.repeatType_clock, r.repeatInterval_clock, r.startDate_clock,
-        r.monthDay1_clock, r.monthDay2_clock, r.deleted_clock, r.deviceId_clock,
-        r.setAsideSoFar_clock, r.isAccelerated_clock
+        r.monthDay1_clock, r.monthDay2_clock, r.deleted_clock, r.deviceId_clock
     )
 
     fun maxClock(s: IncomeSource): Long = maxOf(
@@ -80,7 +80,7 @@ object IntegrityChecker {
 
     fun maxClock(g: SavingsGoal): Long = maxOf(
         g.name_clock, g.targetAmount_clock, g.targetDate_clock,
-        g.totalSavedSoFar_clock, g.contributionPerPeriod_clock,
+        g.contributionPerPeriod_clock,
         g.isPaused_clock, g.deleted_clock, g.deviceId_clock
     )
 
@@ -156,7 +156,8 @@ object IntegrityChecker {
         amortizationEntries: List<AmortizationEntry>,
         categories: List<Category>,
         periodLedgerEntries: List<PeriodLedgerEntry>,
-        sharedSettings: SharedSettings
+        sharedSettings: SharedSettings,
+        availableCash: Double = 0.0
     ): IntegrityFingerprint {
         val collections = mapOf(
             "transactions" to fingerprint(transactions, { it.id }, ::maxClock),
@@ -172,7 +173,8 @@ object IntegrityChecker {
             syncVersion = syncVersion,
             timestamp = System.currentTimeMillis(),
             collections = collections,
-            settingsMaxClock = maxClock(sharedSettings)
+            settingsMaxClock = maxClock(sharedSettings),
+            cashValue = availableCash
         )
     }
 
@@ -184,6 +186,7 @@ object IntegrityChecker {
         obj.put("syncVersion", fp.syncVersion)
         obj.put("timestamp", fp.timestamp)
         obj.put("settingsMaxClock", fp.settingsMaxClock)
+        obj.put("cashValue", fp.cashValue)
         val cols = JSONObject()
         for ((key, cfp) in fp.collections) {
             val c = JSONObject()
@@ -232,7 +235,8 @@ object IntegrityChecker {
             syncVersion = json.getLong("syncVersion"),
             timestamp = json.getLong("timestamp"),
             collections = map,
-            settingsMaxClock = json.getLong("settingsMaxClock")
+            settingsMaxClock = json.getLong("settingsMaxClock"),
+            cashValue = json.optDouble("cashValue", 0.0)
         )
     }
 
@@ -314,6 +318,10 @@ object IntegrityChecker {
 
         if (local.settingsMaxClock != remote.settingsMaxClock) {
             details.add("sharedSettings: clock mismatch (local=${local.settingsMaxClock}, remote=${remote.settingsMaxClock})")
+        }
+
+        if (kotlin.math.abs(local.cashValue - remote.cashValue) > 0.01) {
+            details.add("availableCash: value mismatch (local=${local.cashValue}, remote=${remote.cashValue})")
         }
 
         return DivergenceReport(
