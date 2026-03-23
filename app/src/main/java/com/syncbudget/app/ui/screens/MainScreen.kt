@@ -943,7 +943,7 @@ private fun SpendingPieChart(
                     val boxSpacing = 4.dp
                     val boxSize = iconSize + boxPadding * 2
                     val maxPerColumn = ((maxHeight.value) / (boxSize.value + boxSpacing.value)).toInt().coerceAtLeast(1).coerceAtMost(6)
-                    val columns = smallWedges.chunked(maxPerColumn).take(2)
+                    val columns = smallWedges.reversed().chunked(maxPerColumn).take(2)
 
                     Row(
                         modifier = Modifier
