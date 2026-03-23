@@ -52,6 +52,34 @@ class SyncWorker(
             }
         }
         val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+
+        // If Firestore-native sync is active, skip old CRDT SyncEngine —
+        // but still handle FCM debug requests (dump & upload).
+        val fcmPrefsEarly = applicationContext.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+        if (syncPrefs.getBoolean("migration_native_docs_done", false)) {
+            if (fcmPrefsEarly.getBoolean("fcm_debug_requested", false)) {
+                // Handle debug dump request even in native mode
+                try {
+                    val groupId = syncPrefs.getString("groupId", null)
+                    val deviceId = SyncIdGenerator.getOrCreateDeviceId(applicationContext)
+                    val devName = GroupManager.getDeviceName(applicationContext)
+                    val keyBase64 = SecurePrefs.get(applicationContext).getString("encryptionKey", null)
+                        ?: syncPrefs.getString("encryptionKey", null)
+                    if (groupId != null && keyBase64 != null) {
+                        val key = Base64.decode(keyBase64, Base64.NO_WRAP)
+                        val supportDir = com.syncbudget.app.data.BackupManager.getSupportDir()
+                        val syncLogText = try { java.io.File(supportDir, "native_sync_log.txt").readText() } catch (_: Exception) { "" }
+                        val diagText = try { java.io.File(supportDir, "sync_diag.txt").readText() } catch (_: Exception) { "(no diag file)" }
+                        FirestoreService.uploadDebugFiles(groupId, deviceId, devName, syncLogText, diagText, key)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("SyncWorker", "Debug upload in native mode failed: ${e.message}")
+                }
+                fcmPrefsEarly.edit().putBoolean("fcm_debug_requested", false).apply()
+            }
+            return Result.success()
+        }
+
         val fcmPrefs = applicationContext.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
         val fcmDebugRequested = fcmPrefs.getBoolean("fcm_debug_requested", false)
         // Only run background sync when there are unpushed local changes
