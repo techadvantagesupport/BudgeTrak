@@ -183,6 +183,25 @@ class MainActivity : ComponentActivity() {
                 onDispose { soundPlayer.release() }
             }
 
+            // Sign in anonymously to Firebase — required for Firestore security
+            // rules that check request.auth != null.  Completely invisible to user.
+            var firebaseAuthReady by remember { mutableStateOf(
+                com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null
+            ) }
+            LaunchedEffect(Unit) {
+                if (!firebaseAuthReady) {
+                    try {
+                        com.google.firebase.auth.FirebaseAuth.getInstance()
+                            .signInAnonymously()
+                            .await()
+                        firebaseAuthReady = true
+                    } catch (e: Exception) {
+                        android.util.Log.w("Auth", "Anonymous sign-in failed: ${e.message}")
+                        // App continues — Firestore may reject requests until auth succeeds
+                    }
+                }
+            }
+
             var currentScreen by remember { mutableStateOf("main") }
 
             // Dashboard quick-add dialog state — check widget intent

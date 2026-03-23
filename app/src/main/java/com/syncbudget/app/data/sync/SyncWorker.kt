@@ -6,6 +6,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.tasks.await
 import com.syncbudget.app.data.AmortizationRepository
 import com.syncbudget.app.data.BudgetCalculator
 import com.syncbudget.app.data.CategoryRepository
@@ -39,6 +40,17 @@ class SyncWorker(
     }
 
     private suspend fun doSyncWork(): Result {
+        // Ensure Firebase anonymous auth — required for Firestore rules
+        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+            try {
+                com.google.firebase.auth.FirebaseAuth.getInstance()
+                    .signInAnonymously()
+                    .await()
+            } catch (e: Exception) {
+                android.util.Log.w("SyncWorker", "Anonymous auth failed: ${e.message}")
+                return Result.retry()
+            }
+        }
         val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
         val fcmPrefs = applicationContext.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
         val fcmDebugRequested = fcmPrefs.getBoolean("fcm_debug_requested", false)
