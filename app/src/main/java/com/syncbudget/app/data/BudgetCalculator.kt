@@ -460,8 +460,14 @@ object BudgetCalculator {
                     // FIXED mode: linked income → no cash effect
                     // ACTUAL_ADJUST mode: source is updated to match, so delta is zero
                 } else if (txn.linkedIncomeSourceAmount > 0.0) {
-                    // Formerly linked to deleted income source — use remembered delta
-                    cash += (txn.amount - txn.linkedIncomeSourceAmount)
+                    // Formerly linked to deleted income source.
+                    // In ACTUAL mode: use remembered delta (actual vs budgeted).
+                    // In FIXED/ADJUST mode: no effect (same as when linked).
+                    if (incomeMode == IncomeMode.ACTUAL) {
+                        cash += (txn.amount - txn.linkedIncomeSourceAmount)
+                    }
+                    // FIXED/ADJUST: no cash effect — transaction continues to behave
+                    // as it did while linked (budgeted income, already accounted for)
                 } else if (!txn.isBudgetIncome) {
                     cash += txn.amount
                 }
