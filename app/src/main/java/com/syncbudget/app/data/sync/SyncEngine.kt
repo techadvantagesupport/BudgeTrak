@@ -57,9 +57,11 @@ class SyncEngine(
         /** Increment this when a release introduces breaking sync changes
          *  (new synced data types, changed serialization formats, etc.).
          *  Non-breaking changes (UI, bug fixes) do NOT require incrementing.
-         *  See .claude-memory/project_min_sync_version.md for history. */
-        const val MIN_SYNC_VERSION = 1
-        const val APP_SYNC_VERSION = 1
+         *  See .claude-memory/project_min_sync_version.md for history.
+         *  v2: encrypted pairing keys, auth-required Firestore, fingerprint
+         *  dedup, skeleton filter changes, category tag-hash fingerprint. */
+        const val MIN_SYNC_VERSION = 2
+        const val APP_SYNC_VERSION = 2
     }
 
     private val prefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
