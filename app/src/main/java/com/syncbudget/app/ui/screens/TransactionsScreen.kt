@@ -772,7 +772,7 @@ fun TransactionsScreen(
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.onBackground
                     ),
-                    contentPadding = PaddingValues(horizontal = 3.dp, vertical = 1.dp)
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 3.dp)
                 ) {
                     Text(
                         text = when (viewFilter) {
@@ -784,7 +784,7 @@ fun TransactionsScreen(
                             ViewFilter.NOT_VERIFIED -> S.transactions.notVerifiedFilter
                             ViewFilter.PHOTOS -> S.transactions.photosFilter
                         },
-                        fontSize = 26.sp
+                        fontSize = 20.sp
                     )
                 }
 
@@ -803,7 +803,7 @@ fun TransactionsScreen(
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.onBackground
                     ),
-                    contentPadding = PaddingValues(horizontal = 3.dp, vertical = 1.dp)
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 3.dp)
                 ) {
                     Text(
                         text = when (sortMode) {
@@ -813,7 +813,7 @@ fun TransactionsScreen(
                             SortMode.AMOUNT_ASC -> S.transactions.sortAmountAsc
                             SortMode.CATEGORY -> S.transactions.sortCategory
                         },
-                        fontSize = 26.sp
+                        fontSize = 20.sp
                     )
                 }
 
