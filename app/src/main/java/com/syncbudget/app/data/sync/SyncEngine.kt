@@ -1044,26 +1044,28 @@ class SyncEngine(
                         }
                     }
 
-                    // Check for cash value mismatch
-                    cashMismatchDetected = allReports.any { it.cashMismatch }
-                    if (cashMismatchDetected) {
-                        syncLog("CASH MISMATCH detected — will trigger recompute")
-                    }
-
-                    // Check for value hash mismatch (data corruption)
-                    valueMismatchDetected = allReports.any { it.valueMismatch }
-                    if (valueMismatchDetected) {
-                        syncLog("VALUE CORRUPTION detected — repair will push authoritative data")
-                    }
 
                     // Execute surgical repair if any divergence was found.
                     // But if the divergence signature hasn't changed since last
-                    // repair, the repair is ineffective (frozen clock residual).
-                    // Don't repair or flash — just log it.
+                    // repair, the repair is ineffective (frozen residual).
+                    // Don't repair, flash, or flag — just log it.
                     val merged = IntegrityChecker.mergeRepairs(allReports)
                     val divergenceSig = allReports.flatMap { it.details }.sorted().joinToString("|")
                     val lastDivSig = prefs.getString("lastDivergenceSignature", "") ?: ""
                     val isNewDivergence = divergenceSig != lastDivSig
+
+                    // Only set mismatch flags for NEW divergences (not frozen residuals)
+                    if (isNewDivergence) {
+                        cashMismatchDetected = allReports.any { it.cashMismatch }
+                        valueMismatchDetected = allReports.any { it.valueMismatch }
+                        if (valueMismatchDetected) {
+                            syncLog("VALUE CORRUPTION detected — repair will push authoritative data")
+                        }
+                        if (cashMismatchDetected) {
+                            syncLog("CASH MISMATCH detected — will trigger recompute")
+                        }
+                    }
+
                     if (merged.isNotEmpty() && isNewDivergence) {
                             val repairDeltas = mutableListOf<RecordDelta>()
                             for (action in merged) {
