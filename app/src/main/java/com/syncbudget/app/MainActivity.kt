@@ -1548,9 +1548,13 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             syncStatus = "synced"
-                            if (result.repairAttempted) {
+                            if (result.repairAttempted || result.cashMismatch) {
                                 syncRepairAlert = true
                                 prefs.edit().putBoolean("syncRepairAlert", true).apply()
+                            }
+                            // Cash mismatch: recompute from synced data (deterministic)
+                            if (result.cashMismatch) {
+                                recomputeCash()
                             }
                             syncErrorMessage = null
                             syncProgressMessage = null

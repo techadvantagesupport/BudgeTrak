@@ -41,7 +41,8 @@ data class SyncResult(
     val pendingAdminClaim: AdminClaim? = null,
     val catIdRemap: Map<Int, Int>? = null,
     val error: String? = null,
-    val repairAttempted: Boolean = false
+    val repairAttempted: Boolean = false,
+    val cashMismatch: Boolean = false
 )
 
 class SyncEngine(
@@ -1003,6 +1004,7 @@ class SyncEngine(
             // After a repair, wait until the remote's fingerprint changes (proves
             // they synced) before re-checking — replaces the old cooldown timer.
             var didRepair = false
+            var cashMismatchDetected = false
             if (runIntegrityCheck && fpJson != null) {
                 try {
                     val localFp = IntegrityChecker.fromJson(JSONObject(fpJson))
@@ -1038,6 +1040,12 @@ class SyncEngine(
                             // Clear saved signature — divergence resolved
                             prefs.edit().putString("lastRemoteFpSignature", "").apply()
                         }
+                    }
+
+                    // Check for cash value mismatch
+                    cashMismatchDetected = allReports.any { it.cashMismatch }
+                    if (cashMismatchDetected) {
+                        syncLog("CASH MISMATCH detected — will trigger recompute")
                     }
 
                     // Execute surgical repair if any divergence was found
@@ -1233,7 +1241,8 @@ class SyncEngine(
                 mergedSharedSettings = if (settingsChanged || snapshotApplied || snapshotCatchUp) mergedSettings else null,
                 pendingAdminClaim = adminClaim,
                 catIdRemap = catIdRemap,
-                repairAttempted = didRepair
+                repairAttempted = didRepair,
+                cashMismatch = cashMismatchDetected
             )
         } catch (e: Exception) {
             // Don't infer removal from Firestore exceptions — only explicit

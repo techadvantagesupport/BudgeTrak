@@ -42,7 +42,8 @@ object IntegrityChecker {
     data class DivergenceReport(
         val diverged: Boolean,
         val details: List<String>,
-        val repairs: List<RepairAction>
+        val repairs: List<RepairAction>,
+        val cashMismatch: Boolean = false
     )
 
     // ── Per-record max field clock ────────────────────────────────
@@ -320,14 +321,16 @@ object IntegrityChecker {
             details.add("sharedSettings: clock mismatch (local=${local.settingsMaxClock}, remote=${remote.settingsMaxClock})")
         }
 
-        if (kotlin.math.abs(local.cashValue - remote.cashValue) > 0.01) {
+        val cashDiverged = kotlin.math.abs(local.cashValue - remote.cashValue) > 0.01
+        if (cashDiverged) {
             details.add("availableCash: value mismatch (local=${local.cashValue}, remote=${remote.cashValue})")
         }
 
         return DivergenceReport(
             diverged = details.isNotEmpty(),
             details = details,
-            repairs = repairs
+            repairs = repairs,
+            cashMismatch = cashDiverged
         )
     }
 

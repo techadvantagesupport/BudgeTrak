@@ -343,7 +343,7 @@ class SyncWorker(
 
         if (result.success) {
             // Persist repair alert so foreground UI shows flashing magenta
-            if (result.repairAttempted) {
+            if (result.repairAttempted || result.cashMismatch) {
                 applicationContext.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
                     .edit().putBoolean("syncRepairAlert", true).apply()
             }
