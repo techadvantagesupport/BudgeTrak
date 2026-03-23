@@ -210,6 +210,14 @@ private enum class ViewFilter {
     PHOTOS
 }
 
+private enum class SortMode {
+    DATE_DESC,
+    DATE_ASC,
+    AMOUNT_DESC,
+    AMOUNT_ASC,
+    CATEGORY
+}
+
 private fun isValidAmountInput(text: String, maxDecimals: Int): Boolean {
     if (text.isEmpty()) return true
     if (maxDecimals == 0) return text.all { it.isDigit() }
@@ -286,6 +294,7 @@ fun TransactionsScreen(
     val toastState = LocalAppToast.current
     var photoThumbRefreshKey by remember { mutableIntStateOf(0) }
     var viewFilter by remember { mutableStateOf(ViewFilter.ALL) }
+    var sortMode by remember { mutableStateOf(SortMode.DATE_DESC) }
     var showAddIncome by remember { mutableStateOf(false) }
     var showAddExpense by remember { mutableStateOf(false) }
     var showSearchMenu by remember { mutableStateOf(false) }
@@ -640,11 +649,28 @@ fun TransactionsScreen(
         if (categoryFilterId != null) {
             list = list.filter { t -> t.categoryAmounts.any { it.categoryId == categoryFilterId } }
         }
-        list.sortedWith(
-            compareByDescending<Transaction> { it.date }
-                .thenBy { it.source }
-                .thenBy { it.amount }
-        )
+        when (sortMode) {
+            SortMode.DATE_DESC -> list.sortedWith(
+                compareByDescending<Transaction> { it.date }.thenBy { it.source }
+            )
+            SortMode.DATE_ASC -> list.sortedWith(
+                compareBy<Transaction> { it.date }.thenBy { it.source }
+            )
+            SortMode.AMOUNT_DESC -> list.sortedByDescending { it.amount }
+            SortMode.AMOUNT_ASC -> list.sortedBy { it.amount }
+            SortMode.CATEGORY -> {
+                // Sort by category usage frequency (least used first)
+                val catCount = mutableMapOf<Int, Int>()
+                for (t in transactions) {
+                    for (ca in t.categoryAmounts) {
+                        catCount[ca.categoryId] = (catCount[ca.categoryId] ?: 0) + 1
+                    }
+                }
+                list.sortedBy { t ->
+                    t.categoryAmounts.minOfOrNull { catCount[it.categoryId] ?: 0 } ?: 0
+                }
+            }
+        }
     }
 
     val allSelected = filteredTransactions.isNotEmpty() &&
@@ -754,6 +780,29 @@ fun TransactionsScreen(
                         ViewFilter.EXCLUDED -> S.transactions.excludedFilter
                         ViewFilter.NOT_VERIFIED -> S.transactions.notVerifiedFilter
                         ViewFilter.PHOTOS -> S.transactions.photosFilter
+                    })
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        sortMode = when (sortMode) {
+                            SortMode.DATE_DESC -> SortMode.DATE_ASC
+                            SortMode.DATE_ASC -> SortMode.AMOUNT_DESC
+                            SortMode.AMOUNT_DESC -> SortMode.AMOUNT_ASC
+                            SortMode.AMOUNT_ASC -> SortMode.CATEGORY
+                            SortMode.CATEGORY -> SortMode.DATE_DESC
+                        }
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onBackground
+                    )
+                ) {
+                    Text(when (sortMode) {
+                        SortMode.DATE_DESC -> S.transactions.sortDateDesc
+                        SortMode.DATE_ASC -> S.transactions.sortDateAsc
+                        SortMode.AMOUNT_DESC -> S.transactions.sortAmountDesc
+                        SortMode.AMOUNT_ASC -> S.transactions.sortAmountAsc
+                        SortMode.CATEGORY -> S.transactions.sortCategory
                     })
                 }
 
