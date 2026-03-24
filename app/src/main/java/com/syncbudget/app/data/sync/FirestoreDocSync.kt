@@ -183,12 +183,25 @@ class FirestoreDocSync(
         }
         listeners.clear()
         recentPushes.clear()
+        // Preserve lastSeenEnc and lastKnownState across restarts so the
+        // enc hash skip works if listeners are quickly reattached (e.g.
+        // DisposableEffect recomposition). These caches are scoped to
+        // this FirestoreDocSync instance, which is scoped to the group —
+        // so they're naturally cleared when a new group is joined.
+        deserializeScope.coroutineContext[kotlinx.coroutines.Job]?.cancelChildren()
+        isListening = false
+    }
+
+    /**
+     * Full cleanup including caches. Called only when leaving a group
+     * (not on listener restart).
+     */
+    fun dispose() {
+        stopListeners()
         lastSeenEnc.clear()
         lastKnownState.clear()
         localPendingEdits.clear()
         pendingEditsPrefs.edit().remove("edits").apply()
-        deserializeScope.coroutineContext[kotlinx.coroutines.Job]?.cancelChildren()
-        isListening = false
     }
 
     /**

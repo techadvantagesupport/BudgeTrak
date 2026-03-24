@@ -1064,7 +1064,9 @@ class MainActivity : ComponentActivity() {
                 onDispose {
                     // Only runs when syncGroupId changes (group left/dissolved)
                     // or activity is destroyed — NOT on isSyncConfigured toggles.
-                    docSync?.stopListeners()
+                    // dispose() clears all caches; stopListeners() preserves them
+                    // for quick reattach.
+                    docSync?.dispose()
                     SyncWriteHelper.dispose()
                 }
             }
