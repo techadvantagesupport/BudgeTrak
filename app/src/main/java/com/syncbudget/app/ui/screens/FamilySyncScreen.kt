@@ -1006,8 +1006,9 @@ fun FamilySyncScreen(
             val editableRoster = remember(allDeviceIds, deviceRoster, devices) {
                 mutableStateOf(
                     allDeviceIds.associateWith { id ->
-                        deviceRoster[id]
-                            ?: devices.find { it.deviceId == id }?.deviceName
+                        // Live device name takes priority over stale roster entry
+                        devices.find { it.deviceId == id }?.deviceName?.takeIf { it.isNotEmpty() }
+                            ?: deviceRoster[id]
                             ?: ""
                     }
                 )
