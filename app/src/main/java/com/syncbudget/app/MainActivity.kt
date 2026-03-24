@@ -3453,14 +3453,8 @@ class MainActivity : ComponentActivity() {
                             if (gId != null && key != null) {
                                 coroutineScope.launch {
                                     try {
-                                        // Push all records so the new device can bootstrap from Firestore
-                                        val docSync = FirestoreDocSync(context, gId, localDeviceId, key)
-                                        docSync.pushAllRecords(
-                                            transactions.toList(), recurringExpenses.toList(),
-                                            incomeSources.toList(), savingsGoals.toList(),
-                                            amortizationEntries.toList(), categories.toList(),
-                                            periodLedger.toList(), sharedSettings
-                                        )
+                                        // No need to push data — the new device receives
+                                        // everything via Firestore listeners on join.
                                         generatedPairingCode = GroupManager.generatePairingCode(context, gId, key)
                                     } catch (_: Exception) {}
                                 }
