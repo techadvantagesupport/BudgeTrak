@@ -554,12 +554,27 @@ class MainActivity : ComponentActivity() {
             // in one migration doesn't block subsequent migrations or crash
             // the LaunchedEffect.  Flags are set AFTER success.
             LaunchedEffect(Unit) {
-                // Strip legacy clock fields from local JSON files.
-                // Old CRDT data had _clock fields on every record; the
-                // data classes no longer have them so the next save drops
-                // them.  This forces a re-save of everything at once.
+                // Purge tombstoned records (deleted=true) from local JSON.
+                // These are leftover from old groups and serve no purpose locally.
+                // Also strips any legacy clock fields from JSON on re-save.
                 try {
-                    if (!prefs.getBoolean("migration_strip_clock_fields", false)) {
+                    if (!prefs.getBoolean("migration_purge_tombstones", false)) {
+                        val txnBefore = transactions.size
+                        val reBefore = recurringExpenses.size
+                        val isBefore = incomeSources.size
+                        val sgBefore = savingsGoals.size
+                        val aeBefore = amortizationEntries.size
+                        val catBefore = categories.size
+                        transactions.removeAll { it.deleted }
+                        recurringExpenses.removeAll { it.deleted }
+                        incomeSources.removeAll { it.deleted }
+                        savingsGoals.removeAll { it.deleted }
+                        amortizationEntries.removeAll { it.deleted }
+                        categories.removeAll { it.deleted }
+                        val purged = (txnBefore - transactions.size) + (reBefore - recurringExpenses.size) +
+                            (isBefore - incomeSources.size) + (sgBefore - savingsGoals.size) +
+                            (aeBefore - amortizationEntries.size) + (catBefore - categories.size)
+                        if (purged > 0) android.util.Log.i("Migration", "Purged $purged tombstoned records")
                         TransactionRepository.save(context, transactions.toList())
                         RecurringExpenseRepository.save(context, recurringExpenses.toList())
                         IncomeSourceRepository.save(context, incomeSources.toList())
@@ -568,7 +583,7 @@ class MainActivity : ComponentActivity() {
                         CategoryRepository.save(context, categories.toList())
                         PeriodLedgerRepository.save(context, periodLedger.toList())
                         SharedSettingsRepository.save(context, sharedSettings)
-                        prefs.edit().putBoolean("migration_strip_clock_fields", true).apply()
+                        prefs.edit().putBoolean("migration_purge_tombstones", true).apply()
                     }
                 } catch (e: Exception) { android.util.Log.e("Migration", "strip_clock_fields failed", e) }
                 try {

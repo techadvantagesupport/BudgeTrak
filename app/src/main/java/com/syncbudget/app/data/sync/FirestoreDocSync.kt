@@ -281,24 +281,34 @@ class FirestoreDocSync(
         periodLedgerEntries: List<PeriodLedgerEntry>,
         sharedSettings: SharedSettings
     ) {
-        syncLog("Migration: pushing all records to Firestore")
+        // Filter out tombstoned records — no need to push old deletions to a new group
+        val liveTxns = transactions.filter { !it.deleted }
+        val liveRe = recurringExpenses.filter { !it.deleted }
+        val liveIs = incomeSources.filter { !it.deleted }
+        val liveSg = savingsGoals.filter { !it.deleted }
+        val liveAe = amortizationEntries.filter { !it.deleted }
+        val liveCats = categories.filter { !it.deleted }
 
-        pushBatch(EncryptedDocSerializer.COLLECTION_TRANSACTIONS, transactions) { t ->
+        syncLog("Migration: pushing ${liveTxns.size} txns (${transactions.size - liveTxns.size} tombstones skipped), " +
+                "${liveRe.size} RE, ${liveIs.size} IS, ${liveSg.size} SG, ${liveAe.size} AE, " +
+                "${liveCats.size} cats, ${periodLedgerEntries.size} PLE")
+
+        pushBatch(EncryptedDocSerializer.COLLECTION_TRANSACTIONS, liveTxns) { t ->
             t.id.toString() to EncryptedDocSerializer.transactionToFieldMap(t, encryptionKey, deviceId)
         }
-        pushBatch(EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES, recurringExpenses) { re ->
+        pushBatch(EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES, liveRe) { re ->
             re.id.toString() to EncryptedDocSerializer.recurringExpenseToFieldMap(re, encryptionKey, deviceId)
         }
-        pushBatch(EncryptedDocSerializer.COLLECTION_INCOME_SOURCES, incomeSources) { src ->
+        pushBatch(EncryptedDocSerializer.COLLECTION_INCOME_SOURCES, liveIs) { src ->
             src.id.toString() to EncryptedDocSerializer.incomeSourceToFieldMap(src, encryptionKey, deviceId)
         }
-        pushBatch(EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS, savingsGoals) { sg ->
+        pushBatch(EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS, liveSg) { sg ->
             sg.id.toString() to EncryptedDocSerializer.savingsGoalToFieldMap(sg, encryptionKey, deviceId)
         }
-        pushBatch(EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES, amortizationEntries) { ae ->
+        pushBatch(EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES, liveAe) { ae ->
             ae.id.toString() to EncryptedDocSerializer.amortizationEntryToFieldMap(ae, encryptionKey, deviceId)
         }
-        pushBatch(EncryptedDocSerializer.COLLECTION_CATEGORIES, categories) { cat ->
+        pushBatch(EncryptedDocSerializer.COLLECTION_CATEGORIES, liveCats) { cat ->
             cat.id.toString() to EncryptedDocSerializer.categoryToFieldMap(cat, encryptionKey, deviceId)
         }
         pushBatch(EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER, periodLedgerEntries) { ple ->
@@ -314,10 +324,10 @@ class FirestoreDocSync(
             ssData
         )
 
-        syncLog("Migration complete: pushed ${transactions.size} txns, " +
-                "${recurringExpenses.size} RE, ${incomeSources.size} IS, " +
-                "${savingsGoals.size} SG, ${amortizationEntries.size} AE, " +
-                "${categories.size} cats, ${periodLedgerEntries.size} PLE")
+        syncLog("Migration complete: pushed ${liveTxns.size} txns, " +
+                "${liveRe.size} RE, ${liveIs.size} IS, " +
+                "${liveSg.size} SG, ${liveAe.size} AE, " +
+                "${liveCats.size} cats, ${periodLedgerEntries.size} PLE")
     }
 
     // ── internal: listener handlers ─────────────────────────────────────
