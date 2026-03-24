@@ -59,7 +59,12 @@ class FirestoreDocSync(
     // Value = timestamp when pushed
     private val recentPushes = ConcurrentHashMap<String, Long>()
 
-    /** Callback fired with a batch of incoming remote changes per collection. */
+    // Background scope for heavy deserialization (decrypt + JSON parse)
+    // so the main thread stays responsive during large syncs.
+    private val deserializeScope = CoroutineScope(Dispatchers.Default + kotlinx.coroutines.SupervisorJob())
+
+    /** Callback fired with a batch of incoming remote changes per collection.
+     *  Always invoked on the MAIN thread. */
     var onBatchChanged: ((List<DataChangeEvent>) -> Unit)? = null
 
     /** Whether listeners are currently active. */
@@ -109,6 +114,7 @@ class FirestoreDocSync(
         }
         listeners.clear()
         recentPushes.clear()
+        deserializeScope.coroutineContext[kotlinx.coroutines.Job]?.cancelChildren()
         isListening = false
     }
 
@@ -195,31 +201,37 @@ class FirestoreDocSync(
     private fun handleCollectionChanges(collection: String, changes: List<DocumentChange>) {
         pruneExpiredEchoKeys()
 
-        val events = mutableListOf<DataChangeEvent>()
-        for (change in changes) {
-            val docId = change.document.id
-            val echoKey = "$collection:$docId"
-
-            // Skip echo from our own recent writes
-            if (recentPushes.containsKey(echoKey)) continue
-            // Skip local-only changes (pending writes not yet confirmed)
-            if (change.document.metadata.hasPendingWrites()) continue
-
-            try {
-                val record = deserializeDoc(collection, change.document) ?: continue
-                val action = when (change.type) {
-                    DocumentChange.Type.ADDED -> "added"
-                    DocumentChange.Type.MODIFIED -> "modified"
-                    DocumentChange.Type.REMOVED -> "removed"
-                }
-                events.add(DataChangeEvent(collection, action, record, docId))
-            } catch (e: Exception) {
-                syncLog("Failed to deserialize $echoKey: ${e.message}")
-            }
+        // Filter to only non-echo, server-confirmed changes (lightweight, main thread OK)
+        val toProcess = changes.filter { change ->
+            val echoKey = "$collection:${change.document.id}"
+            !recentPushes.containsKey(echoKey) && !change.document.metadata.hasPendingWrites()
         }
-        if (events.isNotEmpty()) {
-            syncLog("Received ${events.size} changes in $collection")
-            onBatchChanged?.invoke(events)
+        if (toProcess.isEmpty()) return
+
+        // Heavy work (decrypt + JSON parse) on background thread,
+        // then deliver batch to UI on main thread.
+        deserializeScope.launch {
+            val events = mutableListOf<DataChangeEvent>()
+            for (change in toProcess) {
+                val docId = change.document.id
+                try {
+                    val record = deserializeDoc(collection, change.document) ?: continue
+                    val action = when (change.type) {
+                        DocumentChange.Type.ADDED -> "added"
+                        DocumentChange.Type.MODIFIED -> "modified"
+                        DocumentChange.Type.REMOVED -> "removed"
+                    }
+                    events.add(DataChangeEvent(collection, action, record, docId))
+                } catch (e: Exception) {
+                    syncLog("Failed to deserialize $collection/$docId: ${e.message}")
+                }
+            }
+            if (events.isNotEmpty()) {
+                syncLog("Received ${events.size} changes in $collection")
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    onBatchChanged?.invoke(events)
+                }
+            }
         }
     }
 
@@ -230,19 +242,23 @@ class FirestoreDocSync(
         if (recentPushes.containsKey(echoKey)) return
         if (doc.metadata.hasPendingWrites()) return
 
-        try {
-            val settings = EncryptedDocSerializer.sharedSettingsFromDoc(doc, encryptionKey)
-            syncLog("Received 1 changes in sharedSettings")
-            onBatchChanged?.invoke(listOf(
-                DataChangeEvent(
-                    collection = EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS,
-                    action = "modified",
-                    record = settings,
-                    docId = EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID
-                )
-            ))
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to deserialize sharedSettings", e)
+        deserializeScope.launch {
+            try {
+                val settings = EncryptedDocSerializer.sharedSettingsFromDoc(doc, encryptionKey)
+                syncLog("Received 1 changes in sharedSettings")
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    onBatchChanged?.invoke(listOf(
+                        DataChangeEvent(
+                            collection = EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS,
+                            action = "modified",
+                            record = settings,
+                            docId = EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID
+                        )
+                    ))
+                }
+            } catch (e: Exception) {
+                syncLog("Failed to deserialize sharedSettings: ${e.message}")
+            }
         }
     }
 

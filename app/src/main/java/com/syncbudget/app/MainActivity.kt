@@ -1033,26 +1033,28 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         }
-                        // Save once per changed collection (not per record)
-                        if (EncryptedDocSerializer.COLLECTION_TRANSACTIONS in changedCollections)
-                            TransactionRepository.save(context, transactions.toList())
-                        if (EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES in changedCollections)
-                            RecurringExpenseRepository.save(context, recurringExpenses.toList())
-                        if (EncryptedDocSerializer.COLLECTION_INCOME_SOURCES in changedCollections)
-                            IncomeSourceRepository.save(context, incomeSources.toList())
-                        if (EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS in changedCollections)
-                            SavingsGoalRepository.save(context, savingsGoals.toList())
-                        if (EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES in changedCollections)
-                            AmortizationRepository.save(context, amortizationEntries.toList())
-                        if (EncryptedDocSerializer.COLLECTION_CATEGORIES in changedCollections)
-                            CategoryRepository.save(context, categories.toList())
-                        if (EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER in changedCollections)
-                            PeriodLedgerRepository.save(context, periodLedger.toList())
-                        if (EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS in changedCollections)
-                            SharedSettingsRepository.save(context, sharedSettings)
-                        // Recompute cash if any budget-affecting data changed
+                        // Recompute cash on main thread (reads derivedState)
                         if (changedCollections.any { it != EncryptedDocSerializer.COLLECTION_CATEGORIES })
                             recomputeCash()
+                        // Save changed collections to JSON on background thread
+                        val txnSnapshot = if (EncryptedDocSerializer.COLLECTION_TRANSACTIONS in changedCollections) transactions.toList() else null
+                        val reSnapshot = if (EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES in changedCollections) recurringExpenses.toList() else null
+                        val isSnapshot = if (EncryptedDocSerializer.COLLECTION_INCOME_SOURCES in changedCollections) incomeSources.toList() else null
+                        val sgSnapshot = if (EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS in changedCollections) savingsGoals.toList() else null
+                        val aeSnapshot = if (EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES in changedCollections) amortizationEntries.toList() else null
+                        val catSnapshot = if (EncryptedDocSerializer.COLLECTION_CATEGORIES in changedCollections) categories.toList() else null
+                        val pleSnapshot = if (EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER in changedCollections) periodLedger.toList() else null
+                        val ssSnapshot = if (EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS in changedCollections) sharedSettings else null
+                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            txnSnapshot?.let { TransactionRepository.save(context, it) }
+                            reSnapshot?.let { RecurringExpenseRepository.save(context, it) }
+                            isSnapshot?.let { IncomeSourceRepository.save(context, it) }
+                            sgSnapshot?.let { SavingsGoalRepository.save(context, it) }
+                            aeSnapshot?.let { AmortizationRepository.save(context, it) }
+                            catSnapshot?.let { CategoryRepository.save(context, it) }
+                            pleSnapshot?.let { PeriodLedgerRepository.save(context, it) }
+                            ssSnapshot?.let { SharedSettingsRepository.save(context, it) }
+                        }
                         com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
                     } catch (e: Exception) {
                         android.util.Log.e("SyncListener", "Failed to handle batch", e)
