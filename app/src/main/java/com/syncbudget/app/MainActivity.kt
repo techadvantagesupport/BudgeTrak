@@ -861,6 +861,7 @@ class MainActivity : ComponentActivity() {
             val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner) {
                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    android.util.Log.i("SyncLifecycle", "Lifecycle event: $event")
                     if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                         syncTrigger++
                     }
@@ -880,12 +881,14 @@ class MainActivity : ComponentActivity() {
             val docSync = remember(syncGroupId) {
                 val gid = syncGroupId ?: return@remember null
                 val key = GroupManager.getEncryptionKey(context) ?: return@remember null
+                android.util.Log.i("SyncLifecycle", "remember(syncGroupId=$gid): creating NEW FirestoreDocSync")
                 FirestoreDocSync(context, gid, localDeviceId, key)
             }
 
             // Listener lifecycle: starts when docSync is created (group joined),
             // stops only when docSync changes (group left/dissolved) or activity destroyed.
             DisposableEffect(docSync) {
+                android.util.Log.i("SyncLifecycle", "DisposableEffect: docSync=${if (docSync != null) "exists" else "null"}, isListening=${docSync?.isListening}")
                 if (docSync != null) {
                     SyncWriteHelper.initialize(docSync)
 
@@ -1062,10 +1065,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 onDispose {
-                    // Only runs when syncGroupId changes (group left/dissolved)
-                    // or activity is destroyed — NOT on isSyncConfigured toggles.
-                    // dispose() clears all caches; stopListeners() preserves them
-                    // for quick reattach.
+                    android.util.Log.i("SyncLifecycle", "DisposableEffect.onDispose: stopping listeners")
                     docSync?.dispose()
                     SyncWriteHelper.dispose()
                 }

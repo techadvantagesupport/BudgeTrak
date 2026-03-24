@@ -61,8 +61,10 @@ class FirestoreDocSync(
 
     // Enc hash skip: track the last-seen enc blob per document.
     // If unchanged since last callback, skip expensive decryption.
-    // Key = "collection:docId", Value = enc string (or composite hash for per-field).
+    // Key = "collection:docId", Value = composite hash of enc_* fields.
+    // Persisted to disk so cold starts can skip decryption of unchanged docs.
     private val lastSeenEnc = ConcurrentHashMap<String, String>()
+    private val encCacheFile = java.io.File(context.filesDir, "enc_hash_cache.json")
 
     // Last known record state per doc, for diff-based field updates.
     // Populated from listener (incoming) and after pushes (outgoing).
@@ -75,6 +77,18 @@ class FirestoreDocSync(
     private val pendingEditsPrefs = context.getSharedPreferences("pending_edits", Context.MODE_PRIVATE)
 
     init {
+        // Restore persisted enc hash cache (survives process death)
+        try {
+            if (encCacheFile.exists()) {
+                val json = org.json.JSONObject(encCacheFile.readText())
+                for (key in json.keys()) {
+                    lastSeenEnc[key] = json.getString(key)
+                }
+                syncLog("Restored enc hash cache: ${lastSeenEnc.size} entries from disk")
+            }
+        } catch (e: Exception) {
+            syncLog("Failed to restore enc hash cache: ${e.message}")
+        }
         // Restore persisted pending edits
         try {
             val json = pendingEditsPrefs.getString("edits", null)
@@ -84,6 +98,16 @@ class FirestoreDocSync(
                     localPendingEdits[key] = obj.getLong(key)
                 }
             }
+        } catch (_: Exception) {}
+    }
+
+    private fun persistEncCache() {
+        try {
+            val json = org.json.JSONObject()
+            for ((key, value) in lastSeenEnc) {
+                json.put(key, value)
+            }
+            encCacheFile.writeText(json.toString())
         } catch (_: Exception) {}
     }
 
@@ -117,9 +141,12 @@ class FirestoreDocSync(
      * then on every remote change.
      */
     fun startListeners() {
-        if (isListening) return
+        if (isListening) {
+            syncLog("startListeners called but already listening — skipped")
+            return
+        }
         isListening = true
-        syncLog("Starting listeners for group $groupId")
+        syncLog("Starting listeners for group $groupId (encCache=${lastSeenEnc.size} entries, stateCache=${lastKnownState.size} entries)")
 
         // Collection listeners for the 7 standard types
         for (collection in EncryptedDocSerializer.ALL_COLLECTIONS) {
@@ -202,6 +229,7 @@ class FirestoreDocSync(
         lastKnownState.clear()
         localPendingEdits.clear()
         pendingEditsPrefs.edit().remove("edits").apply()
+        encCacheFile.delete()
     }
 
     /**
@@ -425,6 +453,10 @@ class FirestoreDocSync(
                 }
             } else if (skippedUnchanged > 0) {
                 syncLog("Skipped $skippedUnchanged unchanged docs in $collection")
+            }
+            // Persist enc hash cache after processing each collection batch
+            if (events.isNotEmpty() || skippedUnchanged > 0) {
+                persistEncCache()
             }
         }
     }
