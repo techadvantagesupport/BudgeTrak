@@ -346,32 +346,31 @@ class MainActivity : ComponentActivity() {
                 mutableStateListOf(*SavingsGoalRepository.load(context).toTypedArray())
             }
 
-            fun markSyncDirty() {
-                context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
-                    .edit().putBoolean("syncDirty", true).apply()
-            }
+            // Save functions: persist to local JSON + push changed records to Firestore.
+            // Pass changed records to avoid pushing the entire list (which would
+            // re-encrypt every record and trigger mass listener events).
 
-            fun saveIncomeSources() {
+            fun saveIncomeSources(changed: List<IncomeSource> = emptyList()) {
                 IncomeSourceRepository.save(context, incomeSources.toList())
-                markSyncDirty()
+                changed.forEach { SyncWriteHelper.pushIncomeSource(it) }
             }
 
-            fun saveRecurringExpenses() {
+            fun saveRecurringExpenses(changed: List<RecurringExpense> = emptyList()) {
                 RecurringExpenseRepository.save(context, recurringExpenses.toList())
-                markSyncDirty()
+                changed.forEach { SyncWriteHelper.pushRecurringExpense(it) }
             }
 
-            fun saveAmortizationEntries() {
+            fun saveAmortizationEntries(changed: List<AmortizationEntry> = emptyList()) {
                 AmortizationRepository.save(context, amortizationEntries.toList())
-                markSyncDirty()
+                changed.forEach { SyncWriteHelper.pushAmortizationEntry(it) }
             }
 
-            fun saveSavingsGoals() {
+            fun saveSavingsGoals(changed: List<SavingsGoal> = emptyList()) {
                 SavingsGoalRepository.save(context, savingsGoals.toList())
-                markSyncDirty()
+                changed.forEach { SyncWriteHelper.pushSavingsGoal(it) }
             }
 
-            fun saveTransactions() {
+            fun saveTransactions(changed: List<Transaction> = emptyList()) {
                 // Dedup by ID before saving — duplicates can accumulate from
                 // widget disk merge or "added during sync" preservation.
                 val deduped = transactions.groupBy { it.id }
@@ -382,12 +381,12 @@ class MainActivity : ComponentActivity() {
                     transactions.addAll(deduped)
                 }
                 TransactionRepository.save(context, transactions.toList())
-                markSyncDirty()
+                changed.forEach { SyncWriteHelper.pushTransaction(it) }
             }
 
-            fun saveCategories() {
+            fun saveCategories(changed: List<Category> = emptyList()) {
                 CategoryRepository.save(context, categories.toList())
-                markSyncDirty()
+                changed.forEach { SyncWriteHelper.pushCategory(it) }
             }
 
             // persistAvailableCash declared after sync state variables below
@@ -448,9 +447,9 @@ class MainActivity : ComponentActivity() {
                 mutableStateListOf(*PeriodLedgerRepository.load(context).toTypedArray())
             }
 
-            fun savePeriodLedger() {
+            fun savePeriodLedger(changed: List<PeriodLedgerEntry> = emptyList()) {
                 PeriodLedgerRepository.save(context, periodLedger.toList())
-                markSyncDirty()
+                changed.forEach { SyncWriteHelper.pushPeriodLedgerEntry(it) }
             }
 
             // ── Shared Settings (for sync) ──
@@ -916,56 +915,48 @@ class MainActivity : ComponentActivity() {
 
                 // ── Firestore-native listener setup ──
 
-                // Listener callback: update in-memory state when remote changes arrive
-                docSync.onDataChanged = { event ->
+                // Listener callback: update in-memory state when remote changes arrive.
+                // Events arrive batched per collection — apply all, then save once.
+                docSync.onBatchChanged = { events ->
                     try {
-                        when (event.collection) {
-                            EncryptedDocSerializer.COLLECTION_TRANSACTIONS -> {
-                                val txn = event.record as Transaction
-                                val idx = transactions.indexOfFirst { it.id == txn.id }
-                                if (idx >= 0) transactions[idx] = txn else transactions.add(txn)
-                                TransactionRepository.save(context, transactions.toList())
-                                recomputeCash()
-                            }
-                            EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES -> {
-                                val re = event.record as RecurringExpense
-                                val idx = recurringExpenses.indexOfFirst { it.id == re.id }
-                                if (idx >= 0) recurringExpenses[idx] = re else recurringExpenses.add(re)
-                                RecurringExpenseRepository.save(context, recurringExpenses.toList())
-                                recomputeCash()
-                            }
-                            EncryptedDocSerializer.COLLECTION_INCOME_SOURCES -> {
-                                val src = event.record as IncomeSource
-                                val idx = incomeSources.indexOfFirst { it.id == src.id }
-                                if (idx >= 0) incomeSources[idx] = src else incomeSources.add(src)
-                                IncomeSourceRepository.save(context, incomeSources.toList())
-                                recomputeCash()
-                            }
-                            EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS -> {
-                                val sg = event.record as SavingsGoal
-                                val idx = savingsGoals.indexOfFirst { it.id == sg.id }
-                                if (idx >= 0) savingsGoals[idx] = sg else savingsGoals.add(sg)
-                                SavingsGoalRepository.save(context, savingsGoals.toList())
-                                recomputeCash()
-                            }
-                            EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES -> {
-                                val ae = event.record as AmortizationEntry
-                                val idx = amortizationEntries.indexOfFirst { it.id == ae.id }
-                                if (idx >= 0) amortizationEntries[idx] = ae else amortizationEntries.add(ae)
-                                AmortizationRepository.save(context, amortizationEntries.toList())
-                                recomputeCash()
-                            }
+                        val changedCollections = mutableSetOf<String>()
+                        for (event in events) {
+                            changedCollections.add(event.collection)
+                            when (event.collection) {
+                                EncryptedDocSerializer.COLLECTION_TRANSACTIONS -> {
+                                    val txn = event.record as Transaction
+                                    val idx = transactions.indexOfFirst { it.id == txn.id }
+                                    if (idx >= 0) transactions[idx] = txn else transactions.add(txn)
+                                }
+                                EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES -> {
+                                    val re = event.record as RecurringExpense
+                                    val idx = recurringExpenses.indexOfFirst { it.id == re.id }
+                                    if (idx >= 0) recurringExpenses[idx] = re else recurringExpenses.add(re)
+                                }
+                                EncryptedDocSerializer.COLLECTION_INCOME_SOURCES -> {
+                                    val src = event.record as IncomeSource
+                                    val idx = incomeSources.indexOfFirst { it.id == src.id }
+                                    if (idx >= 0) incomeSources[idx] = src else incomeSources.add(src)
+                                }
+                                EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS -> {
+                                    val sg = event.record as SavingsGoal
+                                    val idx = savingsGoals.indexOfFirst { it.id == sg.id }
+                                    if (idx >= 0) savingsGoals[idx] = sg else savingsGoals.add(sg)
+                                }
+                                EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES -> {
+                                    val ae = event.record as AmortizationEntry
+                                    val idx = amortizationEntries.indexOfFirst { it.id == ae.id }
+                                    if (idx >= 0) amortizationEntries[idx] = ae else amortizationEntries.add(ae)
+                                }
                             EncryptedDocSerializer.COLLECTION_CATEGORIES -> {
                                 val cat = event.record as Category
-                                // Tag-based dedup: if a remote category has the same tag
-                                // as a local one, keep local and remap transactions
+                                // Tag-based dedup
                                 val localMatch = if (cat.tag.isNotEmpty()) {
                                     categories.firstOrNull {
                                         it.tag == cat.tag && it.id != cat.id && !it.deleted
                                     }
                                 } else null
                                 if (localMatch != null) {
-                                    // Remap: use local category, discard remote duplicate
                                     val remapJson = syncPrefs.getString("catIdRemap", null)
                                     val remap = if (remapJson != null) {
                                         try {
@@ -977,8 +968,6 @@ class MainActivity : ComponentActivity() {
                                     syncPrefs.edit().putString("catIdRemap",
                                         org.json.JSONObject(remap.mapKeys { it.key.toString() }).toString()
                                     ).apply()
-                                    // Apply remap to transactions
-                                    var remapped = false
                                     for (i in transactions.indices) {
                                         val t = transactions[i]
                                         val newCats = t.categoryAmounts.map { ca ->
@@ -986,28 +975,22 @@ class MainActivity : ComponentActivity() {
                                         }
                                         if (newCats != t.categoryAmounts) {
                                             transactions[i] = t.copy(categoryAmounts = newCats)
-                                            remapped = true
+                                            changedCollections.add(EncryptedDocSerializer.COLLECTION_TRANSACTIONS)
                                         }
                                     }
-                                    if (remapped) TransactionRepository.save(context, transactions.toList())
                                 } else {
                                     val idx = categories.indexOfFirst { it.id == cat.id }
                                     if (idx >= 0) categories[idx] = cat else categories.add(cat)
-                                    CategoryRepository.save(context, categories.toList())
                                 }
                             }
                             EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER -> {
                                 val ple = event.record as PeriodLedgerEntry
                                 val idx = periodLedger.indexOfFirst { it.id == ple.id }
                                 if (idx >= 0) periodLedger[idx] = ple else periodLedger.add(ple)
-                                PeriodLedgerRepository.save(context, periodLedger.toList())
-                                recomputeCash()
                             }
                             EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS -> {
                                 val merged = event.record as SharedSettings
                                 sharedSettings = merged
-                                SharedSettingsRepository.save(context, merged)
-                                // Apply synced settings to local state
                                 currencySymbol = merged.currency
                                 budgetPeriod = try { BudgetPeriod.valueOf(merged.budgetPeriod) } catch (_: Exception) { budgetPeriod }
                                 resetHour = merged.resetHour
@@ -1047,12 +1030,32 @@ class MainActivity : ComponentActivity() {
                                     .putInt("matchChars", merged.matchChars)
                                     .putString("incomeMode", merged.incomeMode)
                                     .apply()
-                                recomputeCash()
                             }
                         }
+                        }
+                        // Save once per changed collection (not per record)
+                        if (EncryptedDocSerializer.COLLECTION_TRANSACTIONS in changedCollections)
+                            TransactionRepository.save(context, transactions.toList())
+                        if (EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES in changedCollections)
+                            RecurringExpenseRepository.save(context, recurringExpenses.toList())
+                        if (EncryptedDocSerializer.COLLECTION_INCOME_SOURCES in changedCollections)
+                            IncomeSourceRepository.save(context, incomeSources.toList())
+                        if (EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS in changedCollections)
+                            SavingsGoalRepository.save(context, savingsGoals.toList())
+                        if (EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES in changedCollections)
+                            AmortizationRepository.save(context, amortizationEntries.toList())
+                        if (EncryptedDocSerializer.COLLECTION_CATEGORIES in changedCollections)
+                            CategoryRepository.save(context, categories.toList())
+                        if (EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER in changedCollections)
+                            PeriodLedgerRepository.save(context, periodLedger.toList())
+                        if (EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS in changedCollections)
+                            SharedSettingsRepository.save(context, sharedSettings)
+                        // Recompute cash if any budget-affecting data changed
+                        if (changedCollections.any { it != EncryptedDocSerializer.COLLECTION_CATEGORIES })
+                            recomputeCash()
                         com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
                     } catch (e: Exception) {
-                        android.util.Log.e("SyncListener", "Failed to handle change: ${event.collection}", e)
+                        android.util.Log.e("SyncListener", "Failed to handle batch", e)
                     }
                 }
 
@@ -1097,25 +1100,11 @@ class MainActivity : ComponentActivity() {
                         delay(5_000) // 5 seconds between checks
                         healthCheckCounter++
 
-                        // Push local changes to Firestore when dirty
+                        // Per-record pushes replaced the dirty-push-all loop.
+                        // Save functions now push individual changed records via
+                        // SyncWriteHelper. Clear stale dirty flag if set.
                         if (syncPrefs.getBoolean("syncDirty", false)) {
-                            try {
-                                android.util.Log.i("SyncLoop", "Dirty flag set — pushing all records")
-                                docSync.pushAllRecords(
-                                    transactions.toList(),
-                                    recurringExpenses.toList(),
-                                    incomeSources.toList(),
-                                    savingsGoals.toList(),
-                                    amortizationEntries.toList(),
-                                    categories.toList(),
-                                    periodLedger.toList(),
-                                    sharedSettings
-                                )
-                                syncPrefs.edit().putBoolean("syncDirty", false).apply()
-                                lastSyncTime = "just now"
-                            } catch (e: Exception) {
-                                android.util.Log.e("SyncLoop", "Dirty push failed", e)
-                            }
+                            syncPrefs.edit().putBoolean("syncDirty", false).apply()
                         }
 
                         // Health checks every ~5 minutes (60 * 5s = 300s)
@@ -3081,10 +3070,26 @@ class MainActivity : ComponentActivity() {
                                         syncErrorMessage = null
                                         syncProgressMessage = null
                                     } catch (e: Exception) {
-                                        android.util.Log.e("Sync", "Dissolve failed", e)
-                                        syncStatus = "error"
+                                        android.util.Log.e("Sync", "Dissolve failed, falling back to local leave", e)
+                                        // If Firestore is unreachable (group already dissolved, network down),
+                                        // fall back to local-only leave so user isn't stuck.
+                                        try {
+                                            GroupManager.leaveGroup(context, localOnly = true)
+                                        } catch (_: Exception) {}
+                                        syncPrefs.edit()
+                                            .remove("catIdRemap")
+                                            .remove("lastSuccessfulSync")
+                                            .apply()
+                                        isSyncConfigured = false
+                                        syncGroupId = null
+                                        isSyncAdmin = false
+                                        syncStatus = "off"
+                                        lastSyncTime = null
+                                        syncDevices = emptyList()
+                                        pendingAdminClaim = null
+                                        syncErrorMessage = null
                                         syncProgressMessage = null
-                                        toastState.show(strings.sync.dissolveError)
+                                        toastState.show("Group left locally (server unreachable)")
                                     }
                                 }
                             }

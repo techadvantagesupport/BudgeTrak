@@ -59,8 +59,8 @@ class FirestoreDocSync(
     // Value = timestamp when pushed
     private val recentPushes = ConcurrentHashMap<String, Long>()
 
-    /** Callback fired for each incoming remote change. */
-    var onDataChanged: ((DataChangeEvent) -> Unit)? = null
+    /** Callback fired with a batch of incoming remote changes per collection. */
+    var onBatchChanged: ((List<DataChangeEvent>) -> Unit)? = null
 
     /** Whether listeners are currently active. */
     var isListening: Boolean = false
@@ -195,19 +195,15 @@ class FirestoreDocSync(
     private fun handleCollectionChanges(collection: String, changes: List<DocumentChange>) {
         pruneExpiredEchoKeys()
 
+        val events = mutableListOf<DataChangeEvent>()
         for (change in changes) {
             val docId = change.document.id
             val echoKey = "$collection:$docId"
 
             // Skip echo from our own recent writes
-            if (recentPushes.containsKey(echoKey)) {
-                continue
-            }
-
+            if (recentPushes.containsKey(echoKey)) continue
             // Skip local-only changes (pending writes not yet confirmed)
-            if (change.document.metadata.hasPendingWrites()) {
-                continue
-            }
+            if (change.document.metadata.hasPendingWrites()) continue
 
             try {
                 val record = deserializeDoc(collection, change.document) ?: continue
@@ -216,18 +212,14 @@ class FirestoreDocSync(
                     DocumentChange.Type.MODIFIED -> "modified"
                     DocumentChange.Type.REMOVED -> "removed"
                 }
-                syncLog("Received $action $collection/$docId")
-                onDataChanged?.invoke(
-                    DataChangeEvent(
-                        collection = collection,
-                        action = action,
-                        record = record,
-                        docId = docId
-                    )
-                )
+                events.add(DataChangeEvent(collection, action, record, docId))
             } catch (e: Exception) {
                 syncLog("Failed to deserialize $echoKey: ${e.message}")
             }
+        }
+        if (events.isNotEmpty()) {
+            syncLog("Received ${events.size} changes in $collection")
+            onBatchChanged?.invoke(events)
         }
     }
 
@@ -240,14 +232,15 @@ class FirestoreDocSync(
 
         try {
             val settings = EncryptedDocSerializer.sharedSettingsFromDoc(doc, encryptionKey)
-            onDataChanged?.invoke(
+            syncLog("Received 1 changes in sharedSettings")
+            onBatchChanged?.invoke(listOf(
                 DataChangeEvent(
                     collection = EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS,
                     action = "modified",
                     record = settings,
                     docId = EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID
                 )
-            )
+            ))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to deserialize sharedSettings", e)
         }
