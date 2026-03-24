@@ -967,6 +967,18 @@ class MainActivity : ComponentActivity() {
                                                 changedCollections.add(EncryptedDocSerializer.COLLECTION_TRANSACTIONS)
                                             }
                                         }
+                                        // Delete the duplicate from Firestore — remap is applied,
+                                        // the doc just wastes space and confuses integrity checks
+                                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                            try {
+                                                val gId = syncGroupId ?: return@launch
+                                                FirestoreDocService.deleteDoc(gId,
+                                                    EncryptedDocSerializer.COLLECTION_CATEGORIES, cat.id.toString())
+                                                android.util.Log.i("SyncDedup", "Deleted remapped category ${cat.id} from Firestore")
+                                            } catch (e: Exception) {
+                                                android.util.Log.w("SyncDedup", "Failed to delete remapped category: ${e.message}")
+                                            }
+                                        }
                                     } else {
                                         val idx = categories.indexOfFirst { it.id == cat.id }
                                         if (idx >= 0) categories[idx] = cat else categories.add(cat)
