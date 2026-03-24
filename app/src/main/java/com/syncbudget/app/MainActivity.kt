@@ -1376,11 +1376,24 @@ class MainActivity : ComponentActivity() {
                                 EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER to periodLedger.size
                             )
 
+                            // IDs of categories remapped by tag dedup (exist in Firestore
+                            // but not in local list — excluded from integrity comparison)
+                            val remapJson = syncPrefs.getString("catIdRemap", null)
+                            val remappedCatIds = if (remapJson != null) {
+                                try {
+                                    val json = org.json.JSONObject(remapJson)
+                                    json.keys().asSequence().map { it }.toSet()
+                                } catch (_: Exception) { emptySet() }
+                            } else emptySet<String>()
+
                             val divergent = mutableListOf<String>()
                             for ((collection, localCount) in localCounts) {
                                 val firestoreDocs = FirestoreDocService.readAllDocs(groupId, collection)
                                 val firestoreCount = firestoreDocs.count { doc ->
-                                    doc.getBoolean("deleted") != true
+                                    val isDeleted = doc.getBoolean("deleted") == true
+                                    val isRemapped = collection == EncryptedDocSerializer.COLLECTION_CATEGORIES &&
+                                        doc.id in remappedCatIds
+                                    !isDeleted && !isRemapped
                                 }
                                 if (localCount != firestoreCount) {
                                     android.util.Log.w("Integrity",
