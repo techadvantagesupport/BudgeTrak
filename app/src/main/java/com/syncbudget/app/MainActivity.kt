@@ -881,13 +881,23 @@ class MainActivity : ComponentActivity() {
                     docSync.onBatchChanged = { events ->
                         try {
                             val changedCollections = mutableSetOf<String>()
+                            var conflictDetected = false
                             for (event in events) {
                                 changedCollections.add(event.collection)
                                 when (event.collection) {
                                     EncryptedDocSerializer.COLLECTION_TRANSACTIONS -> {
-                                        val txn = event.record as Transaction
+                                        var txn = event.record as Transaction
+                                        // Conflict: another device edited while we had pending edits
+                                        if (event.isConflict) {
+                                            txn = txn.copy(isUserCategorized = false)
+                                            conflictDetected = true
+                                        }
                                         val idx = transactions.indexOfFirst { it.id == txn.id }
                                         if (idx >= 0) transactions[idx] = txn else transactions.add(txn)
+                                        // Push conflict flag so other device sees unverified too
+                                        if (event.isConflict) {
+                                            SyncWriteHelper.pushTransaction(txn)
+                                        }
                                     }
                                     EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES -> {
                                         val re = event.record as RecurringExpense
@@ -1018,6 +1028,11 @@ class MainActivity : ComponentActivity() {
                             }
                             com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
                             lastSyncActivity = System.currentTimeMillis()
+                            // Flash sync repair alert if conflict detected
+                            if (conflictDetected) {
+                                syncRepairAlert = true
+                                prefs.edit().putBoolean("syncRepairAlert", true).apply()
+                            }
                         } catch (e: Exception) {
                             android.util.Log.e("SyncListener", "Failed to handle batch", e)
                         }
@@ -1145,6 +1160,29 @@ class MainActivity : ComponentActivity() {
                         syncProgressMessage = null
                     } catch (e: Exception) {
                         android.util.Log.e("SyncLoop", "Migration failed", e)
+                        syncProgressMessage = null
+                    }
+                }
+
+                // One-time migration: re-push all records in per-field encrypted format
+                if (!syncPrefs.getBoolean("migration_per_field_enc_done", false)) {
+                    try {
+                        syncStatus = "syncing"
+                        syncProgressMessage = "Upgrading encryption..."
+                        docSync.pushAllRecords(
+                            transactions.toList(),
+                            recurringExpenses.toList(),
+                            incomeSources.toList(),
+                            savingsGoals.toList(),
+                            amortizationEntries.toList(),
+                            categories.toList(),
+                            periodLedger.toList(),
+                            sharedSettings
+                        )
+                        syncPrefs.edit().putBoolean("migration_per_field_enc_done", true).apply()
+                        syncProgressMessage = null
+                    } catch (e: Exception) {
+                        android.util.Log.e("SyncLoop", "Per-field encryption migration failed", e)
                         syncProgressMessage = null
                     }
                 }

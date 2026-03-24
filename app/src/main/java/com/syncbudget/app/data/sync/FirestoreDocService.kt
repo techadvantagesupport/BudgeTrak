@@ -70,6 +70,25 @@ object FirestoreDocService {
         }
     }
 
+    // ── field-level update ────────────────────────────────────────────
+
+    /**
+     * Update specific fields on an existing document (Firestore `update()`).
+     * Unlike `writeDoc()` (which uses `set()` and replaces the whole doc),
+     * this merges only the provided fields — other fields are untouched.
+     * Fails with NOT_FOUND if the document doesn't exist.
+     */
+    suspend fun updateFields(
+        groupId: String,
+        collection: String,
+        docId: String,
+        data: Map<String, Any>
+    ) {
+        withTimeout(OP_TIMEOUT_MS) {
+            docRef(groupId, collection, docId).update(data).await()
+        }
+    }
+
     // ── read all docs in a collection ───────────────────────────────────
 
     /**

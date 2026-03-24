@@ -145,6 +145,7 @@ object GroupManager {
             .remove("catIdRemap")
             .remove("syncDirty")
             .remove("migration_native_docs_done")
+            .remove("migration_per_field_enc_done")
             .apply()
         // Also clear from encrypted prefs
         try { SecurePrefs.get(context).edit().remove("encryptionKey").commit() } catch (_: Exception) {}

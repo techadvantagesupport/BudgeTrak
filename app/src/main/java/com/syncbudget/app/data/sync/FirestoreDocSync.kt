@@ -61,8 +61,16 @@ class FirestoreDocSync(
 
     // Enc hash skip: track the last-seen enc blob per document.
     // If unchanged since last callback, skip expensive decryption.
-    // Key = "collection:docId", Value = enc string.
+    // Key = "collection:docId", Value = enc string (or composite hash for per-field).
     private val lastSeenEnc = ConcurrentHashMap<String, String>()
+
+    // Last known record state per doc, for diff-based field updates.
+    // Populated from listener (incoming) and after pushes (outgoing).
+    private val lastKnownState = ConcurrentHashMap<String, Any>()
+
+    // Records with unpushed local edits, for conflict detection.
+    // Key = "collection:docId", Value = epoch millis of local edit.
+    private val localPendingEdits = ConcurrentHashMap<String, Long>()
 
     // Background scope for heavy deserialization (decrypt + JSON parse)
     // so the main thread stays responsive during large syncs.
@@ -151,6 +159,8 @@ class FirestoreDocSync(
         listeners.clear()
         recentPushes.clear()
         lastSeenEnc.clear()
+        lastKnownState.clear()
+        localPendingEdits.clear()
         deserializeScope.coroutineContext[kotlinx.coroutines.Job]?.cancelChildren()
         isListening = false
     }
@@ -163,8 +173,9 @@ class FirestoreDocSync(
     fun reattachListener(collection: String) {
         syncLog("Reattaching listener: $collection (integrity repair)")
         listeners[collection]?.remove()
-        // Clear enc cache for this collection so all docs get reprocessed
+        // Clear enc cache and state for this collection so all docs get reprocessed
         lastSeenEnc.keys.removeAll { it.startsWith("$collection:") }
+        lastKnownState.keys.removeAll { it.startsWith("$collection:") }
         if (collection == EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS) {
             attachSettingsListener()
         } else {
@@ -174,7 +185,8 @@ class FirestoreDocSync(
 
     /**
      * Push a single record to Firestore. Called on local edits.
-     * Records the push for echo suppression.
+     * Uses diff-based field updates when the last known state is available,
+     * falling back to full set() for new records or NOT_FOUND errors.
      */
     suspend fun pushRecord(record: Any) {
         val collection = EncryptedDocSerializer.collectionName(record)
@@ -182,18 +194,48 @@ class FirestoreDocSync(
             is SharedSettings -> EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID
             else -> EncryptedDocSerializer.docId(record)
         }
-        val data = EncryptedDocSerializer.toDoc(record, encryptionKey, deviceId)
+        val stateKey = "$collection:$docId"
 
-        // Mark as recently pushed for echo suppression
-        val echoKey = "$collection:$docId"
-        recentPushes[echoKey] = System.currentTimeMillis()
+        recentPushes[stateKey] = System.currentTimeMillis()
 
         try {
-            FirestoreDocService.writeDoc(groupId, collection, docId, data)
+            val lastKnown = lastKnownState[stateKey]
+            if (lastKnown != null && lastKnown::class == record::class) {
+                // Existing record — diff and use update()
+                val changedFields = EncryptedDocSerializer.diffFields(lastKnown, record)
+                if (changedFields.isEmpty()) {
+                    recentPushes.remove(stateKey)
+                    return // nothing changed
+                }
+                val data = EncryptedDocSerializer.fieldUpdate(record, changedFields, encryptionKey, deviceId)
+                FirestoreDocService.updateFields(groupId, collection, docId, data)
+                syncLog("Updated $stateKey: ${changedFields.size} fields [${changedFields.joinToString()}]")
+            } else {
+                // New record — use set() with all fields
+                val data = EncryptedDocSerializer.toFieldMap(record, encryptionKey, deviceId)
+                FirestoreDocService.writeDoc(groupId, collection, docId, data)
+                syncLog("Set (new) $stateKey")
+            }
+            localPendingEdits[stateKey] = System.currentTimeMillis()
+            lastKnownState[stateKey] = record
         } catch (e: Exception) {
-            syncLog("Push failed: $echoKey — ${e.message}")
-            recentPushes.remove(echoKey)
-            throw e
+            syncLog("Push failed: $stateKey — ${e.message}")
+            recentPushes.remove(stateKey)
+            // If update() fails with NOT_FOUND, fall back to set()
+            if (e.message?.contains("NOT_FOUND") == true || e.message?.contains("No document to update") == true) {
+                try {
+                    val data = EncryptedDocSerializer.toFieldMap(record, encryptionKey, deviceId)
+                    FirestoreDocService.writeDoc(groupId, collection, docId, data)
+                    lastKnownState[stateKey] = record
+                    localPendingEdits[stateKey] = System.currentTimeMillis()
+                    syncLog("Fallback set() succeeded for $stateKey")
+                } catch (e2: Exception) {
+                    syncLog("Fallback set() also failed for $stateKey: ${e2.message}")
+                    throw e2
+                }
+            } else {
+                throw e
+            }
         }
     }
 
@@ -214,29 +256,29 @@ class FirestoreDocSync(
         syncLog("Migration: pushing all records to Firestore")
 
         pushBatch(EncryptedDocSerializer.COLLECTION_TRANSACTIONS, transactions) { t ->
-            t.id.toString() to EncryptedDocSerializer.transactionToDoc(t, encryptionKey, deviceId)
+            t.id.toString() to EncryptedDocSerializer.transactionToFieldMap(t, encryptionKey, deviceId)
         }
         pushBatch(EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES, recurringExpenses) { re ->
-            re.id.toString() to EncryptedDocSerializer.recurringExpenseToDoc(re, encryptionKey, deviceId)
+            re.id.toString() to EncryptedDocSerializer.recurringExpenseToFieldMap(re, encryptionKey, deviceId)
         }
         pushBatch(EncryptedDocSerializer.COLLECTION_INCOME_SOURCES, incomeSources) { src ->
-            src.id.toString() to EncryptedDocSerializer.incomeSourceToDoc(src, encryptionKey, deviceId)
+            src.id.toString() to EncryptedDocSerializer.incomeSourceToFieldMap(src, encryptionKey, deviceId)
         }
         pushBatch(EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS, savingsGoals) { sg ->
-            sg.id.toString() to EncryptedDocSerializer.savingsGoalToDoc(sg, encryptionKey, deviceId)
+            sg.id.toString() to EncryptedDocSerializer.savingsGoalToFieldMap(sg, encryptionKey, deviceId)
         }
         pushBatch(EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES, amortizationEntries) { ae ->
-            ae.id.toString() to EncryptedDocSerializer.amortizationEntryToDoc(ae, encryptionKey, deviceId)
+            ae.id.toString() to EncryptedDocSerializer.amortizationEntryToFieldMap(ae, encryptionKey, deviceId)
         }
         pushBatch(EncryptedDocSerializer.COLLECTION_CATEGORIES, categories) { cat ->
-            cat.id.toString() to EncryptedDocSerializer.categoryToDoc(cat, encryptionKey, deviceId)
+            cat.id.toString() to EncryptedDocSerializer.categoryToFieldMap(cat, encryptionKey, deviceId)
         }
         pushBatch(EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER, periodLedgerEntries) { ple ->
-            ple.id.toString() to EncryptedDocSerializer.periodLedgerToDoc(ple, encryptionKey, deviceId)
+            ple.id.toString() to EncryptedDocSerializer.periodLedgerToFieldMap(ple, encryptionKey, deviceId)
         }
 
         // SharedSettings is a single doc, not batched
-        val ssData = EncryptedDocSerializer.sharedSettingsToDoc(sharedSettings, encryptionKey, deviceId)
+        val ssData = EncryptedDocSerializer.sharedSettingsToFieldMap(sharedSettings, encryptionKey, deviceId)
         FirestoreDocService.writeDoc(
             groupId,
             EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS,
@@ -268,18 +310,26 @@ class FirestoreDocSync(
             val events = mutableListOf<DataChangeEvent>()
             for (change in toProcess) {
                 val docId = change.document.id
+                val stateKey = "$collection:$docId"
                 try {
-                    // Enc hash skip: if the enc blob hasn't changed, skip decryption
-                    val encKey = "$collection:$docId"
-                    val enc = change.document.getString("enc")
+                    // Composite hash of all enc_* fields for skip detection
+                    val encComposite = change.document.data
+                        ?.filterKeys { it.startsWith("enc_") }
+                        ?.entries
+                        ?.sortedBy { it.key }
+                        ?.joinToString("|") { "${it.key}=${it.value}" }
+                        ?.hashCode()?.toString()
+                        ?: change.document.getString("enc") // fallback for old single-blob format
+
                     if (change.type != DocumentChange.Type.REMOVED) {
-                        if (enc != null && lastSeenEnc[encKey] == enc) {
+                        if (encComposite != null && lastSeenEnc[stateKey] == encComposite) {
                             skippedUnchanged++
                             continue
                         }
                     } else {
-                        // Document removed — clear from cache
-                        lastSeenEnc.remove(encKey)
+                        // Document removed — clear from caches
+                        lastSeenEnc.remove(stateKey)
+                        lastKnownState.remove(stateKey)
                     }
 
                     val record = deserializeDoc(collection, change.document) ?: continue
@@ -288,12 +338,27 @@ class FirestoreDocSync(
                         DocumentChange.Type.MODIFIED -> "modified"
                         DocumentChange.Type.REMOVED -> "removed"
                     }
-                    events.add(DataChangeEvent(collection, action, record, docId))
 
-                    // Update enc cache after successful decryption
-                    if (enc != null && change.type != DocumentChange.Type.REMOVED) {
-                        lastSeenEnc[encKey] = enc
+                    // Conflict detection
+                    val lastEditBy = change.document.getString("lastEditBy")
+                    var isConflict = false
+                    if (lastEditBy != null && lastEditBy != deviceId && localPendingEdits.containsKey(stateKey)) {
+                        // Another device edited this record while we have pending local edits
+                        isConflict = true
+                        syncLog("Conflict detected: $stateKey (lastEditBy=$lastEditBy, we have pending edit)")
                     }
+                    // Clear pending if our edit confirmed
+                    if (lastEditBy == deviceId) {
+                        localPendingEdits.remove(stateKey)
+                    }
+
+                    events.add(DataChangeEvent(collection, action, record, docId, isConflict))
+
+                    // Update enc cache and last known state after successful deserialization
+                    if (encComposite != null && change.type != DocumentChange.Type.REMOVED) {
+                        lastSeenEnc[stateKey] = encComposite
+                    }
+                    lastKnownState[stateKey] = record
                 } catch (e: Exception) {
                     syncLog("Failed to deserialize $collection/$docId: ${e.message}")
                 }
@@ -313,12 +378,19 @@ class FirestoreDocSync(
     private fun handleSharedSettingsChange(doc: DocumentSnapshot) {
         pruneExpiredEchoKeys()
 
-        val echoKey = "${EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS}:${EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID}"
-        if (recentPushes.containsKey(echoKey)) return
+        val stateKey = "${EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS}:${EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID}"
+        if (recentPushes.containsKey(stateKey)) return
 
-        // Enc hash skip: if the enc blob hasn't changed, skip decryption
-        val enc = doc.getString("enc")
-        if (enc != null && lastSeenEnc[echoKey] == enc) {
+        // Composite hash of all enc_* fields for skip detection
+        val encComposite = doc.data
+            ?.filterKeys { it.startsWith("enc_") }
+            ?.entries
+            ?.sortedBy { it.key }
+            ?.joinToString("|") { "${it.key}=${it.value}" }
+            ?.hashCode()?.toString()
+            ?: doc.getString("enc") // fallback for old single-blob format
+
+        if (encComposite != null && lastSeenEnc[stateKey] == encComposite) {
             syncLog("Skipped 1 unchanged doc in sharedSettings")
             return
         }
@@ -326,8 +398,9 @@ class FirestoreDocSync(
         deserializeScope.launch {
             try {
                 val settings = EncryptedDocSerializer.sharedSettingsFromDoc(doc, encryptionKey)
-                // Update enc cache after successful decryption
-                if (enc != null) lastSeenEnc[echoKey] = enc
+                // Update enc cache and last known state after successful decryption
+                if (encComposite != null) lastSeenEnc[stateKey] = encComposite
+                lastKnownState[stateKey] = settings
                 syncLog("Received 1 changes in sharedSettings")
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
                     onBatchChanged?.invoke(listOf(
@@ -348,7 +421,10 @@ class FirestoreDocSync(
     // ── internal: deserialization dispatch ───────────────────────────────
 
     private fun deserializeDoc(collection: String, doc: DocumentSnapshot): Any? {
-        if (!doc.contains("enc") || doc.getString("enc") == null) return null
+        // Accept docs with either old single-blob "enc" field or new per-field "enc_*" fields
+        val hasEncBlob = doc.contains("enc") && doc.getString("enc") != null
+        val hasEncFields = doc.data?.keys?.any { it.startsWith("enc_") } == true
+        if (!hasEncBlob && !hasEncFields) return null
 
         return when (collection) {
             EncryptedDocSerializer.COLLECTION_TRANSACTIONS ->
@@ -409,5 +485,7 @@ data class DataChangeEvent(
     /** The deserialized data class (Transaction, Category, etc.). */
     val record: Any,
     /** Firestore document ID. */
-    val docId: String
+    val docId: String,
+    /** True if another device edited this record while we have pending local edits. */
+    val isConflict: Boolean = false
 )
