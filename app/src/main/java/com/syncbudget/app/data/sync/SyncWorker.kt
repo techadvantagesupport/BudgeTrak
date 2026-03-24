@@ -120,7 +120,7 @@ class SyncWorker(
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<SyncWorker>(
-                15, TimeUnit.MINUTES
+                10, TimeUnit.MINUTES
             ).build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
