@@ -70,7 +70,32 @@ class FirestoreDocSync(
 
     // Records with unpushed local edits, for conflict detection.
     // Key = "collection:docId", Value = epoch millis of local edit.
+    // Persisted to SharedPreferences so conflicts survive app restart/reboot.
     private val localPendingEdits = ConcurrentHashMap<String, Long>()
+    private val pendingEditsPrefs = context.getSharedPreferences("pending_edits", Context.MODE_PRIVATE)
+
+    init {
+        // Restore persisted pending edits
+        try {
+            val json = pendingEditsPrefs.getString("edits", null)
+            if (json != null) {
+                val obj = org.json.JSONObject(json)
+                for (key in obj.keys()) {
+                    localPendingEdits[key] = obj.getLong(key)
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun persistPendingEdits() {
+        try {
+            val obj = org.json.JSONObject()
+            for ((key, value) in localPendingEdits) {
+                obj.put(key, value)
+            }
+            pendingEditsPrefs.edit().putString("edits", obj.toString()).apply()
+        } catch (_: Exception) {}
+    }
 
     // Background scope for heavy deserialization (decrypt + JSON parse)
     // so the main thread stays responsive during large syncs.
@@ -161,6 +186,7 @@ class FirestoreDocSync(
         lastSeenEnc.clear()
         lastKnownState.clear()
         localPendingEdits.clear()
+        pendingEditsPrefs.edit().remove("edits").apply()
         deserializeScope.coroutineContext[kotlinx.coroutines.Job]?.cancelChildren()
         isListening = false
     }
@@ -217,6 +243,7 @@ class FirestoreDocSync(
                 syncLog("Set (new) $stateKey")
             }
             localPendingEdits[stateKey] = System.currentTimeMillis()
+            persistPendingEdits()
             lastKnownState[stateKey] = record
         } catch (e: Exception) {
             syncLog("Push failed: $stateKey — ${e.message}")
@@ -228,6 +255,7 @@ class FirestoreDocSync(
                     FirestoreDocService.writeDoc(groupId, collection, docId, data)
                     lastKnownState[stateKey] = record
                     localPendingEdits[stateKey] = System.currentTimeMillis()
+                    persistPendingEdits()
                     syncLog("Fallback set() succeeded for $stateKey")
                 } catch (e2: Exception) {
                     syncLog("Fallback set() also failed for $stateKey: ${e2.message}")
@@ -350,6 +378,7 @@ class FirestoreDocSync(
                     // Clear pending if our edit confirmed
                     if (lastEditBy == deviceId) {
                         localPendingEdits.remove(stateKey)
+                        persistPendingEdits()
                     }
 
                     events.add(DataChangeEvent(collection, action, record, docId, isConflict))
