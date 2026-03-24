@@ -1537,10 +1537,30 @@ class MainActivity : ComponentActivity() {
                 } catch (_: Exception) { }
             }
 
-            // Period refresh — checks immediately on launch and every 30s
-            // while the app is open so the UI updates when a period boundary
-            // passes without needing a restart.
+            // Period refresh — checks every 30s while the app is open so the
+            // UI updates when a period boundary passes without needing a restart.
+            // When sync is configured, waits for the initial Firestore listener
+            // snapshot before creating ledger entries (ensures budget amounts
+            // reflect the latest RE/IS/settings from other devices).
+            var initialSyncReceived by remember { mutableStateOf(!isSyncConfigured) } // true immediately for solo users
             LaunchedEffect(Unit) {
+                // If syncing, wait for initial listener snapshot before first refresh.
+                // Listeners deliver cached data within ~1s of attaching.
+                if (isSyncConfigured && !initialSyncReceived) {
+                    val maxWait = 5_000L // 5 seconds max
+                    val start = System.currentTimeMillis()
+                    while (!initialSyncReceived && System.currentTimeMillis() - start < maxWait) {
+                        delay(200)
+                        // Check if listeners have delivered any data
+                        if (docSync?.isListening == true && lastSyncActivity > start) {
+                            initialSyncReceived = true
+                        }
+                    }
+                    if (!initialSyncReceived) {
+                        initialSyncReceived = true // proceed anyway after timeout
+                        android.util.Log.w("PeriodRefresh", "Timed out waiting for initial sync — proceeding with local data")
+                    }
+                }
                 while (true) {
                     if (budgetStartDate != null && lastRefreshDate != null) {
                         // For DAILY periods, respect resetHour: the budget "day" starts
