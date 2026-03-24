@@ -351,35 +351,43 @@ class MainActivity : ComponentActivity() {
             // Declared before save functions so they can update it on push.
             var lastSyncActivity by remember { mutableStateOf(0L) }
 
-            // Save functions: persist to local JSON + push changed records to Firestore.
-            // Pass changed records to avoid pushing the entire list (which would
-            // re-encrypt every record and trigger mass listener events).
+            // Save functions: persist to local JSON + auto-push ALL records to Firestore.
+            // FirestoreDocSync.pushRecord diffs against lastKnownState so unchanged
+            // records skip the Firestore write automatically — pushing all is safe.
 
-            fun saveIncomeSources(changed: List<IncomeSource> = emptyList()) {
+            fun saveIncomeSources() {
                 IncomeSourceRepository.save(context, incomeSources.toList())
-                changed.forEach { SyncWriteHelper.pushIncomeSource(it) }
-                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
+                if (SyncWriteHelper.isInitialized()) {
+                    incomeSources.forEach { SyncWriteHelper.pushIncomeSource(it) }
+                    lastSyncActivity = System.currentTimeMillis()
+                }
             }
 
-            fun saveRecurringExpenses(changed: List<RecurringExpense> = emptyList()) {
+            fun saveRecurringExpenses() {
                 RecurringExpenseRepository.save(context, recurringExpenses.toList())
-                changed.forEach { SyncWriteHelper.pushRecurringExpense(it) }
-                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
+                if (SyncWriteHelper.isInitialized()) {
+                    recurringExpenses.forEach { SyncWriteHelper.pushRecurringExpense(it) }
+                    lastSyncActivity = System.currentTimeMillis()
+                }
             }
 
-            fun saveAmortizationEntries(changed: List<AmortizationEntry> = emptyList()) {
+            fun saveAmortizationEntries() {
                 AmortizationRepository.save(context, amortizationEntries.toList())
-                changed.forEach { SyncWriteHelper.pushAmortizationEntry(it) }
-                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
+                if (SyncWriteHelper.isInitialized()) {
+                    amortizationEntries.forEach { SyncWriteHelper.pushAmortizationEntry(it) }
+                    lastSyncActivity = System.currentTimeMillis()
+                }
             }
 
-            fun saveSavingsGoals(changed: List<SavingsGoal> = emptyList()) {
+            fun saveSavingsGoals() {
                 SavingsGoalRepository.save(context, savingsGoals.toList())
-                changed.forEach { SyncWriteHelper.pushSavingsGoal(it) }
-                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
+                if (SyncWriteHelper.isInitialized()) {
+                    savingsGoals.forEach { SyncWriteHelper.pushSavingsGoal(it) }
+                    lastSyncActivity = System.currentTimeMillis()
+                }
             }
 
-            fun saveTransactions(changed: List<Transaction> = emptyList()) {
+            fun saveTransactions() {
                 // Dedup by ID before saving — duplicates can accumulate from
                 // widget disk merge or "added during sync" preservation.
                 val deduped = transactions.groupBy { it.id }
@@ -390,14 +398,18 @@ class MainActivity : ComponentActivity() {
                     transactions.addAll(deduped)
                 }
                 TransactionRepository.save(context, transactions.toList())
-                changed.forEach { SyncWriteHelper.pushTransaction(it) }
-                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
+                if (SyncWriteHelper.isInitialized()) {
+                    transactions.forEach { SyncWriteHelper.pushTransaction(it) }
+                    lastSyncActivity = System.currentTimeMillis()
+                }
             }
 
-            fun saveCategories(changed: List<Category> = emptyList()) {
+            fun saveCategories() {
                 CategoryRepository.save(context, categories.toList())
-                changed.forEach { SyncWriteHelper.pushCategory(it) }
-                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
+                if (SyncWriteHelper.isInitialized()) {
+                    categories.forEach { SyncWriteHelper.pushCategory(it) }
+                    lastSyncActivity = System.currentTimeMillis()
+                }
             }
 
             // persistAvailableCash declared after sync state variables below
@@ -458,10 +470,12 @@ class MainActivity : ComponentActivity() {
                 mutableStateListOf(*PeriodLedgerRepository.load(context).toTypedArray())
             }
 
-            fun savePeriodLedger(changed: List<PeriodLedgerEntry> = emptyList()) {
+            fun savePeriodLedger() {
                 PeriodLedgerRepository.save(context, periodLedger.toList())
-                changed.forEach { SyncWriteHelper.pushPeriodLedgerEntry(it) }
-                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
+                if (SyncWriteHelper.isInitialized()) {
+                    periodLedger.forEach { SyncWriteHelper.pushPeriodLedgerEntry(it) }
+                    lastSyncActivity = System.currentTimeMillis()
+                }
             }
 
             // ── Shared Settings (for sync) ──
@@ -2611,7 +2625,7 @@ class MainActivity : ComponentActivity() {
                                 transactions[idx] = t.copy(
                                     deleted = true
                                 )
-                                saveTransactions(listOf(transactions[idx]))
+                                saveTransactions()
                                 // Clean up receipt photos (local + cloud)
                                 val receiptIds = listOfNotNull(t.receiptId1, t.receiptId2, t.receiptId3, t.receiptId4, t.receiptId5)
                                 if (receiptIds.isNotEmpty()) {
