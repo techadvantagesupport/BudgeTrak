@@ -52,8 +52,8 @@ class FirestoreDocSync(
         } catch (_: Exception) {}
     }
 
-    // Active snapshot listeners — detached on stop
-    private val listeners = mutableListOf<ListenerRegistration>()
+    // Active snapshot listeners — keyed by collection name, detached on stop
+    private val listeners = mutableMapOf<String, ListenerRegistration>()
 
     // Echo prevention: track recently-pushed doc keys ("collection:docId")
     // Value = timestamp when pushed
@@ -115,7 +115,7 @@ class FirestoreDocSync(
                 }
             }
         )
-        listeners.add(reg)
+        listeners[collection] = reg
     }
 
     private fun attachSettingsListener() {
@@ -137,7 +137,7 @@ class FirestoreDocSync(
                 }
             }
         )
-        listeners.add(reg)
+        listeners[EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS] = reg
     }
 
     /**
@@ -145,7 +145,7 @@ class FirestoreDocSync(
      */
     fun stopListeners() {
         syncLog("Stopping ${listeners.size} listeners")
-        for (reg in listeners) {
+        for (reg in listeners.values) {
             reg.remove()
         }
         listeners.clear()
@@ -153,6 +153,23 @@ class FirestoreDocSync(
         lastSeenEnc.clear()
         deserializeScope.coroutineContext[kotlinx.coroutines.Job]?.cancelChildren()
         isListening = false
+    }
+
+    /**
+     * Reattach a single collection's listener (integrity repair).
+     * Detaches the old listener, clears its enc cache so all docs get
+     * reprocessed, then attaches a fresh listener.
+     */
+    fun reattachListener(collection: String) {
+        syncLog("Reattaching listener: $collection (integrity repair)")
+        listeners[collection]?.remove()
+        // Clear enc cache for this collection so all docs get reprocessed
+        lastSeenEnc.keys.removeAll { it.startsWith("$collection:") }
+        if (collection == EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS) {
+            attachSettingsListener()
+        } else {
+            attachCollectionListener(collection)
+        }
     }
 
     /**
