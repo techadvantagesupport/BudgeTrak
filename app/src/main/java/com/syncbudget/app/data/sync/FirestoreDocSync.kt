@@ -277,6 +277,19 @@ class FirestoreDocSync(
                 val data = EncryptedDocSerializer.fieldUpdate(record, changedFields, encryptionKey, deviceId)
                 FirestoreDocService.updateFields(groupId, collection, docId, data)
                 syncLog("Updated $stateKey: ${changedFields.size} fields [${changedFields.joinToString()}]")
+            } else if (record is PeriodLedgerEntry) {
+                // Period ledger: create-if-absent (first writer wins).
+                // Prevents offline devices from overwriting correct entries
+                // created by online devices with fresher budget configuration.
+                val data = EncryptedDocSerializer.toFieldMap(record, encryptionKey, deviceId)
+                val created = FirestoreDocService.createDocIfAbsent(groupId, collection, docId, data)
+                if (created) {
+                    syncLog("Created (new) $stateKey")
+                } else {
+                    syncLog("Skipped $stateKey (already exists in Firestore)")
+                    recentPushes.remove(stateKey)
+                    return // don't update local state — listener will deliver the correct entry
+                }
             } else {
                 // New record — use set() with all fields
                 val data = EncryptedDocSerializer.toFieldMap(record, encryptionKey, deviceId)

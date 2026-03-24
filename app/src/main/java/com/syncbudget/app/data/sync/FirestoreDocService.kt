@@ -48,6 +48,32 @@ object FirestoreDocService {
         }
     }
 
+    /**
+     * Create a document only if it doesn't already exist. Returns true if
+     * created, false if it already existed (no overwrite). Used for period
+     * ledger entries where the first writer wins.
+     */
+    suspend fun createDocIfAbsent(
+        groupId: String,
+        collection: String,
+        docId: String,
+        data: Map<String, Any>
+    ): Boolean {
+        return withTimeout(OP_TIMEOUT_MS) {
+            val ref = docRef(groupId, collection, docId)
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .runTransaction { tx ->
+                    val snap = tx.get(ref)
+                    if (!snap.exists()) {
+                        tx.set(ref, data)
+                        true
+                    } else {
+                        false // already exists, don't overwrite
+                    }
+                }.await()
+        }
+    }
+
     // ── batch write (for migration) ─────────────────────────────────────
 
     /**
