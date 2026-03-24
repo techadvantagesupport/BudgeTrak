@@ -59,10 +59,13 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -156,6 +159,15 @@ fun FamilySyncScreen(
     val context = LocalContext.current
     val toastState = LocalAppToast.current
     val clipboardManager = LocalClipboardManager.current
+
+    // Tick counter to force periodic recomposition of relative times and status dots
+    var tick by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(10_000)
+            tick = System.currentTimeMillis()
+        }
+    }
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var createNicknameInput by remember { mutableStateOf("") }
@@ -493,8 +505,11 @@ fun FamilySyncScreen(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // tick forces recomposition every 10s for live status updates
+                            val statusColor = remember(tick, device.lastSeen) { deviceSyncColor(device.lastSeen) }
+                            val relTime = remember(tick, device.lastSeen) { deviceRelativeTime(device.lastSeen) }
                             Canvas(modifier = Modifier.size(12.dp)) {
-                                drawCircle(color = deviceSyncColor(device.lastSeen))
+                                drawCircle(color = statusColor)
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -513,12 +528,30 @@ fun FamilySyncScreen(
                                         )
                                     }
                                 }
-                                if (device.isAdmin) {
-                                    Text(
-                                        text = S.sync.admin,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (device.isAdmin) {
+                                        Text(
+                                            text = S.sync.admin,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    if (relTime != null) {
+                                        if (device.isAdmin) {
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "·",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                        }
+                                        Text(
+                                            text = relTime,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                        )
+                                    }
                                 }
                             }
                         }

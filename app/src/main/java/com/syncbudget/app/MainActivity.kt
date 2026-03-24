@@ -346,6 +346,10 @@ class MainActivity : ComponentActivity() {
                 mutableStateListOf(*SavingsGoalRepository.load(context).toTypedArray())
             }
 
+            // Track when the last successful push or receive occurred (epoch millis).
+            // Declared before save functions so they can update it on push.
+            var lastSyncActivity by remember { mutableStateOf(0L) }
+
             // Save functions: persist to local JSON + push changed records to Firestore.
             // Pass changed records to avoid pushing the entire list (which would
             // re-encrypt every record and trigger mass listener events).
@@ -353,21 +357,25 @@ class MainActivity : ComponentActivity() {
             fun saveIncomeSources(changed: List<IncomeSource> = emptyList()) {
                 IncomeSourceRepository.save(context, incomeSources.toList())
                 changed.forEach { SyncWriteHelper.pushIncomeSource(it) }
+                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
             }
 
             fun saveRecurringExpenses(changed: List<RecurringExpense> = emptyList()) {
                 RecurringExpenseRepository.save(context, recurringExpenses.toList())
                 changed.forEach { SyncWriteHelper.pushRecurringExpense(it) }
+                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
             }
 
             fun saveAmortizationEntries(changed: List<AmortizationEntry> = emptyList()) {
                 AmortizationRepository.save(context, amortizationEntries.toList())
                 changed.forEach { SyncWriteHelper.pushAmortizationEntry(it) }
+                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
             }
 
             fun saveSavingsGoals(changed: List<SavingsGoal> = emptyList()) {
                 SavingsGoalRepository.save(context, savingsGoals.toList())
                 changed.forEach { SyncWriteHelper.pushSavingsGoal(it) }
+                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
             }
 
             fun saveTransactions(changed: List<Transaction> = emptyList()) {
@@ -382,11 +390,13 @@ class MainActivity : ComponentActivity() {
                 }
                 TransactionRepository.save(context, transactions.toList())
                 changed.forEach { SyncWriteHelper.pushTransaction(it) }
+                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
             }
 
             fun saveCategories(changed: List<Category> = emptyList()) {
                 CategoryRepository.save(context, categories.toList())
                 changed.forEach { SyncWriteHelper.pushCategory(it) }
+                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
             }
 
             // persistAvailableCash declared after sync state variables below
@@ -450,6 +460,7 @@ class MainActivity : ComponentActivity() {
             fun savePeriodLedger(changed: List<PeriodLedgerEntry> = emptyList()) {
                 PeriodLedgerRepository.save(context, periodLedger.toList())
                 changed.forEach { SyncWriteHelper.pushPeriodLedgerEntry(it) }
+                if (changed.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
             }
 
             // ── Shared Settings (for sync) ──
@@ -461,7 +472,6 @@ class MainActivity : ComponentActivity() {
             var syncGroupId by remember { mutableStateOf(GroupManager.getGroupId(context)) }
             var isSyncAdmin by remember { mutableStateOf(GroupManager.isAdmin(context)) }
             var syncStatus by remember { mutableStateOf(if (GroupManager.isConfigured(context)) "synced" else "off") }
-            var lastSyncTime by remember { mutableStateOf<String?>(null) }
             var syncDevices by remember { mutableStateOf<List<DeviceInfo>>(emptyList()) }
             var generatedPairingCode by remember { mutableStateOf<String?>(null) }
             val localDeviceId = remember { SyncIdGenerator.getOrCreateDeviceId(context) }
@@ -473,6 +483,23 @@ class MainActivity : ComponentActivity() {
             var syncRepairAlert by remember { mutableStateOf(
                 prefs.getBoolean("syncRepairAlert", false)
             ) }
+
+            // Live "X ago" display computed from lastSyncActivity epoch millis
+            var lastSyncTimeDisplay by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(lastSyncActivity) {
+                while (true) {
+                    val elapsed = if (lastSyncActivity > 0) (System.currentTimeMillis() - lastSyncActivity) / 1000 else -1L
+                    lastSyncTimeDisplay = when {
+                        elapsed < 0 -> null
+                        elapsed < 10 -> "just now"
+                        elapsed < 60 -> "${elapsed}s ago"
+                        elapsed < 3600 -> "${elapsed / 60}m ago"
+                        else -> "${elapsed / 3600}h ago"
+                    }
+                    delay(10_000)
+                }
+            }
+
             // availableCash may go negative (= overspent). Guard against NaN/Infinity.
             fun persistAvailableCash() {
                 if (availableCash.isNaN() || availableCash.isInfinite()) availableCash = 0.0
@@ -1056,6 +1083,7 @@ class MainActivity : ComponentActivity() {
                             ssSnapshot?.let { SharedSettingsRepository.save(context, it) }
                         }
                         com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
+                        lastSyncActivity = System.currentTimeMillis()
                     } catch (e: Exception) {
                         android.util.Log.e("SyncListener", "Failed to handle batch", e)
                     }
@@ -1093,7 +1121,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 syncStatus = "synced"
-                lastSyncTime = "just now"
+                lastSyncActivity = System.currentTimeMillis()
                 var healthCheckCounter = 0
 
                 try {
@@ -1109,7 +1137,28 @@ class MainActivity : ComponentActivity() {
                             syncPrefs.edit().putBoolean("syncDirty", false).apply()
                         }
 
-                        // Health checks every ~5 minutes (60 * 5s = 300s)
+                        // Light health check every ~60 seconds (12 * 5s):
+                        // update device metadata + refresh device list
+                        if (healthCheckCounter % 12 == 0) {
+                            try {
+                                syncDevices = GroupManager.getDevices(groupId)
+                                isSyncAdmin = GroupManager.isAdmin(context)
+                                // Update device metadata — keep appSyncVersion=2
+                                // to avoid triggering "update_required" in old
+                                // SyncWorker until it's fully replaced.
+                                FirestoreService.updateDeviceMetadata(
+                                    groupId, localDeviceId,
+                                    syncVersion = 0L,
+                                    appSyncVersion = 2,
+                                    minSyncVersion = 2
+                                )
+                            } catch (e: Exception) {
+                                android.util.Log.w("SyncLoop", "Light health check failed", e)
+                            }
+                        }
+
+                        // Heavy health checks every ~5 minutes (60 * 5s = 300s):
+                        // dissolution, removal, subscription, group activity
                         if (healthCheckCounter % 60 == 0) {
                             try {
                                 // Check group dissolution
@@ -1160,18 +1209,6 @@ class MainActivity : ComponentActivity() {
                                         FirestoreService.updateSubscriptionExpiry(groupId, subscriptionExpiry)
                                     }
                                 }
-                                // Refresh device list
-                                syncDevices = GroupManager.getDevices(groupId)
-                                isSyncAdmin = GroupManager.isAdmin(context)
-                                // Update device metadata — keep appSyncVersion=2
-                                // to avoid triggering "update_required" in old
-                                // SyncWorker until it's fully replaced.
-                                FirestoreService.updateDeviceMetadata(
-                                    groupId, localDeviceId,
-                                    syncVersion = 0L,
-                                    appSyncVersion = 2,
-                                    minSyncVersion = 2
-                                )
                                 // Update group activity timestamp
                                 FirestoreService.updateGroupActivity(groupId)
                             } catch (e: Exception) {
@@ -1705,7 +1742,7 @@ class MainActivity : ComponentActivity() {
                             syncStatus = "synced"
                             syncErrorMessage = null
                             syncProgressMessage = null
-                            lastSyncTime = "just now"
+                            lastSyncActivity = System.currentTimeMillis()
                             try {
                                 syncDevices = GroupManager.getDevices(gId)
                                 isSyncAdmin = GroupManager.isAdmin(context)
@@ -2400,7 +2437,7 @@ class MainActivity : ComponentActivity() {
                                         syncGroupId = newGroup.groupId
                                         isSyncAdmin = true
                                         syncStatus = "synced"
-                                        lastSyncTime = null
+                                        lastSyncActivity = 0L
                                         syncDevices = emptyList()
                                         generatedPairingCode = null
                                     }
@@ -2793,7 +2830,7 @@ class MainActivity : ComponentActivity() {
                         localDeviceId = localDeviceId,
                         devices = syncDevices,
                         syncStatus = syncStatus,
-                        lastSyncTime = lastSyncTime,
+                        lastSyncTime = lastSyncTimeDisplay,
                         familyTimezone = sharedSettings.familyTimezone,
                         onTimezoneChange = { tz ->
                             sharedSettings = sharedSettings.copy(
@@ -3041,7 +3078,7 @@ class MainActivity : ComponentActivity() {
                                 syncGroupId = null
                                 isSyncAdmin = false
                                 syncStatus = "off"
-                                lastSyncTime = null
+                                lastSyncActivity = 0L
                                 syncDevices = emptyList()
                                 pendingAdminClaim = null
                                 syncErrorMessage = null
@@ -3066,7 +3103,7 @@ class MainActivity : ComponentActivity() {
                                         syncGroupId = null
                                         isSyncAdmin = false
                                         syncStatus = "off"
-                                        lastSyncTime = null
+                                        lastSyncActivity = 0L
                                         syncDevices = emptyList()
                                         pendingAdminClaim = null
                                         syncErrorMessage = null
@@ -3086,7 +3123,7 @@ class MainActivity : ComponentActivity() {
                                         syncGroupId = null
                                         isSyncAdmin = false
                                         syncStatus = "off"
-                                        lastSyncTime = null
+                                        lastSyncActivity = 0L
                                         syncDevices = emptyList()
                                         pendingAdminClaim = null
                                         syncErrorMessage = null

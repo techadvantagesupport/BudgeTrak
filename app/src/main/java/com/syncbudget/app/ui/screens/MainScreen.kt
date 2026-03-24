@@ -251,10 +251,23 @@ internal fun deviceSyncColor(lastSeen: Long): Color {
     if (lastSeen == 0L) return Color(0xFF9E9E9E)
     val age = System.currentTimeMillis() - lastSeen
     return when {
-        age < 5 * 60_000L -> Color(0xFF4CAF50)
-        age < 2 * 3_600_000L -> Color(0xFFFFEB3B)
-        age < 24 * 3_600_000L -> Color(0xFFFF9800)
-        else -> Color(0xFFF44336)
+        age < 2 * 60_000L -> Color(0xFF4CAF50)   // green: active within 2 min
+        age < 10 * 60_000L -> Color(0xFFFFEB3B)   // yellow: within 10 min
+        age < 24 * 3_600_000L -> Color(0xFFFF9800) // orange: within 24 hours
+        else -> Color(0xFFF44336)                   // red: older
+    }
+}
+
+internal fun deviceRelativeTime(lastSeen: Long): String? {
+    if (lastSeen == 0L) return null
+    val elapsed = (System.currentTimeMillis() - lastSeen) / 1000
+    return when {
+        elapsed < 10 -> "active now"
+        elapsed < 60 -> "active ${elapsed}s ago"
+        elapsed < 120 -> "active 1m ago"
+        elapsed < 3600 -> "last seen ${elapsed / 60}m ago"
+        elapsed < 86400 -> "last seen ${elapsed / 3600}h ago"
+        else -> "last seen ${elapsed / 86400}d ago"
     }
 }
 
