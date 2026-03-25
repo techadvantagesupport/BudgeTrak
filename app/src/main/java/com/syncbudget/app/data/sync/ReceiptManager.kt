@@ -216,6 +216,9 @@ object ReceiptManager {
         try {
             ImageLedgerService.deleteLedgerEntry(groupId, receiptId)
         } catch (_: Exception) {}
+        try {
+            ImageLedgerService.bumpFlagClock(groupId)
+        } catch (_: Exception) {}
     }
 
     // ── Encryption for Cloud Upload ─────────────────────────────

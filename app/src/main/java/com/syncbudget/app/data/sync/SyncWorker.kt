@@ -71,11 +71,14 @@ class SyncWorker(
             val deviceId = SyncIdGenerator.getOrCreateDeviceId(applicationContext)
             if (groupId != null) {
                 try {
+                    val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                    val photoCapable = appPrefs.getBoolean("isPaidUser", false) || appPrefs.getBoolean("isSubscriber", false)
                     FirestoreService.updateDeviceMetadata(
                         groupId, deviceId,
                         syncVersion = 0L,
                         appSyncVersion = 2,
-                        minSyncVersion = 2
+                        minSyncVersion = 2,
+                        photoCapable = photoCapable
                     )
                 } catch (e: Exception) {
                     android.util.Log.w("SyncWorker", "Metadata update failed: ${e.message}")

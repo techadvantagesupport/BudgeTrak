@@ -643,6 +643,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                             if (idx >= 0) {
                                                 existing[idx] = existing[idx].copy(deleted = true)
                                                 TransactionRepository.save(context, existing)
+                                                SyncWriteHelper.pushTransaction(existing[idx])
                                             }
                                             val t = pendingTxn!!
                                             val c = pendingCatAmounts
@@ -965,6 +966,7 @@ class WidgetTransactionActivity : ComponentActivity() {
                                 amount = txn.amount
                             )
                             IncomeSourceRepository.save(context, sources)
+                            SyncWriteHelper.pushIncomeSource(sources[idx])
                         }
                         0.0  // source adjusted, no cash delta
                     }

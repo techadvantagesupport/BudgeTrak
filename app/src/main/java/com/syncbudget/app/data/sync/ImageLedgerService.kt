@@ -140,7 +140,7 @@ object ImageLedgerService {
 
     /**
      * Create a ledger entry after successful upload (normal flow).
-     * Does NOT bump flag clock — CRDT sync handles notification.
+     * Bumps flag clock so other devices discover the new entry promptly.
      */
     suspend fun createLedgerEntry(
         groupId: String,
@@ -160,6 +160,7 @@ object ImageLedgerService {
                 )
                 ledgerRef(groupId).document(receiptId).set(data).await()
             }
+            bumpFlagClock(groupId)
             true
         } catch (e: Exception) {
             Log.w(TAG, "Create ledger entry failed for $receiptId: ${e.message}")

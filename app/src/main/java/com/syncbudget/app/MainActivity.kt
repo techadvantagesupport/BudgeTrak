@@ -1327,7 +1327,8 @@ class MainActivity : ComponentActivity() {
                                 groupId, localDeviceId,
                                 syncVersion = 0L,
                                 appSyncVersion = 2,
-                                minSyncVersion = 2
+                                minSyncVersion = 2,
+                                photoCapable = isPaidUser || isSubscriber
                             )
                         } catch (e: Exception) {
                             android.util.Log.w("SyncLoop", "Light health check failed", e)
@@ -1484,7 +1485,8 @@ class MainActivity : ComponentActivity() {
                                 syncVersion = 0L,
                                 fingerprintJson = cashJson,
                                 appSyncVersion = 2,
-                                minSyncVersion = 2
+                                minSyncVersion = 2,
+                                photoCapable = isPaidUser || isSubscriber
                             )
 
                             // Diagnostic: compare cash with other devices (log only, no repair)
