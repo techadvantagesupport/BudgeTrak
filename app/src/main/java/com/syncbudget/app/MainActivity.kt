@@ -352,44 +352,71 @@ class MainActivity : ComponentActivity() {
             var lastSyncActivity by remember { mutableStateOf(0L) }
 
             // Save functions: persist to local JSON + auto-push ALL records to Firestore.
-            // FirestoreDocSync.pushRecord diffs against lastKnownState so unchanged
-            // records skip the Firestore write automatically — pushing all is safe.
+            // Save functions: persist to JSON + push only CHANGED records to Firestore.
+            // Each collection keeps a snapshot (by ID) of the last-saved state.
+            // On save, only records that are new or differ from the snapshot are pushed.
+            val lastSavedTxns = remember { mutableMapOf<Int, Transaction>() }
+            val lastSavedRe = remember { mutableMapOf<Int, RecurringExpense>() }
+            val lastSavedIs = remember { mutableMapOf<Int, IncomeSource>() }
+            val lastSavedSg = remember { mutableMapOf<Int, SavingsGoal>() }
+            val lastSavedAe = remember { mutableMapOf<Int, AmortizationEntry>() }
+            val lastSavedCat = remember { mutableMapOf<Int, Category>() }
+            val lastSavedPle = remember { mutableMapOf<Int, PeriodLedgerEntry>() }
 
             fun saveIncomeSources() {
-                IncomeSourceRepository.save(context, incomeSources.toList())
+                val current = incomeSources.toList()
+                IncomeSourceRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    incomeSources.forEach { SyncWriteHelper.pushIncomeSource(it) }
-                    lastSyncActivity = System.currentTimeMillis()
+                    var pushed = false
+                    for (src in current) {
+                        if (lastSavedIs[src.id] != src) { SyncWriteHelper.pushIncomeSource(src); pushed = true }
+                    }
+                    current.associateByTo(lastSavedIs) { it.id }
+                    if (pushed) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
             fun saveRecurringExpenses() {
-                RecurringExpenseRepository.save(context, recurringExpenses.toList())
+                val current = recurringExpenses.toList()
+                RecurringExpenseRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    recurringExpenses.forEach { SyncWriteHelper.pushRecurringExpense(it) }
-                    lastSyncActivity = System.currentTimeMillis()
+                    var pushed = false
+                    for (re in current) {
+                        if (lastSavedRe[re.id] != re) { SyncWriteHelper.pushRecurringExpense(re); pushed = true }
+                    }
+                    current.associateByTo(lastSavedRe) { it.id }
+                    if (pushed) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
             fun saveAmortizationEntries() {
-                AmortizationRepository.save(context, amortizationEntries.toList())
+                val current = amortizationEntries.toList()
+                AmortizationRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    amortizationEntries.forEach { SyncWriteHelper.pushAmortizationEntry(it) }
-                    lastSyncActivity = System.currentTimeMillis()
+                    var pushed = false
+                    for (ae in current) {
+                        if (lastSavedAe[ae.id] != ae) { SyncWriteHelper.pushAmortizationEntry(ae); pushed = true }
+                    }
+                    current.associateByTo(lastSavedAe) { it.id }
+                    if (pushed) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
             fun saveSavingsGoals() {
-                SavingsGoalRepository.save(context, savingsGoals.toList())
+                val current = savingsGoals.toList()
+                SavingsGoalRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    savingsGoals.forEach { SyncWriteHelper.pushSavingsGoal(it) }
-                    lastSyncActivity = System.currentTimeMillis()
+                    var pushed = false
+                    for (sg in current) {
+                        if (lastSavedSg[sg.id] != sg) { SyncWriteHelper.pushSavingsGoal(sg); pushed = true }
+                    }
+                    current.associateByTo(lastSavedSg) { it.id }
+                    if (pushed) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
             fun saveTransactions() {
-                // Dedup by ID before saving — duplicates can accumulate from
-                // widget disk merge or "added during sync" preservation.
+                // Dedup by ID before saving
                 val deduped = transactions.groupBy { it.id }
                     .values.map { group -> group.first() }
                 if (deduped.size < transactions.size) {
@@ -397,18 +424,28 @@ class MainActivity : ComponentActivity() {
                     transactions.clear()
                     transactions.addAll(deduped)
                 }
-                TransactionRepository.save(context, transactions.toList())
+                val current = transactions.toList()
+                TransactionRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    transactions.forEach { SyncWriteHelper.pushTransaction(it) }
-                    lastSyncActivity = System.currentTimeMillis()
+                    var pushed = false
+                    for (txn in current) {
+                        if (lastSavedTxns[txn.id] != txn) { SyncWriteHelper.pushTransaction(txn); pushed = true }
+                    }
+                    current.associateByTo(lastSavedTxns) { it.id }
+                    if (pushed) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
             fun saveCategories() {
-                CategoryRepository.save(context, categories.toList())
+                val current = categories.toList()
+                CategoryRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    categories.forEach { SyncWriteHelper.pushCategory(it) }
-                    lastSyncActivity = System.currentTimeMillis()
+                    var pushed = false
+                    for (cat in current) {
+                        if (lastSavedCat[cat.id] != cat) { SyncWriteHelper.pushCategory(cat); pushed = true }
+                    }
+                    current.associateByTo(lastSavedCat) { it.id }
+                    if (pushed) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
@@ -471,10 +508,15 @@ class MainActivity : ComponentActivity() {
             }
 
             fun savePeriodLedger() {
-                PeriodLedgerRepository.save(context, periodLedger.toList())
+                val current = periodLedger.toList()
+                PeriodLedgerRepository.save(context, current)
                 if (SyncWriteHelper.isInitialized()) {
-                    periodLedger.forEach { SyncWriteHelper.pushPeriodLedgerEntry(it) }
-                    lastSyncActivity = System.currentTimeMillis()
+                    var pushed = false
+                    for (ple in current) {
+                        if (lastSavedPle[ple.id] != ple) { SyncWriteHelper.pushPeriodLedgerEntry(ple); pushed = true }
+                    }
+                    current.associateByTo(lastSavedPle) { it.id }
+                    if (pushed) lastSyncActivity = System.currentTimeMillis()
                 }
             }
 
