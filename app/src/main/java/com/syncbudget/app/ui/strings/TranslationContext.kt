@@ -567,7 +567,7 @@ object TranslationContext {
         "dissolveGroup" to "Button label for the admin to permanently delete the entire family sync group.",
         "syncNow" to "Button label to trigger an immediate synchronization with the cloud server.",
         "syncCashToAdmin" to "Button label to synchronize the available cash balance with the admin device's value.",
-        "lastSynced" to "Status label showing when the last successful sync occurred. Lambda: 'time' is a formatted timestamp.",
+        "lastSynced" to "Status label showing when data was last sent or received. Lambda: 'time' is a formatted elapsed timestamp (e.g. '20s ago').",
         "syncing" to "Status label shown during an active synchronization. Present participle with ellipsis.",
         "syncError" to "Status label shown when the last sync attempt failed.",
         "notConfigured" to "Status label shown when Family Sync has not been set up.",

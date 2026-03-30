@@ -158,7 +158,7 @@ pre code { background: none; padding: 0; color: inherit; }
     <span><strong>Language:</strong> Kotlin</span>
     <span><strong>Document Version:</strong> 2.3</span><br>
     <span><strong>Date:</strong> March 2026</span>
-    <span><strong>Source Files:</strong> 88 Kotlin files, 43,165 lines</span>
+    <span><strong>Source Files:</strong> 89 Kotlin files, ~43,405 lines</span>
 </div>
 </div>
 
@@ -230,6 +230,7 @@ pre code { background: none; padding: 0; color: inherit; }
             <li><a href="#s6-11">SafeIO</a></li>
             <li><a href="#s6-12">PrefsCompat</a></li>
             <li><a href="#s6-13">ExpenseReportGenerator</a></li>
+            <li><a href="#s6-14">DiagDumpBuilder</a></li>
         </ol>
     </li>
     <li><a href="#sec7">Sync Classes</a>
@@ -291,7 +292,7 @@ pre code { background: none; padding: 0; color: inherit; }
 <table>
 <tr><th>Package / Directory</th><th>Files</th><th>Lines</th><th>Description</th></tr>
 <tr><td>com.syncbudget.app</td><td>1</td><td>3,944</td><td>MainActivity</td></tr>
-<tr><td>com.syncbudget.app.data</td><td>20</td><td>3,831</td><td>Data classes, repositories, utilities, PeriodRefreshService</td></tr>
+<tr><td>com.syncbudget.app.data</td><td>21</td><td>4,071</td><td>Data classes, repositories, utilities, PeriodRefreshService, DiagDumpBuilder</td></tr>
 <tr><td>com.syncbudget.app.data.sync</td><td>19</td><td>4,626</td><td>Sync engine, encryption, receipts, SyncMergeProcessor, PeriodRefreshWorker</td></tr>
 <tr><td>com.syncbudget.app.ui.screens</td><td>22</td><td>17,578</td><td>Main screens + help screens</td></tr>
 <tr><td>com.syncbudget.app.ui.components</td><td>5</td><td>2,005</td><td>Flip display, charts, photo row</td></tr>
@@ -299,7 +300,7 @@ pre code { background: none; padding: 0; color: inherit; }
 <tr><td>com.syncbudget.app.ui.strings</td><td>5</td><td>6,238</td><td>i18n, translation context</td></tr>
 <tr><td>com.syncbudget.app.sound</td><td>1</td><td>134</td><td>Flip sound player</td></tr>
 <tr><td>com.syncbudget.app.widget</td><td>3</td><td>1,515</td><td>Home screen widget</td></tr>
-<tr><td colspan="2"><strong>Total</strong></td><td><strong>43,165</strong></td><td><strong>88 Kotlin source files</strong></td></tr>
+<tr><td colspan="2"><strong>Total</strong></td><td><strong>~43,405</strong></td><td><strong>89 Kotlin source files</strong></td></tr>
 </table>
 
 <h4>Firestore Collection Structure</h4>
@@ -498,6 +499,18 @@ No <code>changed</code> parameter is needed &mdash; FirestoreDocSync's diff-base
 <div class="method"><span class="method-name">Background Worker Scheduling</span></div>
 <div class="method-desc">Schedules <code>PeriodRefreshWorker.schedule(context)</code> alongside <code>SyncWorker.schedule(context)</code> during sync setup. PeriodRefreshWorker handles background period refresh, cash recompute, and widget update when the app is not in the foreground.</div>
 
+<h4>JIT Composable Extraction (v2.3+)</h4>
+<p class="desc">To reduce the monolithic <code>setContent</code> block size and improve Compose JIT compilation, several composable wrappers were extracted:</p>
+<table>
+<tr><th>Extracted Composable</th><th>Description</th></tr>
+<tr><td><code>DashboardDialogs</code></td><td>@Composable function receiving 79 parameters, encapsulating 9 dialog blocks from the dashboard. Each dialog has an if-guard so it only composes when visible.</td></tr>
+<tr><td><code>SettingsScreenBranch</code></td><td>@Composable wrapper for SettingsScreen rendering when <code>currentScreen == "settings"</code>.</td></tr>
+<tr><td><code>TransactionsScreenBranch</code></td><td>@Composable wrapper for TransactionsScreen rendering when <code>currentScreen == "transactions"</code>.</td></tr>
+<tr><td><code>FamilySyncScreenBranch</code></td><td>@Composable wrapper for FamilySyncScreen rendering when <code>currentScreen == "family_sync"</code>.</td></tr>
+</table>
+<p class="desc"><strong>Diagnostic methods moved:</strong> <code>buildDiagDump()</code>, <code>writeDiagToMediaStore()</code>, and <code>sanitizeDeviceName()</code> were extracted from MainActivity into the new <code>DiagDumpBuilder</code> object (see Section 6.14).</p>
+<p class="desc"><strong>BudgetConfigScreen extraction reverted:</strong> An attempt to extract BudgetConfigScreen into a composable wrapper was reverted because the 18 setter lambdas required added more bytecode instructions than the inline code saved, negating the JIT benefit.</p>
+
 
 <!-- 2.2 MainScreen -->
 <h3 id="s2-2">2.2 MainScreen</h3>
@@ -536,7 +549,14 @@ No <code>changed</code> parameter is needed &mdash; FirestoreDocSync's diff-base
 <tr><td>TextSearchDialog</td><td>Private</td><td>Text search</td></tr>
 <tr><td>AmountSearchDialog</td><td>Private</td><td>Amount range search</td></tr>
 <tr><td>SearchDatePickerDialog</td><td>Private</td><td>Date range picker</td></tr>
+<tr><td>SaveFormatDialog</td><td>Private</td><td>Save format selection (JIT-extracted)</td></tr>
+<tr><td>FullBackupLoadDialog</td><td>Private</td><td>Backup load confirmation (JIT-extracted)</td></tr>
+<tr><td>ImportFormatSelectionDialog</td><td>Private</td><td>Import format picker (JIT-extracted)</td></tr>
+<tr><td>ImportParseErrorDialog</td><td>Private</td><td>Import error display (JIT-extracted)</td></tr>
+<tr><td>ManualDuplicateDialog</td><td>Private</td><td>Manual duplicate resolution (JIT-extracted)</td></tr>
+<tr><td>EffectExplanationPopup</td><td>Private</td><td>Budget effect explanation popup (JIT-extracted)</td></tr>
 </table>
+<p class="desc"><strong>JIT optimization (v2.3+):</strong> Six private @Composable functions were extracted from the main TransactionsScreen body. Each extracted function contains an if-guard so it only composes when its dialog/popup is visible, improving JIT compilation of the parent function.</p>
 
 
 <!-- 2.4 BudgetConfigScreen -->
@@ -1092,6 +1112,30 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 <div class="file-info"><strong>File:</strong> <code>data/ExpenseReportGenerator.kt</code> (365 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
 <p class="desc">Generates PDF expense reports for selected transactions. Uses Android PdfDocument API with Canvas rendering. Letter-size pages (612x792 points). Output to <code>Download/BudgeTrak/PDF/</code>.</p>
 
+<h3 id="s6-14">6.14 DiagDumpBuilder (Object Singleton)</h3>
+<div class="file-info"><strong>File:</strong> <code>data/DiagDumpBuilder.kt</code> (~240 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<p class="desc">Builds comprehensive diagnostic dump text for debug support. Extracted from <code>MainActivity</code> in v2.3+ to allow reuse by both the foreground activity (Settings &rarr; "Dump &amp; Sync Debug") and background <code>SyncWorker</code> (FCM debug request flow). Loads all repositories and preferences, computes budget amounts, and assembles a structured text dump.</p>
+<h4>Methods</h4>
+<table>
+<tr><th>Method</th><th>Description</th></tr>
+<tr><td><code>build(context: Context): String</code></td><td>Loads all repos (transactions, categories, RE, IS, SG, AE, period ledger, shared settings) and SharedPreferences, computes <code>budgetAmount</code> and <code>safeBudgetAmount</code> via <code>BudgetCalculator</code>, and returns a formatted diagnostic string including: record counts, sync metadata, categories, recurring expenses, recent transactions, cash verification breakdown, period ledger entries, and native sync log tail.</td></tr>
+<tr><td><code>writeDiagToMediaStore(context: Context, fileName: String, text: String)</code></td><td>Writes diagnostic text to the support directory (<code>Download/BudgeTrak/support/</code>). Falls back to MediaStore API if direct file write fails.</td></tr>
+<tr><td><code>sanitizeDeviceName(name: String): String</code></td><td>Sanitizes a device name string for use in file names (removes special characters, limits length).</td></tr>
+</table>
+<h4>Dump Contents</h4>
+<ul>
+<li>Record counts for all entity types (active + tombstoned)</li>
+<li>Sync configuration (groupId, deviceId, admin status)</li>
+<li>Budget configuration (period, start date, reset settings, income mode)</li>
+<li>Computed budgetAmount and safeBudgetAmount</li>
+<li>All categories with IDs, names, tags</li>
+<li>All recurring expenses with set-aside amounts</li>
+<li>Recent transactions (last 50)</li>
+<li>Cash verification: step-by-step recompute breakdown</li>
+<li>Period ledger entries</li>
+<li>Tail of native_sync_log.txt</li>
+</ul>
+
 
 <!-- ================================================================== -->
 <!--  7. SYNC CLASSES                                                   -->
@@ -1279,7 +1323,14 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 <h4>doWork() Steps</h4>
 <ol>
 <li>Ensure Firebase anonymous auth (retry on failure).</li>
-<li>Check <code>fcm_debug_requested</code> flag; if true, upload sync log and diag files via <code>FirestoreService.uploadDebugFiles()</code>.</li>
+<li>Check <code>fcm_debug_requested</code> flag; if true:
+    <ol style="margin:4px 0 4px 20px;font-size:13px;">
+    <li>Calls <code>DiagDumpBuilder.build(applicationContext)</code> to generate a fresh diagnostic dump.</li>
+    <li>Saves the dump to disk via <code>DiagDumpBuilder.writeDiagToMediaStore()</code>.</li>
+    <li>On error generating fresh dump, falls back to reading the existing diag file from disk.</li>
+    <li>Uploads sync log and diag text via <code>FirestoreService.uploadDebugFiles()</code>.</li>
+    </ol>
+</li>
 <li>Update device metadata: <code>lastSeen</code>, <code>appSyncVersion=2</code>, <code>minSyncVersion=2</code>, <code>photoCapable</code>.</li>
 </ol>
 <h4>Companion Methods</h4>
@@ -1302,7 +1353,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 <h4>Key Methods</h4>
 <table>
 <tr><th>Method</th><th>Description</th></tr>
-<tr><td>updateDeviceMetadata(groupId, deviceId, syncVersion, ...)</td><td>Update device doc with lastSeen, photoCapable, appSyncVersion, uploadSpeedBps</td></tr>
+<tr><td>updateDeviceMetadata(groupId, deviceId, syncVersion, ..., fingerprintJson)</td><td>Update device doc with lastSeen, photoCapable, appSyncVersion, uploadSpeedBps. Optional <code>fingerprintJson</code> parameter accepts a JSON string (e.g. <code>{"cash": 123.45}</code>) written to the device doc for integrity cross-checks.</td></tr>
 <tr><td>getDeviceRecord(groupId, deviceId): DeviceRecord?</td><td>Read single device record</td></tr>
 <tr><td>getDevices(groupId): List&lt;DeviceRecord&gt;</td><td>Read all non-removed device records</td></tr>
 <tr><td>registerDevice(groupId, deviceId, deviceName, isAdmin)</td><td>Register new device in group</td></tr>
@@ -1519,11 +1570,15 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <li><strong>Firestore sync (if configured):</strong> Creates a temporary <code>FirestoreDocSync</code> instance, opens short-lived listeners with ~60-second timeout via <code>CompletableDeferred</code>, accumulates <code>DataChangeEvent</code>s, then calls <code>stopListeners()</code>.</li>
 <li><strong>Process events:</strong> Calls <code>SyncMergeProcessor.processBatch()</code>. Saves merged data to disk via repositories. Applies settings to SharedPreferences.</li>
 <li><strong>Period refresh:</strong> Builds <code>RefreshConfig</code> from SharedPreferences, calls <code>PeriodRefreshService.refreshIfNeeded()</code>.</li>
-<li><strong>Cash recompute fallback:</strong> If no period refresh was needed, still recomputes cash from disk via <code>recomputeCashFromDisk()</code>.</li>
+<li><strong>Cash recompute fallback:</strong> If sync delivered changes but no period boundary was crossed, calls <code>recomputeCashFromDisk()</code> (private method that loads all data from disk and calls <code>BudgetCalculator.recomputeAvailableCash()</code>) to pick up any sync-delivered transaction changes.</li>
 <li><strong>Push to Firestore:</strong> Pushes new period ledger entries via <code>createDocIfAbsent()</code>, updated SG via <code>updateFields()</code> with <code>fieldUpdate(sg, setOf("totalSavedSoFar"))</code>, updated RE via <code>updateFields()</code> with <code>fieldUpdate(re, setOf("setAsideSoFar", "isAccelerated"))</code>.</li>
 <li><strong>Push sync side effects:</strong> Deletes remapped categories from Firestore, pushes back conflicted transactions.</li>
-<li><strong>Update widget + device metadata:</strong> Calls <code>BudgetWidgetProvider.updateAllWidgets()</code> and updates device <code>lastSeen</code>.</li>
+<li><strong>Update widget + device metadata:</strong> Calls <code>BudgetWidgetProvider.updateAllWidgets()</code> and updates device metadata via <code>FirestoreService.updateDeviceMetadata()</code> with <code>lastSeen</code> plus a cash fingerprint: a <code>JSONObject</code> containing <code>{"cash": currentCash}</code> passed as the <code>fingerprintJson</code> parameter, enabling the integrity check to detect cash mismatches across devices.</li>
 </ol>
+
+<h4>Private Methods</h4>
+<div class="method"><span class="method-name">recomputeCashFromDisk()</span></div>
+<div class="method-desc">Loads all data from disk (transactions, recurring expenses, income sources, savings goals, amortization entries, period ledger) via repositories, builds the budget start date and period from SharedPreferences, and calls <code>BudgetCalculator.recomputeAvailableCash()</code>. Saves the recomputed cash to SharedPreferences. Called when sync delivered changes but no period boundary was crossed, ensuring the widget and device metadata reflect the latest synced state.</div>
 
 
 <h3 id="s7-20">7.20 PeriodRefreshService (Object Singleton)</h3>
@@ -1686,6 +1741,16 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <h3>11.1 BudgetWidgetProvider</h3>
 <div class="file-info"><strong>File:</strong> <code>widget/BudgetWidgetProvider.kt</code> (252 lines) &nbsp;|&nbsp; <strong>Extends:</strong> <code>AppWidgetProvider</code></div>
 <p class="desc">Home screen widget with Solari flip-display bitmap and button bar (+ and - buttons for quick add). Theme-aware: light mode uses blue cards (#305880), dark mode uses dark cards (#1A1A1A). Logo visibility controlled by <code>showWidgetLogo</code> pref. Non-paid users see "Upgrade for full widget" overlay.</p>
+
+<h4>Companion Object &mdash; Widget Throttle</h4>
+<table>
+<tr><th>Field</th><th>Type</th><th>Description</th></tr>
+<tr><td><code>lastWidgetRedraw</code></td><td>Long</td><td>Timestamp (ms) of the most recent actual widget redraw</td></tr>
+<tr><td><code>pendingRedraw</code></td><td>@Volatile Boolean</td><td>Flag indicating a deferred redraw is already scheduled</td></tr>
+<tr><td><code>WIDGET_THROTTLE_MS</code></td><td>Long (5,000L)</td><td>Minimum interval between widget redraws (5 seconds)</td></tr>
+</table>
+<p class="desc"><strong>Throttle behavior:</strong> <code>updateAllWidgets(context)</code> checks elapsed time since <code>lastWidgetRedraw</code>. If the cooldown period has elapsed, it calls <code>doUpdateAllWidgets()</code> immediately. If within cooldown and no deferred redraw is pending, it schedules a single deferred redraw via <code>Handler(Looper.getMainLooper()).postDelayed()</code> for the remaining cooldown time and sets <code>pendingRedraw = true</code>. Additional calls during cooldown while a deferred redraw is already pending are dropped. The private <code>doUpdateAllWidgets()</code> performs the actual render (builds RemoteViews from WidgetRenderer bitmap), updates <code>lastWidgetRedraw</code>, and clears <code>pendingRedraw</code>.</p>
+
 <h4>Key Methods</h4>
 <table>
 <tr><th>Method</th><th>Description</th></tr>
@@ -1693,7 +1758,8 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>onReceive(context, intent)</td><td>Handles ACTION_RESET_REFRESH: calls <code>PeriodRefreshWorker.runOnce()</code></td></tr>
 <tr><td>onDisabled(context)</td><td>No longer cancels any worker (PeriodRefreshWorker serves both widget and sync)</td></tr>
 <tr><td>onAppWidgetOptionsChanged(...)</td><td>Re-renders widget on size change</td></tr>
-<tr><td>updateAllWidgets(context) [companion]</td><td>Static method to trigger all widget updates</td></tr>
+<tr><td>updateAllWidgets(context) [companion]</td><td>Public entry point; throttled &mdash; delegates to <code>doUpdateAllWidgets()</code> with 5-second cooldown</td></tr>
+<tr><td>doUpdateAllWidgets(context) [private]</td><td>Performs the actual widget render: reads prefs, calls WidgetRenderer, pushes RemoteViews</td></tr>
 <tr><td>scheduleResetAlarm(context)</td><td>AlarmManager alarm at next period reset time for immediate widget refresh</td></tr>
 </table>
 
@@ -1906,6 +1972,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>CryptoHelper.kt</td><td>93</td><td>ChaCha20-Poly1305 encryption</td></tr>
 <tr><td>CsvParser.kt</td><td>996</td><td>CSV import/export</td></tr>
 <tr><td>DefaultCategories.kt</td><td>50</td><td>System category definitions</td></tr>
+<tr><td>DiagDumpBuilder.kt</td><td>~240</td><td>Diagnostic dump builder (shared by foreground + SyncWorker)</td></tr>
 <tr><td>DuplicateDetector.kt</td><td>213</td><td>Transaction matching functions</td></tr>
 <tr><td>ExpenseReportGenerator.kt</td><td>365</td><td>PDF expense report generation</td></tr>
 <tr><td>FullBackupSerializer.kt</td><td>243</td><td>Complete state serialization</td></tr>
@@ -2028,11 +2095,21 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
     <strong>Modified:</strong> MainActivity (~220 lines moved to shared services): companion object with <code>isAppActive</code> volatile flag, <code>onBatchChanged</code> delegates to SyncMergeProcessor, period refresh delegates to PeriodRefreshService, schedules PeriodRefreshWorker. SyncWorker: removed <code>BudgetWidgetProvider.updateAllWidgets()</code> call. BudgetWidgetProvider: <code>onUpdate()</code> schedules PeriodRefreshWorker, <code>onReceive(ACTION_RESET_REFRESH)</code> calls <code>PeriodRefreshWorker.runOnce()</code>, <code>onDisabled()</code> no longer cancels any worker. ImageLedgerService: <code>SNAPSHOT_DOC_ID</code> changed from <code>"__snapshot_request__"</code> to <code>"_snapshot_request"</code>.
     <strong>Metrics:</strong> +3 new files (984 lines), &minus;1 removed file (105 lines), ~220 lines moved from MainActivity to shared services. 88 source files, 43,165 lines.</td>
 </tr>
+<tr>
+    <td>2.3.1</td><td>March 2026</td><td>BudgeTrak Team</td>
+    <td>Post-release updates to v2.3 document.
+    <strong>New class:</strong> DiagDumpBuilder (~240 lines) &mdash; object singleton extracted from MainActivity; builds diagnostic dump text and writes to support dir with MediaStore fallback. Used by both foreground (Settings debug) and background (SyncWorker FCM debug flow).
+    <strong>Widget throttle:</strong> BudgetWidgetProvider companion object gains <code>lastWidgetRedraw</code>, <code>pendingRedraw</code> (@Volatile), <code>WIDGET_THROTTLE_MS</code> (5s). <code>updateAllWidgets()</code> throttles via Handler deferred redraw; private <code>doUpdateAllWidgets()</code> does actual render.
+    <strong>SyncWorker:</strong> FCM debug flow now calls <code>DiagDumpBuilder.build()</code> for fresh dump before upload, falls back to existing file on error.
+    <strong>PeriodRefreshWorker:</strong> Cash fingerprint &mdash; builds <code>JSONObject</code> with <code>{"cash": currentCash}</code> and passes as <code>fingerprintJson</code> to <code>FirestoreService.updateDeviceMetadata()</code>. New private <code>recomputeCashFromDisk()</code> method runs when sync delivered changes but no period boundary crossed.
+    <strong>JIT optimizations:</strong> TransactionsScreen: 6 private @Composable functions extracted (SaveFormatDialog, FullBackupLoadDialog, ImportFormatSelectionDialog, ImportParseErrorDialog, ManualDuplicateDialog, EffectExplanationPopup) with if-guards. MainActivity: DashboardDialogs (79 params, 9 dialog blocks), SettingsScreenBranch, TransactionsScreenBranch, FamilySyncScreenBranch @Composable wrappers. BudgetConfigScreen extraction reverted (18 setter lambdas negated JIT benefit).
+    <strong>Metrics:</strong> +1 new file (~240 lines). 89 source files, ~43,405 lines.</td>
+</tr>
 </table>
 
 <hr style="margin-top:40px;border:none;border-top:3px solid #1a365d;">
 <p style="text-align:center;font-size:12px;color:#718096;margin-top:16px;">
-    BudgeTrak Low-Level Design Document v2.3 &mdash; March 2026 &mdash; END OF DOCUMENT
+    BudgeTrak Low-Level Design Document v2.3.1 &mdash; March 2026 &mdash; END OF DOCUMENT
 </p>
 
 </div><!-- .container -->

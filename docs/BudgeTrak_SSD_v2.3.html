@@ -298,7 +298,7 @@
     <div class="subtitle">System Specification Document (SSD)</div>
     <div class="meta">
         <table>
-            <tr><td>Document Version</td><td>2.3</td></tr>
+            <tr><td>Document Version</td><td>2.3.1</td></tr>
             <tr><td>Application Version</td><td>2.3</td></tr>
             <tr><td>Date</td><td>March 2026</td></tr>
             <tr><td>Author</td><td>BudgeTrak Development Team</td></tr>
@@ -311,8 +311,8 @@
             <tr><td>UI Framework</td><td>Jetpack Compose with Material Design 3</td></tr>
             <tr><td>Build System</td><td>Gradle 8.9 with Kotlin DSL</td></tr>
             <tr><td>JVM Target</td><td>Java 17</td></tr>
-            <tr><td>Total Source Files</td><td>89 Kotlin files</td></tr>
-            <tr><td>Total Lines of Code</td><td>43,374 lines</td></tr>
+            <tr><td>Total Source Files</td><td>90 Kotlin files</td></tr>
+            <tr><td>Total Lines of Code</td><td>44,242 lines</td></tr>
         </table>
     </div>
 </div>
@@ -509,6 +509,12 @@ authenticated encryption with PBKDF2 key derivation for secure data portability.
 
     <li><strong>Auto-push</strong>: All save functions automatically push records to Firestore via
     SyncWriteHelper. It is impossible to create a local-only change when sync is configured.</li>
+
+    <li><strong>Lifecycle coordination</strong>: <code>MainActivity.isAppActive</code> is a static
+    <code>@Volatile</code> boolean set on <code>ON_START</code> and cleared on <code>ON_STOP</code>.
+    <code>PeriodRefreshWorker</code> checks this flag at the start of <code>doWork()</code> and returns
+    early when the foreground is active, avoiding duplicate period refresh and widget updates that the
+    foreground already handles.</li>
 </ol>
 
 <h3 id="sec2-2">2.2 Component Architecture</h3>
@@ -518,9 +524,9 @@ authenticated encryption with PBKDF2 key derivation for secure data portability.
         <tr><th>Component</th><th>File</th><th>Lines</th><th>Purpose</th></tr>
     </thead>
     <tbody>
-        <tr><td>MainActivity</td><td>MainActivity.kt</td><td>4,164</td><td>Central coordinator, state management, navigation, budget refresh, sync integration, save/push functions</td></tr>
+        <tr><td>MainActivity</td><td>MainActivity.kt</td><td>4,580</td><td>Central coordinator, state management, navigation, budget refresh, sync integration, save/push functions; isAppActive lifecycle flag; DashboardDialogs() and screen wrapper functions extracted for JIT</td></tr>
         <tr><td>MainScreen (Dashboard)</td><td>MainScreen.kt</td><td>1,302</td><td>Dashboard with flip display, spending charts, Supercharge dialog, quick-add, sync indicators</td></tr>
-        <tr><td>TransactionsScreen</td><td>TransactionsScreen.kt</td><td>5,304</td><td>Full transaction management, import/export, bulk ops, linked transactions, receipt photos</td></tr>
+        <tr><td>TransactionsScreen</td><td>TransactionsScreen.kt</td><td>5,423</td><td>Full transaction management, import/export, bulk ops, linked transactions, receipt photos; 6 dialogs extracted into private @Composable functions for JIT</td></tr>
         <tr><td>BudgetConfigScreen</td><td>BudgetConfigScreen.kt</td><td>1,241</td><td>Income sources, budget period, reset settings, manual override with savings warning</td></tr>
         <tr><td>SettingsScreen</td><td>SettingsScreen.kt</td><td>1,492</td><td>Currency, categories, matching config, language, date format, chart palette, widget settings</td></tr>
         <tr><td>FutureExpendituresScreen</td><td>FutureExpendituresScreen.kt</td><td>804</td><td>Savings goals management (target-date and fixed-contribution types)</td></tr>
@@ -535,16 +541,16 @@ authenticated encryption with PBKDF2 key derivation for secure data portability.
         <tr><td>FirestoreDocService</td><td>FirestoreDocService.kt</td><td>193</td><td>Low-level Firestore: writeDoc (set), updateFields (update), listenToCollection, readAllDocs</td></tr>
         <tr><td>FirestoreService</td><td>FirestoreService.kt</td><td>540</td><td>Device/group management, pairing, admin claims, subscriptions</td></tr>
         <tr><td>SyncWriteHelper</td><td>SyncWriteHelper.kt</td><td>67</td><td>Singleton push dispatcher on IO thread (fire-and-forget)</td></tr>
-        <tr><td>SyncWorker</td><td>SyncWorker.kt</td><td>117</td><td>Background: Firebase auth, FCM debug upload, lastSeen publish (widget update delegated to PeriodRefreshWorker)</td></tr>
+        <tr><td>SyncWorker</td><td>SyncWorker.kt</td><td>129</td><td>Background: Firebase auth, FCM debug upload (fresh dump via DiagDumpBuilder), lastSeen publish (widget update delegated to PeriodRefreshWorker)</td></tr>
         <tr><td>GroupManager</td><td>GroupManager.kt</td><td>191</td><td>Group create/join/leave/dissolve lifecycle</td></tr>
         <tr><td>ImageLedgerService</td><td>ImageLedgerService.kt</td><td>673</td><td>Firestore image ledger operations, flag clock, orphan scan</td></tr>
         <tr><td>ReceiptSyncManager</td><td>ReceiptSyncManager.kt</td><td>666</td><td>Cloud Storage upload/download, encryption, hash assignment, recovery</td></tr>
         <tr><td>ReceiptManager</td><td>ReceiptManager.kt</td><td>391</td><td>Local photo capture, compression, thumbnail generation, deleteReceiptFull chain</td></tr>
         <tr><td>SwipeablePhotoRow</td><td>SwipeablePhotoRow.kt</td><td>669</td><td>Transaction receipt photo UI with swipe-to-reveal panel</td></tr>
-        <tr><td>BudgetWidgetProvider</td><td>BudgetWidgetProvider.kt</td><td>252</td><td>AppWidgetProvider: lifecycle, alarms, resetHour, schedules PeriodRefreshWorker</td></tr>
+        <tr><td>BudgetWidgetProvider</td><td>BudgetWidgetProvider.kt</td><td>288</td><td>AppWidgetProvider: lifecycle, alarms, resetHour, schedules PeriodRefreshWorker; updateAllWidgets() debounce throttle (5s cooldown)</td></tr>
         <tr><td>WidgetRenderer</td><td>WidgetRenderer.kt</td><td>276</td><td>Canvas bitmap renderer for Solari flip-display cards in widget</td></tr>
         <tr><td>WidgetTransactionActivity</td><td>WidgetTransactionActivity.kt</td><td>987</td><td>Quick add expense/income from widget buttons</td></tr>
-        <tr><td>PeriodRefreshWorker</td><td>PeriodRefreshWorker.kt</td><td>435</td><td>Background: Firestore sync + period refresh + cash recompute + widget update (15 min periodic, replaces WidgetRefreshWorker)</td></tr>
+        <tr><td>PeriodRefreshWorker</td><td>PeriodRefreshWorker.kt</td><td>452</td><td>Background: Firestore sync + period refresh + cash recompute + widget update (15 min periodic, replaces WidgetRefreshWorker); publishes availableCash in fingerprintJson; skips when isAppActive</td></tr>
         <tr><td>PeriodRefreshService</td><td>PeriodRefreshService.kt</td><td>275</td><td>Shared period refresh logic: ledger creation, SG/RE accrual (@Synchronized foreground/background)</td></tr>
         <tr><td>SyncMergeProcessor</td><td>SyncMergeProcessor.kt</td><td>263</td><td>Shared merge logic for incoming sync events: dedup, conflict detection, settings, add-or-replace</td></tr>
         <tr><td>FlipDisplay</td><td>FlipDisplay.kt</td><td>257</td><td>Solari-style display compositor with currency-aware formatting</td></tr>
@@ -559,6 +565,7 @@ authenticated encryption with PBKDF2 key derivation for secure data portability.
         <tr><td>CryptoHelper</td><td>CryptoHelper.kt</td><td>93</td><td>ChaCha20-Poly1305 encrypt/decrypt (password and direct-key modes)</td></tr>
         <tr><td>AutoCategorizer</td><td>AutoCategorizer.kt</td><td>49</td><td>Merchant-based auto-categorization from 6-month transaction history</td></tr>
         <tr><td>BackupManager</td><td>BackupManager.kt</td><td>390</td><td>Full app backup and restore</td></tr>
+        <tr><td>DiagDumpBuilder</td><td>DiagDumpBuilder.kt</td><td>239</td><td>Diagnostic dump generator from disk data (SharedPrefs + JSON repos); writeDiagToMediaStore(); sanitizeDeviceName(). Used by foreground and SyncWorker background.</td></tr>
         <tr><td>ExpenseReportGenerator</td><td>ExpenseReportGenerator.kt</td><td>365</td><td>Expense report generation</td></tr>
         <tr><td>CategoryIcons</td><td>CategoryIcons.kt</td><td>327</td><td>CATEGORY_ICON_MAP with 120+ Material icon entries</td></tr>
         <tr><td>AppStrings</td><td>AppStrings.kt</td><td>1,405</td><td>Interface definitions for 16 string groups (~800+ fields)</td></tr>
@@ -825,7 +832,8 @@ missedPeriods = countPeriodsCompleted(lastRefreshDate, currentPeriod, budgetPeri
 <h4>Foreground vs Background Execution</h4>
 <ul>
     <li><strong>Foreground</strong> (LaunchedEffect): Applies results directly to Compose SnapshotStateLists in MainActivity</li>
-    <li><strong>Background</strong> (PeriodRefreshWorker): Pushes ledger entries via <code>FirestoreDocService.createDocIfAbsent()</code> and SG/RE updates via <code>FirestoreDocService.updateFields()</code>, then saves to disk via repositories</li>
+    <li><strong>Background</strong> (PeriodRefreshWorker): Pushes ledger entries via <code>FirestoreDocService.createDocIfAbsent()</code> and SG/RE updates via <code>FirestoreDocService.updateFields()</code>, then saves to disk via repositories. Publishes <code>availableCash</code> in device metadata via <code>fingerprintJson</code> for cross-device cash comparison even when the app is in the background.</li>
+    <li><strong>Foreground guard</strong>: <code>PeriodRefreshWorker</code> checks <code>MainActivity.isAppActive</code> at the start of <code>doWork()</code> and returns early when the foreground is active, avoiding duplicate refresh and widget updates.</li>
 </ul>
 
 <div class="note"><strong>Timezone rule:</strong> When in a sync group, ALL period calculations use
@@ -1616,6 +1624,7 @@ entire document.</p>
     <li>Count mismatch &rarr; reattach listener for affected collection</li>
     <li>Cash mismatch with peers &rarr; <code>recomputeCash()</code></li>
     <li>SyncWorker publishes only <code>lastSeen</code> timestamp (for online status and tombstone age calculation); widget update delegated to PeriodRefreshWorker</li>
+    <li><strong>Background cash fingerprint:</strong> PeriodRefreshWorker publishes the current <code>availableCash</code> value in device metadata via the <code>fingerprintJson</code> parameter when calling <code>updateLastSeen()</code>. This ensures cross-device cash comparison works even when the app is in the background (the worker reads cash from SharedPreferences, not in-memory state).</li>
 </ol>
 
 <div class="note"><strong>No peer fingerprints:</strong> Unlike the previous CRDT system, there are no
@@ -1643,6 +1652,8 @@ truth, and the integrity check simply ensures local state matches it.</div>
         <tr><td>Batched callbacks</td><td>Save once per collection per listener callback, not per record</td></tr>
         <tr><td>Field-level updates</td><td><code>update()</code> with only changed <code>enc_*</code> fields, not full doc writes</td></tr>
         <tr><td>Diff-based push</td><td><code>diffFields()</code> in EncryptedDocSerializer compares local vs <code>lastKnownState</code> to determine which fields actually changed</td></tr>
+        <tr><td>Widget update throttle</td><td><code>updateAllWidgets()</code> debounces to once per 5 seconds, dropping rapid-fire calls from RE/SG accrual pushes to prevent frame drops</td></tr>
+        <tr><td>JIT function extraction</td><td>Large @Composable functions broken into private sub-functions so the JIT compiler can optimize each independently. TransactionsScreen: 6 dialogs extracted. MainActivity: DashboardDialogs() extracted, 3 screen branches (settings, transactions, family_sync) wrapped, and diagnostic utilities moved to DiagDumpBuilder. Note: private functions are still in the same file and class; the benefit is JIT method-level compilation, not lambda overhead reduction (extracting lambdas that capture mutable state can increase overhead from captures).</td></tr>
     </tbody>
 </table>
 
@@ -1734,10 +1745,11 @@ truth, and the integrity check simply ensures local state matches it.</div>
         <tr><td>FirestoreDocService</td><td>FirestoreDocService.kt</td><td>193</td><td>Low-level Firestore operations</td></tr>
         <tr><td>FirestoreDocSync</td><td>FirestoreDocSync.kt</td><td>595</td><td>Main sync coordinator: listeners, push, conflict detection</td></tr>
         <tr><td>SyncWriteHelper</td><td>SyncWriteHelper.kt</td><td>67</td><td>Singleton push dispatcher</td></tr>
-        <tr><td>SyncWorker</td><td>SyncWorker.kt</td><td>117</td><td>Background: auth, FCM, lastSeen (widget delegated to PeriodRefreshWorker)</td></tr>
+        <tr><td>SyncWorker</td><td>SyncWorker.kt</td><td>129</td><td>Background: auth, FCM debug (fresh dump via DiagDumpBuilder), lastSeen (widget delegated to PeriodRefreshWorker)</td></tr>
         <tr><td>SyncMergeProcessor</td><td>SyncMergeProcessor.kt</td><td>263</td><td>Shared merge logic for incoming sync events (foreground + background)</td></tr>
         <tr><td>PeriodRefreshService</td><td>PeriodRefreshService.kt</td><td>275</td><td>Shared period refresh logic: ledger, SG/RE accrual (@Synchronized)</td></tr>
-        <tr><td>PeriodRefreshWorker</td><td>PeriodRefreshWorker.kt</td><td>435</td><td>Background: Firestore sync + period refresh + widget update (15 min)</td></tr>
+        <tr><td>PeriodRefreshWorker</td><td>PeriodRefreshWorker.kt</td><td>452</td><td>Background: Firestore sync + period refresh + widget update (15 min); publishes availableCash fingerprint; skips when isAppActive</td></tr>
+        <tr><td>DiagDumpBuilder</td><td>DiagDumpBuilder.kt</td><td>239</td><td>Diagnostic dump from disk data; writeDiagToMediaStore(); sanitizeDeviceName()</td></tr>
         <tr><td>FirestoreService</td><td>FirestoreService.kt</td><td>540</td><td>Device/group management, pairing, admin, subscriptions</td></tr>
         <tr><td>GroupManager</td><td>GroupManager.kt</td><td>191</td><td>Group lifecycle: create, join, leave, dissolve</td></tr>
         <tr><td>SyncFilters</td><td>SyncFilters.kt</td><td>37</td><td><code>.active</code> extension filters (excludes deleted records)</td></tr>
@@ -1863,10 +1875,10 @@ quick-add expense/income buttons. The widget is theme-aware and respects paid/fr
 <table>
     <thead><tr><th>Component</th><th>File</th><th>Lines</th><th>Purpose</th></tr></thead>
     <tbody>
-        <tr><td>BudgetWidgetProvider</td><td>BudgetWidgetProvider.kt</td><td>252</td><td>AppWidgetProvider: lifecycle, alarms, resetHour for all alarm types, schedules PeriodRefreshWorker</td></tr>
+        <tr><td>BudgetWidgetProvider</td><td>BudgetWidgetProvider.kt</td><td>288</td><td>AppWidgetProvider: lifecycle, alarms, resetHour for all alarm types, schedules PeriodRefreshWorker, updateAllWidgets() debounce throttle</td></tr>
         <tr><td>WidgetRenderer</td><td>WidgetRenderer.kt</td><td>276</td><td>Canvas bitmap renderer for Solari flip-display cards</td></tr>
         <tr><td>WidgetTransactionActivity</td><td>WidgetTransactionActivity.kt</td><td>987</td><td>Quick add expense/income from widget buttons, pushes via SyncWriteHelper</td></tr>
-        <tr><td>PeriodRefreshWorker</td><td>PeriodRefreshWorker.kt</td><td>435</td><td>Background: Firestore sync + period refresh + cash recompute + widget update (15 min periodic)</td></tr>
+        <tr><td>PeriodRefreshWorker</td><td>PeriodRefreshWorker.kt</td><td>452</td><td>Background: Firestore sync + period refresh + cash recompute + widget update (15 min periodic)</td></tr>
     </tbody>
 </table>
 
@@ -1889,6 +1901,23 @@ quick-add expense/income buttons. The widget is theme-aware and respects paid/fr
     <li>Settings changes (theme, currency, logo visibility)</li>
     <li>resetHour alarm for all budget period types</li>
 </ul>
+
+<h4>Update Throttle</h4>
+<p><code>BudgetWidgetProvider.updateAllWidgets()</code> debounces widget redraws to at most once every
+5 seconds (<code>WIDGET_THROTTLE_MS = 5_000L</code>). If a call arrives within the cooldown window, a
+single deferred redraw is scheduled via <code>Handler.postDelayed()</code>; additional calls during the
+same window are dropped. This prevents frame drops that would otherwise occur from rapid successive
+updates triggered by recurring expense and savings goal accrual pushes during period refresh.</p>
+
+<table>
+    <thead><tr><th>Throttle Parameter</th><th>Value</th></tr></thead>
+    <tbody>
+        <tr><td>Cooldown window</td><td>5,000 ms</td></tr>
+        <tr><td>Pending redraw flag</td><td><code>@Volatile pendingRedraw</code></td></tr>
+        <tr><td>Deferred scheduling</td><td><code>Handler(Looper.getMainLooper()).postDelayed()</code></td></tr>
+        <tr><td>Drop behavior</td><td>If <code>pendingRedraw</code> is already true, additional calls within the window are no-ops</td></tr>
+    </tbody>
+</table>
 
 <div class="note"><strong>Background freshness:</strong> Widget stays fresh even when the app is closed.
 PeriodRefreshWorker runs every 15 minutes, opens a short-lived Firestore listener (~5-10 seconds,
@@ -2330,7 +2359,7 @@ with icons, tip/note callout boxes, key-value description rows, and numbered ste
     <thead><tr><th>Component</th><th>Purpose</th></tr></thead>
     <tbody>
         <tr><td>SyncWorker</td><td>WorkManager periodic background sync (15 min)</td></tr>
-        <tr><td>PeriodRefreshWorker</td><td>Background: Firestore sync + period refresh + widget update (15 min, replaces WidgetRefreshWorker)</td></tr>
+        <tr><td>PeriodRefreshWorker</td><td>Background: Firestore sync + period refresh + cash fingerprint publish + widget update (15 min, replaces WidgetRefreshWorker); skips when isAppActive</td></tr>
         <tr><td>BudgetWidgetProvider</td><td>AppWidgetProvider receiver</td></tr>
         <tr><td>WidgetTransactionActivity</td><td>Widget quick-add activity</td></tr>
         <tr><td>FcmService</td><td>Firebase Cloud Messaging handler</td></tr>
@@ -2346,21 +2375,21 @@ with icons, tip/note callout boxes, key-value description rows, and numbered ste
 <table>
     <thead><tr><th>Layer</th><th>Files</th><th>Lines</th><th>Percentage</th></tr></thead>
     <tbody>
-        <tr><td>Screen Composables (incl. MainActivity)</td><td>12</td><td>18,341</td><td>43.2%</td></tr>
-        <tr><td>Help Screens</td><td>10</td><td>3,509</td><td>8.3%</td></tr>
-        <tr><td>Localization Strings</td><td>5</td><td>6,238</td><td>14.7%</td></tr>
-        <tr><td>UI Components</td><td>5</td><td>2,005</td><td>4.7%</td></tr>
-        <tr><td>Data Layer (models + repos)</td><td>17</td><td>1,447</td><td>3.4%</td></tr>
-        <tr><td>Data Layer (logic)</td><td>7</td><td>2,857</td><td>6.7%</td></tr>
-        <tr><td>Sync Engine</td><td>17</td><td>4,756</td><td>11.0%</td></tr>
-        <tr><td>Receipt System</td><td>3</td><td>1,730</td><td>4.0%</td></tr>
-        <tr><td>Widget</td><td>3</td><td>1,515</td><td>3.5%</td></tr>
-        <tr><td>Theme</td><td>3</td><td>712</td><td>1.7%</td></tr>
+        <tr><td>Screen Composables (incl. MainActivity)</td><td>12</td><td>18,853</td><td>42.6%</td></tr>
+        <tr><td>Help Screens</td><td>10</td><td>3,509</td><td>7.9%</td></tr>
+        <tr><td>Localization Strings</td><td>5</td><td>6,246</td><td>14.1%</td></tr>
+        <tr><td>UI Components</td><td>5</td><td>2,005</td><td>4.5%</td></tr>
+        <tr><td>Data Layer (models + repos)</td><td>17</td><td>1,447</td><td>3.3%</td></tr>
+        <tr><td>Data Layer (logic)</td><td>8</td><td>3,096</td><td>7.0%</td></tr>
+        <tr><td>Sync Engine</td><td>17</td><td>4,785</td><td>10.8%</td></tr>
+        <tr><td>Receipt System</td><td>3</td><td>1,730</td><td>3.9%</td></tr>
+        <tr><td>Widget</td><td>3</td><td>1,551</td><td>3.5%</td></tr>
+        <tr><td>Theme</td><td>3</td><td>712</td><td>1.6%</td></tr>
         <tr><td>Sound</td><td>1</td><td>134</td><td>0.3%</td></tr>
         <tr><td>QuickStart</td><td>1</td><td>357</td><td>0.8%</td></tr>
     </tbody>
     <tfoot>
-        <tr><td><strong>TOTAL</strong></td><td><strong>89</strong></td><td><strong>43,374</strong></td><td><strong>100%</strong></td></tr>
+        <tr><td><strong>TOTAL</strong></td><td><strong>90</strong></td><td><strong>44,242</strong></td><td><strong>100%</strong></td></tr>
     </tfoot>
 </table>
 
@@ -2368,8 +2397,8 @@ with icons, tip/note callout boxes, key-value description rows, and numbered ste
 <table>
     <thead><tr><th>Rank</th><th>File</th><th>Lines</th></tr></thead>
     <tbody>
-        <tr><td>1</td><td>TransactionsScreen.kt</td><td>5,304</td></tr>
-        <tr><td>2</td><td>MainActivity.kt</td><td>4,164</td></tr>
+        <tr><td>1</td><td>TransactionsScreen.kt</td><td>5,423</td></tr>
+        <tr><td>2</td><td>MainActivity.kt</td><td>4,580</td></tr>
         <tr><td>3</td><td>EnglishStrings.kt</td><td>1,704</td></tr>
         <tr><td>4</td><td>SpanishStrings.kt</td><td>1,699</td></tr>
         <tr><td>5</td><td>SettingsScreen.kt</td><td>1,492</td></tr>
@@ -2391,8 +2420,8 @@ with icons, tip/note callout boxes, key-value description rows, and numbered ste
     <thead><tr><th>Directory</th><th>Files</th></tr></thead>
     <tbody>
         <tr><td>com.syncbudget.app (root)</td><td>1</td></tr>
-        <tr><td>com.syncbudget.app.data</td><td>28</td></tr>
-        <tr><td>com.syncbudget.app.data.sync</td><td>21</td></tr>
+        <tr><td>com.syncbudget.app.data</td><td>30</td></tr>
+        <tr><td>com.syncbudget.app.data.sync</td><td>20</td></tr>
         <tr><td>com.syncbudget.app.sound</td><td>1</td></tr>
         <tr><td>com.syncbudget.app.ui.components</td><td>5</td></tr>
         <tr><td>com.syncbudget.app.ui.screens</td><td>22</td></tr>
@@ -2401,7 +2430,7 @@ with icons, tip/note callout boxes, key-value description rows, and numbered ste
         <tr><td>com.syncbudget.app.widget</td><td>3</td></tr>
     </tbody>
     <tfoot>
-        <tr><td><strong>TOTAL</strong></td><td><strong>89 files</strong></td></tr>
+        <tr><td><strong>TOTAL</strong></td><td><strong>90 files</strong></td></tr>
     </tfoot>
 </table>
 
@@ -2507,12 +2536,18 @@ with icons, tip/note callout boxes, key-value description rows, and numbered ste
             <td>BudgeTrak Development Team</td>
             <td>Background sync and period refresh. Added PeriodRefreshWorker (435 lines, 15-min periodic) replacing WidgetRefreshWorker (105 lines, removed): opens short-lived Firestore listener, processes sync via SyncMergeProcessor, runs period refresh via PeriodRefreshService, recomputes cash, updates widget. Extracted shared code: SyncMergeProcessor (263 lines) for merge logic used by both foreground listeners and background worker; PeriodRefreshService (275 lines) for period refresh logic shared by foreground LaunchedEffect and background worker with @Synchronized race prevention. Fixed ImageLedgerService SNAPSHOT_DOC_ID from "__snapshot_request__" to "_snapshot_request" to avoid Firestore reserved ID error. SyncWorker no longer updates widget (delegated to PeriodRefreshWorker). Net +868 lines, 3 new files, 1 removed. 89 source files, 43,374 lines.</td>
         </tr>
+        <tr>
+            <td>2.3.1</td>
+            <td>March 2026</td>
+            <td>BudgeTrak Development Team</td>
+            <td>Post-v2.3 improvements. Widget throttle: BudgetWidgetProvider.updateAllWidgets() debounces to once per 5 seconds, preventing frame drops from rapid RE/SG accrual pushes. DiagDumpBuilder (239 lines): new utility generating diagnostic dumps from disk data (SharedPrefs + JSON repos), used by foreground and SyncWorker; holds writeDiagToMediaStore() and sanitizeDeviceName() (extracted from MainActivity). SyncWorker generates fresh dump via DiagDumpBuilder.build() before FCM debug upload instead of uploading potentially stale files. PeriodRefreshWorker publishes availableCash in device metadata via fingerprintJson for background cross-device cash comparison; skips execution when MainActivity.isAppActive (foreground handles refresh). JIT optimization: TransactionsScreen had 6 dialogs extracted into private @Composable functions; MainActivity had DashboardDialogs(), 3 screen branches, and diagnostic utilities extracted. isAppActive: static @Volatile boolean on MainActivity set ON_START/cleared ON_STOP. Net +868 lines, 1 new file. 90 source files, 44,242 lines.</td>
+        </tr>
     </tbody>
 </table>
 
 <hr>
 <p style="text-align: center; color: #718096; font-size: 10pt; margin-top: 40px;">
-    BudgeTrak System Specification Document v2.3 &mdash; March 2026 &mdash; END OF DOCUMENT
+    BudgeTrak System Specification Document v2.3.1 &mdash; March 2026 &mdash; END OF DOCUMENT
 </p>
 
 </body>

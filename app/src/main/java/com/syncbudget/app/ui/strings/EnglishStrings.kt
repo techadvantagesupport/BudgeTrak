@@ -537,7 +537,7 @@ object EnglishStrings : AppStrings {
         dissolveGroup = "Dissolve Group",
         syncNow = "Sync Now",
         syncCashToAdmin = "Sync Available Cash to Admin",
-        lastSynced = { time -> "Last synced: $time" },
+        lastSynced = { time -> "Last data sent/received: $time" },
         syncing = "Syncing...",
         syncError = "Sync error",
         notConfigured = "Not configured",
