@@ -165,7 +165,10 @@ class PeriodRefreshWorker(
         try {
             docSync.startListeners()
 
-            // Wait up to 60 seconds for all collections to deliver initial snapshot
+            // Wait for collections to deliver. With filtered listeners, unchanged
+            // collections won't fire onBatchChanged, so this may time out when
+            // nothing changed — that's fine (line 178 handles empty results).
+            // Keep 60s for large imports (e.g. 200 bank transactions).
             withTimeoutOrNull(60_000) { allReceived.await() }
 
             docSync.stopListeners()
