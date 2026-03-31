@@ -844,16 +844,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 android.util.Log.w("SyncLoop", "Device metadata write failed: ${e.message}")
             }
 
-            // Register FCM token for push notifications
+            // Register FCM token for push notifications (always fetch fresh — token
+            // can become stale after app update without uninstall)
             try {
                 val fcmPrefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
-                var fcmToken = fcmPrefs.getString("fcm_token", null)
-                if (fcmToken == null) {
-                    fcmToken = com.google.firebase.messaging.FirebaseMessaging.getInstance()
-                        .token.await()
-                    fcmPrefs.edit().putString("fcm_token", fcmToken).apply()
-                }
+                val fcmToken = com.google.firebase.messaging.FirebaseMessaging.getInstance()
+                    .token.await()
                 if (fcmToken != null) {
+                    fcmPrefs.edit().putString("fcm_token", fcmToken).apply()
                     FirestoreService.storeFcmToken(groupId, localDeviceId, fcmToken)
                     fcmPrefs.edit().putBoolean("token_needs_upload", false).apply()
                 }

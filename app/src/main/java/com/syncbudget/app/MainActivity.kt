@@ -164,7 +164,9 @@ class MainActivity : ComponentActivity() {
                     if (t != null) sb.appendLine("Caused by:")
                 }
                 val dir = BackupManager.getSupportDir()
-                java.io.File(dir, "crash_log.txt").appendText(sb.toString())
+                val crashFile = java.io.File(dir, "crash_log.txt")
+                if (crashFile.exists() && crashFile.length() > 100_000) crashFile.writeText("")
+                crashFile.appendText(sb.toString())
             } catch (_: Exception) {}
             defaultHandler?.uncaughtException(thread, throwable)
         }
@@ -1578,6 +1580,7 @@ class MainActivity : ComponentActivity() {
                             try {
                                 val fcmTokens = FirestoreService.getFcmTokens(gId, vm.localDeviceId)
                                 val debugLog = java.io.File(supportDir, "fcm_debug.txt")
+                                if (debugLog.exists() && debugLog.length() > 50_000) debugLog.writeText("")
                                 debugLog.appendText("[${java.time.LocalDateTime.now()}] FCM tokens found: ${fcmTokens.size}\n")
                                 for (token in fcmTokens) {
                                     debugLog.appendText("  token: ${token.take(20)}...\n")
