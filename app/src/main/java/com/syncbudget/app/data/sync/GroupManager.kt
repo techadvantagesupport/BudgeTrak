@@ -18,7 +18,10 @@ data class DeviceInfo(
     val deviceName: String,
     val isAdmin: Boolean,
     val lastSeen: Long,
-    val online: Boolean = false
+    val online: Boolean = false,
+    val photoCapable: Boolean = false,
+    val uploadSpeedBps: Long = 0L,
+    val uploadSpeedMeasuredAt: Long = 0L
 )
 
 object GroupManager {

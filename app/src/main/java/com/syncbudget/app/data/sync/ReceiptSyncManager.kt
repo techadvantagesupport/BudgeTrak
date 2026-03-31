@@ -56,7 +56,7 @@ class ReceiptSyncManager(
      */
     suspend fun syncReceipts(
         transactions: List<Transaction>,
-        allDevices: List<DeviceRecord>
+        allDevices: List<DeviceInfo>
     ): List<Transaction> {
         val photoCapableDeviceIds = allDevices.filter { it.photoCapable }.map { it.deviceId }.toSet()
         var txns = transactions.toMutableList()
@@ -135,7 +135,7 @@ class ReceiptSyncManager(
     private suspend fun processLedgerOperations(
         transactions: MutableList<Transaction>,
         photoCapableDeviceIds: Set<String>,
-        allDevices: List<DeviceRecord>
+        allDevices: List<DeviceInfo>
     ): MutableList<Transaction> {
         val remoteFlagClock = ImageLedgerService.getFlagClock(groupId)
         val localFlagClock = prefs.getLong(KEY_LAST_SEEN_FLAG_CLOCK, 0L)
@@ -169,7 +169,7 @@ class ReceiptSyncManager(
     private suspend fun handleReuploadRequest(
         entry: ImageLedgerEntry,
         photoCapableDeviceIds: Set<String>,
-        allDevices: List<DeviceRecord>
+        allDevices: List<DeviceInfo>
     ) {
         // Candidates: photo-capable devices that have the file
         val candidatesWithFile = entry.possessions.keys
@@ -257,7 +257,7 @@ class ReceiptSyncManager(
     private suspend fun processRecovery(
         transactions: MutableList<Transaction>,
         photoCapableDeviceIds: Set<String>,
-        allDevices: List<DeviceRecord>
+        allDevices: List<DeviceInfo>
     ): MutableList<Transaction> {
         val allReceiptIds = ReceiptManager.collectAllReceiptIds(transactions)
         val pending = ReceiptManager.loadPendingUploads(context)
@@ -346,7 +346,7 @@ class ReceiptSyncManager(
     private suspend fun processSnapshotLifecycle(
         transactions: List<Transaction>,
         photoCapableDeviceIds: Set<String>,
-        allDevices: List<DeviceRecord>
+        allDevices: List<DeviceInfo>
     ) {
         val entry = ImageLedgerService.getSnapshotEntry(groupId) ?: return
         val now = System.currentTimeMillis()
@@ -567,7 +567,7 @@ class ReceiptSyncManager(
 
     private suspend fun processStalePruning(
         photoCapableDeviceIds: Set<String>,
-        allDevices: List<DeviceRecord>
+        allDevices: List<DeviceInfo>
     ) {
         val now = System.currentTimeMillis()
 
@@ -620,7 +620,7 @@ class ReceiptSyncManager(
     private fun selectBuilder(
         taskId: String,
         candidates: Set<String>,
-        allDevices: List<DeviceRecord>
+        allDevices: List<DeviceInfo>
     ): String? {
         if (candidates.isEmpty()) return null
         if (candidates.size == 1) return candidates.first()

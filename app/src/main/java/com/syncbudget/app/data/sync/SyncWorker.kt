@@ -102,11 +102,11 @@ class SyncWorker(
                             appPrefs.getBoolean("isSubscriber", false)
                     if (photoCapable) {
                         val transactions = com.syncbudget.app.data.TransactionRepository.load(applicationContext)
-                        val deviceRecords = FirestoreService.getDevices(groupId)
+                        val devices = RealtimePresenceService.getDevices(groupId)
                         val receiptSync = ReceiptSyncManager(
                             applicationContext, groupId, deviceId, key
                         ) { msg -> android.util.Log.i("SyncWorker", "Receipt: $msg") }
-                        receiptSync.syncReceipts(transactions, deviceRecords)
+                        receiptSync.syncReceipts(transactions, devices)
                         // Don't save transaction list changes — foreground ViewModel owns that state
                     }
                 } catch (e: Exception) {

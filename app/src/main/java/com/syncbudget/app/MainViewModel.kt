@@ -587,7 +587,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Set up RTDB presence (foreground only)
         try {
             val deviceName = GroupManager.getDeviceName(context)
-            com.syncbudget.app.data.sync.RealtimePresenceService.setupPresence(gid, localDeviceId, deviceName)
+            val receiptPrefs = context.getSharedPreferences("receipt_sync_prefs", Context.MODE_PRIVATE)
+            val uploadSpeed = receiptPrefs.getLong("lastUploadSpeedBps", 0L)
+            val speedMeasuredAt = receiptPrefs.getLong("lastSpeedMeasuredAt", 0L)
+            com.syncbudget.app.data.sync.RealtimePresenceService.setupPresence(
+                gid, localDeviceId, deviceName,
+                photoCapable = isPaidUser || isSubscriber,
+                uploadSpeedBps = uploadSpeed,
+                uploadSpeedMeasuredAt = speedMeasuredAt
+            )
             com.syncbudget.app.data.sync.RealtimePresenceService.listenToGroupPresence(gid) { presenceRecords ->
                 // Merge RTDB presence with existing syncDevices metadata (admin status)
                 val currentDevices = syncDevices
@@ -597,7 +605,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         device.copy(
                             online = presence.online,
                             lastSeen = maxOf(device.lastSeen, presence.lastSeen),
-                            deviceName = if (presence.deviceName.isNotEmpty()) presence.deviceName else device.deviceName
+                            deviceName = if (presence.deviceName.isNotEmpty()) presence.deviceName else device.deviceName,
+                            photoCapable = presence.photoCapable,
+                            uploadSpeedBps = presence.uploadSpeedBps,
+                            uploadSpeedMeasuredAt = presence.uploadSpeedMeasuredAt
                         )
                     } else device
                 }
@@ -605,7 +616,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val existingIds = updatedDevices.map { it.deviceId }.toSet()
                 val newDevices = presenceRecords
                     .filter { it.deviceId !in existingIds }
-                    .map { DeviceInfo(it.deviceId, it.deviceName, isAdmin = false, lastSeen = it.lastSeen, online = it.online) }
+                    .map { DeviceInfo(it.deviceId, it.deviceName, isAdmin = false, lastSeen = it.lastSeen,
+                        online = it.online, photoCapable = it.photoCapable,
+                        uploadSpeedBps = it.uploadSpeedBps, uploadSpeedMeasuredAt = it.uploadSpeedMeasuredAt) }
                 syncDevices = updatedDevices + newDevices
             }
         } catch (e: Exception) {
@@ -1200,17 +1213,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (ds != null && !ds.isListening) {
                     ds.startListeners()
                 }
-                // Refresh device list
-                syncDevices = GroupManager.getDevices(gId)
-                isSyncAdmin = GroupManager.isAdmin(context)
                 // Trigger receipt photo sync (paid users only)
+                isSyncAdmin = GroupManager.isAdmin(context)
                 if (isPaidUser || isSubscriber) {
                     try {
-                        val deviceRecords = FirestoreService.getDevices(gId)
                         val receiptSync = com.syncbudget.app.data.sync.ReceiptSyncManager(
                             context, gId, localDeviceId, key
                         )
-                        val updatedTxns = receiptSync.syncReceipts(transactions.toList(), deviceRecords)
+                        val updatedTxns = receiptSync.syncReceipts(transactions.toList(), syncDevices)
                         if (updatedTxns != transactions.toList()) {
                             transactions.clear()
                             transactions.addAll(updatedTxns)

@@ -7,12 +7,16 @@ import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
 import com.google.firebase.database.ValueEventListener
+import kotlinx.coroutines.tasks.await
 
 data class PresenceRecord(
     val deviceId: String,
     val online: Boolean,
     val deviceName: String,
-    val lastSeen: Long
+    val lastSeen: Long,
+    val photoCapable: Boolean = false,
+    val uploadSpeedBps: Long = 0L,
+    val uploadSpeedMeasuredAt: Long = 0L
 )
 
 /**
@@ -51,7 +55,10 @@ object RealtimePresenceService {
      * Set up presence for this device. Writes online=true on connect,
      * registers onDisconnect to write online=false + lastSeen on disconnect.
      */
-    fun setupPresence(groupId: String, deviceId: String, deviceName: String) {
+    fun setupPresence(
+        groupId: String, deviceId: String, deviceName: String,
+        photoCapable: Boolean = false, uploadSpeedBps: Long = 0L, uploadSpeedMeasuredAt: Long = 0L
+    ) {
         val db = getDatabase() ?: return
 
         val myRef = db.reference.child("groups/$groupId/presence/$deviceId")
@@ -59,21 +66,28 @@ object RealtimePresenceService {
         val connRef = db.getReference(".info/connected")
         connectedRef = connRef
 
+        val data = mapOf(
+            "online" to true,
+            "deviceName" to deviceName,
+            "lastSeen" to ServerValue.TIMESTAMP,
+            "photoCapable" to photoCapable,
+            "uploadSpeedBps" to uploadSpeedBps,
+            "uploadSpeedMeasuredAt" to uploadSpeedMeasuredAt
+        )
+        val disconnectData = mapOf(
+            "online" to false,
+            "deviceName" to deviceName,
+            "lastSeen" to ServerValue.TIMESTAMP,
+            "photoCapable" to photoCapable,
+            "uploadSpeedBps" to uploadSpeedBps,
+            "uploadSpeedMeasuredAt" to uploadSpeedMeasuredAt
+        )
+
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (snapshot.getValue(Boolean::class.java) == true) {
-                    // Register what to write on disconnect BEFORE marking online
-                    myRef.onDisconnect().setValue(mapOf(
-                        "online" to false,
-                        "deviceName" to deviceName,
-                        "lastSeen" to ServerValue.TIMESTAMP
-                    ))
-                    // Mark as online
-                    myRef.setValue(mapOf(
-                        "online" to true,
-                        "deviceName" to deviceName,
-                        "lastSeen" to ServerValue.TIMESTAMP
-                    ))
+                    myRef.onDisconnect().setValue(disconnectData)
+                    myRef.setValue(data)
                     Log.i(TAG, "Presence online for $deviceId in group $groupId")
                 }
             }
@@ -107,7 +121,10 @@ object RealtimePresenceService {
                     val online = child.child("online").getValue(Boolean::class.java) ?: false
                     val name = child.child("deviceName").getValue(String::class.java) ?: ""
                     val lastSeen = child.child("lastSeen").getValue(Long::class.java) ?: 0L
-                    PresenceRecord(deviceId, online, name, lastSeen)
+                    val photoCapable = child.child("photoCapable").getValue(Boolean::class.java) ?: false
+                    val speed = child.child("uploadSpeedBps").getValue(Long::class.java) ?: 0L
+                    val speedAt = child.child("uploadSpeedMeasuredAt").getValue(Long::class.java) ?: 0L
+                    PresenceRecord(deviceId, online, name, lastSeen, photoCapable, speed, speedAt)
                 }
                 callback(records)
             }
@@ -119,6 +136,33 @@ object RealtimePresenceService {
 
         ref.addValueEventListener(listener)
         presenceListener = listener
+    }
+
+    /**
+     * One-shot read of all devices' presence (for background workers without persistent listeners).
+     * Returns empty list if RTDB is not configured.
+     */
+    suspend fun getDevices(groupId: String): List<DeviceInfo> {
+        val db = getDatabase() ?: return emptyList()
+        return try {
+            val snapshot = db.reference.child("groups/$groupId/presence")
+                .get().await()
+            snapshot.children.mapNotNull { snap ->
+                val id = snap.key ?: return@mapNotNull null
+                val name = snap.child("deviceName").getValue(String::class.java) ?: ""
+                val lastSeen = snap.child("lastSeen").getValue(Long::class.java) ?: 0L
+                val online = snap.child("online").getValue(Boolean::class.java) ?: false
+                val photo = snap.child("photoCapable").getValue(Boolean::class.java) ?: false
+                val speed = snap.child("uploadSpeedBps").getValue(Long::class.java) ?: 0L
+                val speedAt = snap.child("uploadSpeedMeasuredAt").getValue(Long::class.java) ?: 0L
+                DeviceInfo(id, name, isAdmin = false, lastSeen = lastSeen,
+                    online = online, photoCapable = photo,
+                    uploadSpeedBps = speed, uploadSpeedMeasuredAt = speedAt)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "One-shot presence read failed: ${e.message}")
+            emptyList()
+        }
     }
 
     /**
