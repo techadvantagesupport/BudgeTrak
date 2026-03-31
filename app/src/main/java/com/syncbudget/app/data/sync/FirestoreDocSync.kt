@@ -55,6 +55,23 @@ class FirestoreDocSync(
     // Active snapshot listeners — keyed by collection name, detached on stop
     private val listeners = ConcurrentHashMap<String, ListenerRegistration>()
 
+    // Track which collections have delivered their initial snapshot (even if empty).
+    // Completes when all 8 (7 data + sharedSettings) have reported.
+    private val deliveredCollections = ConcurrentHashMap.newKeySet<String>()
+    private val allDelivered = kotlinx.coroutines.CompletableDeferred<Unit>()
+    private val expectedCollections = EncryptedDocSerializer.ALL_COLLECTIONS.size + 1 // +1 for sharedSettings
+
+    /** Suspend until all collection listeners have delivered their initial snapshot. */
+    suspend fun awaitInitialSync(timeoutMs: Long = 30_000): Boolean {
+        return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { allDelivered.await() } != null
+    }
+
+    private fun markCollectionDelivered(collection: String) {
+        if (deliveredCollections.add(collection) && deliveredCollections.size >= expectedCollections) {
+            if (!allDelivered.isCompleted) allDelivered.complete(Unit)
+        }
+    }
+
     // Echo prevention: track recently-pushed doc keys ("collection:docId")
     // Value = timestamp when pushed
     private val recentPushes = ConcurrentHashMap<String, Long>()
@@ -433,6 +450,7 @@ class FirestoreDocSync(
     // ── internal: listener handlers ─────────────────────────────────────
 
     private fun handleCollectionChanges(collection: String, changes: List<DocumentChange>) {
+        markCollectionDelivered(collection)
         pruneExpiredEchoKeys()
 
         // Filter out echoes from our own recent writes (lightweight, main thread OK)
@@ -538,6 +556,7 @@ class FirestoreDocSync(
     }
 
     private fun handleSharedSettingsChange(doc: DocumentSnapshot) {
+        markCollectionDelivered(EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS)
         pruneExpiredEchoKeys()
 
         val stateKey = "${EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS}:${EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID}"

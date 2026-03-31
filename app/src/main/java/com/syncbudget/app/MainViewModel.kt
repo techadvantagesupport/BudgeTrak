@@ -1064,8 +1064,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             lastSyncActivity = System.currentTimeMillis()
 
             // ── One-time startup health check ──
-            // Wait for listeners to deliver initial snapshots
-            delay(3_000)
+            // Wait for all collection listeners to deliver (up to 30s for large datasets)
+            val allSynced = docSync?.awaitInitialSync(30_000) ?: false
+            if (!allSynced) {
+                android.util.Log.w("SyncLoop", "Initial sync timed out after 30s — proceeding with available data")
+            }
 
             try {
                 // Single group doc read for dissolution + subscription expiry
@@ -1407,18 +1410,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // ── One-time migrations ──
         viewModelScope.launch {
-            // Wait for initial listener snapshot so lastKnownState is populated.
+            // Wait for all listeners to deliver before running migrations.
             if (isSyncConfigured && !initialSyncReceived) {
-                val start = System.currentTimeMillis()
-                while (!initialSyncReceived && System.currentTimeMillis() - start < 5_000L) {
-                    delay(200)
-                    if (lastSyncActivity > start) {
-                        initialSyncReceived = true
-                    }
-                }
-                if (!initialSyncReceived) {
-                    initialSyncReceived = true
-                    android.util.Log.w("Migration", "Timed out waiting for initial sync — proceeding with local data")
+                val synced = docSync?.awaitInitialSync(30_000) ?: false
+                initialSyncReceived = true
+                if (!synced) {
+                    android.util.Log.w("Migration", "Initial sync timed out — proceeding with available data")
                 }
             }
             // Purge tombstoned records (deleted=true) from local JSON.
