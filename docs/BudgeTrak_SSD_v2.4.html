@@ -495,7 +495,7 @@ and business logic, and Composable-based screen navigation:</p>
     via SafeIO atomic writes, ensuring immediate persistence without database overhead.</li>
 
     <li><strong>Budget period refresh</strong> runs every 30 seconds in the foreground and every 15 minutes
-    in the background via <code>PeriodRefreshWorker</code>. It calculates missed periods since the last
+    in the background via <code>BackgroundSyncWorker</code>. It calculates missed periods since the last
     refresh and adds (budgetAmount x missedPeriods) to the available cash balance. Each refresh is
     recorded in the period ledger for deterministic cash recomputation. The refresh logic is shared
     via <code>PeriodRefreshService</code> with <code>@Synchronized</code> to prevent races. In sync
@@ -524,7 +524,7 @@ and business logic, and Composable-based screen navigation:</p>
 
     <li><strong>Lifecycle coordination</strong>: <code>MainActivity.isAppActive</code> is a static
     <code>@Volatile</code> boolean set on <code>ON_START</code> and cleared on <code>ON_STOP</code>.
-    <code>PeriodRefreshWorker</code> checks this flag at the start of <code>doWork()</code> and returns
+    <code>BackgroundSyncWorker</code> checks this flag at the start of <code>doWork()</code> and returns
     early when the foreground is active, avoiding duplicate period refresh and widget updates that the
     foreground already handles.</li>
 </ol>
@@ -561,10 +561,10 @@ and business logic, and Composable-based screen navigation:</p>
         <tr><td>ReceiptSyncManager</td><td>ReceiptSyncManager.kt</td><td>660</td><td>Cloud Storage upload/download, encryption, hash assignment, recovery; takes DeviceInfo (from RTDB) instead of DeviceRecord</td></tr>
         <tr><td>ReceiptManager</td><td>ReceiptManager.kt</td><td>391</td><td>Local photo capture, compression, thumbnail generation, deleteReceiptFull chain</td></tr>
         <tr><td>SwipeablePhotoRow</td><td>SwipeablePhotoRow.kt</td><td>669</td><td>Transaction receipt photo UI with swipe-to-reveal panel</td></tr>
-        <tr><td>BudgetWidgetProvider</td><td>BudgetWidgetProvider.kt</td><td>288</td><td>AppWidgetProvider: lifecycle, alarms, resetHour, schedules PeriodRefreshWorker; updateAllWidgets() debounce throttle (5s cooldown)</td></tr>
+        <tr><td>BudgetWidgetProvider</td><td>BudgetWidgetProvider.kt</td><td>288</td><td>AppWidgetProvider: lifecycle, alarms, resetHour, schedules BackgroundSyncWorker; updateAllWidgets() debounce throttle (5s cooldown)</td></tr>
         <tr><td>WidgetRenderer</td><td>WidgetRenderer.kt</td><td>276</td><td>Canvas bitmap renderer for Solari flip-display cards in widget</td></tr>
         <tr><td>WidgetTransactionActivity</td><td>WidgetTransactionActivity.kt</td><td>987</td><td>Quick add expense/income from widget buttons</td></tr>
-        <tr><td>PeriodRefreshWorker</td><td>PeriodRefreshWorker.kt</td><td>436</td><td>Background: Firestore sync + period refresh + cash recompute + widget update (15 min periodic); publishes availableCash in fingerprintJson; skips when isAppActive</td></tr>
+        <tr><td>BackgroundSyncWorker</td><td>BackgroundSyncWorker.kt</td><td>436</td><td>Background: Firestore sync + period refresh + cash recompute + widget update (15 min periodic); publishes availableCash in fingerprintJson; skips when isAppActive</td></tr>
         <tr><td>PeriodRefreshService</td><td>PeriodRefreshService.kt</td><td>275</td><td>Shared period refresh logic: ledger creation, SG/RE accrual (@Synchronized foreground/background)</td></tr>
         <tr><td>SyncMergeProcessor</td><td>SyncMergeProcessor.kt</td><td>263</td><td>Shared merge logic for incoming sync events: dedup, conflict detection, settings, add-or-replace</td></tr>
         <tr><td>FlipDisplay</td><td>FlipDisplay.kt</td><td>257</td><td>Solari-style display compositor with currency-aware formatting</td></tr>
@@ -825,7 +825,7 @@ deduction = roundCents(amount * (elapsed+1) / totalPeriods) - roundCents(amount 
 <h3 id="sec4-3">4.3 Budget Period Refresh</h3>
 
 <p>Period refresh logic is encapsulated in <code>PeriodRefreshService</code> (275 lines), shared by both
-the foreground <code>LaunchedEffect</code> (every 30 seconds) and the background <code>PeriodRefreshWorker</code>
+the foreground <code>LaunchedEffect</code> (every 30 seconds) and the background <code>BackgroundSyncWorker</code>
 (every 15 minutes). A <code>@Synchronized</code> annotation prevents foreground/background race conditions.</p>
 
 <pre><code>timezone = if (syncConfigured && familyTimezone.isNotEmpty()) ZoneId.of(familyTimezone) else null
@@ -846,8 +846,8 @@ missedPeriods = countPeriodsCompleted(lastRefreshDate, currentPeriod, budgetPeri
 <h4>Foreground vs Background Execution</h4>
 <ul>
     <li><strong>Foreground</strong> (LaunchedEffect): Applies results directly to Compose SnapshotStateLists in MainViewModel</li>
-    <li><strong>Background</strong> (PeriodRefreshWorker): Pushes ledger entries via <code>FirestoreDocService.createDocIfAbsent()</code> and SG/RE updates via <code>FirestoreDocService.updateFields()</code>, then saves to disk via repositories. Publishes <code>availableCash</code> in device metadata via <code>fingerprintJson</code> for cross-device cash comparison even when the app is in the background.</li>
-    <li><strong>Foreground guard</strong>: <code>PeriodRefreshWorker</code> checks <code>MainActivity.isAppActive</code> at the start of <code>doWork()</code> and returns early when the foreground is active, avoiding duplicate refresh and widget updates.</li>
+    <li><strong>Background</strong> (BackgroundSyncWorker): Pushes ledger entries via <code>FirestoreDocService.createDocIfAbsent()</code> and SG/RE updates via <code>FirestoreDocService.updateFields()</code>, then saves to disk via repositories. Publishes <code>availableCash</code> in device metadata via <code>fingerprintJson</code> for cross-device cash comparison even when the app is in the background.</li>
+    <li><strong>Foreground guard</strong>: <code>BackgroundSyncWorker</code> checks <code>MainActivity.isAppActive</code> at the start of <code>doWork()</code> and returns early when the foreground is active, avoiding duplicate refresh and widget updates.</li>
 </ul>
 
 <div class="note"><strong>Timezone rule:</strong> When in a sync group, ALL period calculations use
@@ -1624,7 +1624,7 @@ devices with unfiltered listeners reduced to ~$160/month with cursor-based filte
 
 <h4>Sync Data Processing (SyncMergeProcessor)</h4>
 <p>Merge logic for incoming sync events is extracted into <code>SyncMergeProcessor</code> (263 lines),
-shared by both the foreground listener callbacks and the background <code>PeriodRefreshWorker</code>.</p>
+shared by both the foreground listener callbacks and the background <code>BackgroundSyncWorker</code>.</p>
 <ul>
     <li><strong>Category dedup</strong>: tag-based deduplication for system categories</li>
     <li><strong>Conflict detection</strong>: checks <code>lastEditBy</code> vs <code>localPendingEdits</code></li>
@@ -1810,7 +1810,7 @@ Firestore is the single source of truth, and cursor-based listeners ensure local
         <tr><td>SyncWorker</td><td>SyncWorker.kt</td><td>145</td><td>Background: auth, FCM debug (fresh dump via DiagDumpBuilder), syncReceipts() every 15 min</td></tr>
         <tr><td>SyncMergeProcessor</td><td>SyncMergeProcessor.kt</td><td>263</td><td>Shared merge logic for incoming sync events (foreground + background)</td></tr>
         <tr><td>PeriodRefreshService</td><td>PeriodRefreshService.kt</td><td>275</td><td>Shared period refresh logic: ledger, SG/RE accrual (@Synchronized)</td></tr>
-        <tr><td>PeriodRefreshWorker</td><td>PeriodRefreshWorker.kt</td><td>436</td><td>Background: Firestore sync + period refresh + widget update (15 min); publishes availableCash fingerprint; skips when isAppActive</td></tr>
+        <tr><td>BackgroundSyncWorker</td><td>BackgroundSyncWorker.kt</td><td>436</td><td>Background: Firestore sync + period refresh + widget update (15 min); publishes availableCash fingerprint; skips when isAppActive</td></tr>
         <tr><td>RealtimePresenceService</td><td>RealtimePresenceService.kt</td><td>180</td><td>RTDB presence: online/offline detection, device capabilities, syncDevices node</td></tr>
         <tr><td>DiagDumpBuilder</td><td>DiagDumpBuilder.kt</td><td>239</td><td>Diagnostic dump from disk data; writeDiagToMediaStore(); sanitizeDeviceName()</td></tr>
         <tr><td>FirestoreService</td><td>FirestoreService.kt</td><td>560</td><td>Device/group management, pairing, admin, subscriptions, getGroupHealthStatus()</td></tr>
@@ -1985,10 +1985,10 @@ quick-add expense/income buttons. The widget is theme-aware and respects paid/fr
 <table>
     <thead><tr><th>Component</th><th>File</th><th>Lines</th><th>Purpose</th></tr></thead>
     <tbody>
-        <tr><td>BudgetWidgetProvider</td><td>BudgetWidgetProvider.kt</td><td>288</td><td>AppWidgetProvider: lifecycle, alarms, resetHour for all alarm types, schedules PeriodRefreshWorker, updateAllWidgets() debounce throttle</td></tr>
+        <tr><td>BudgetWidgetProvider</td><td>BudgetWidgetProvider.kt</td><td>288</td><td>AppWidgetProvider: lifecycle, alarms, resetHour for all alarm types, schedules BackgroundSyncWorker, updateAllWidgets() debounce throttle</td></tr>
         <tr><td>WidgetRenderer</td><td>WidgetRenderer.kt</td><td>276</td><td>Canvas bitmap renderer for Solari flip-display cards</td></tr>
         <tr><td>WidgetTransactionActivity</td><td>WidgetTransactionActivity.kt</td><td>987</td><td>Quick add expense/income from widget buttons, pushes via SyncWriteHelper</td></tr>
-        <tr><td>PeriodRefreshWorker</td><td>PeriodRefreshWorker.kt</td><td>436</td><td>Background: Firestore sync + period refresh + cash recompute + widget update (15 min periodic)</td></tr>
+        <tr><td>BackgroundSyncWorker</td><td>BackgroundSyncWorker.kt</td><td>436</td><td>Background: Firestore sync + period refresh + cash recompute + widget update (15 min periodic)</td></tr>
     </tbody>
 </table>
 
@@ -2007,7 +2007,7 @@ quick-add expense/income buttons. The widget is theme-aware and respects paid/fr
 <ul>
     <li>MainViewModel (on resume, data changes)</li>
     <li>WidgetTransactionActivity (after adding transaction)</li>
-    <li>PeriodRefreshWorker (periodic 15-min background refresh with Firestore sync + period refresh + cash recompute)</li>
+    <li>BackgroundSyncWorker (periodic 15-min background refresh with Firestore sync + period refresh + cash recompute)</li>
     <li>Settings changes (theme, currency, logo visibility)</li>
     <li>resetHour alarm for all budget period types</li>
 </ul>
@@ -2030,7 +2030,7 @@ updates triggered by recurring expense and savings goal accrual pushes during pe
 </table>
 
 <div class="note"><strong>Background freshness:</strong> Widget stays fresh even when the app is closed.
-PeriodRefreshWorker runs every 15 minutes, opens a short-lived Firestore listener (~5-10 seconds,
+BackgroundSyncWorker runs every 15 minutes, opens a short-lived Firestore listener (~5-10 seconds,
 served from Firestore offline cache), processes sync changes via SyncMergeProcessor, runs period
 refresh via PeriodRefreshService, recomputes cash, and updates the widget. This ensures the widget
 reflects remote transactions added by other family members.</div>
@@ -2053,10 +2053,10 @@ reflects remote transactions added by other family members.</div>
 
 <h3>18.7 Widget Lifecycle</h3>
 <ul>
-    <li><code>onEnabled</code>: schedules PeriodRefreshWorker</li>
-    <li><code>onDisabled</code>: does not cancel PeriodRefreshWorker (serves broader purpose than widget alone)</li>
-    <li><code>onUpdate</code>: schedules PeriodRefreshWorker, re-renders bitmap, binds click intents to buttons</li>
-    <li><code>onReceive(ACTION_RESET_REFRESH)</code>: calls <code>PeriodRefreshWorker.runOnce()</code></li>
+    <li><code>onEnabled</code>: schedules BackgroundSyncWorker</li>
+    <li><code>onDisabled</code>: does not cancel BackgroundSyncWorker (serves broader purpose than widget alone)</li>
+    <li><code>onUpdate</code>: schedules BackgroundSyncWorker, re-renders bitmap, binds click intents to buttons</li>
+    <li><code>onReceive(ACTION_RESET_REFRESH)</code>: calls <code>BackgroundSyncWorker.runOnce()</code></li>
 </ul>
 
 <!-- ================================================================ -->
@@ -2471,7 +2471,7 @@ with icons, tip/note callout boxes, key-value description rows, and numbered ste
     <thead><tr><th>Component</th><th>Purpose</th></tr></thead>
     <tbody>
         <tr><td>SyncWorker</td><td>WorkManager periodic background sync (15 min): auth, FCM debug upload, syncReceipts()</td></tr>
-        <tr><td>PeriodRefreshWorker</td><td>Background: Firestore sync + period refresh + cash fingerprint publish + widget update (15 min); skips when isAppActive</td></tr>
+        <tr><td>BackgroundSyncWorker</td><td>Background: Firestore sync + period refresh + cash fingerprint publish + widget update (15 min); skips when isAppActive</td></tr>
         <tr><td>BudgetWidgetProvider</td><td>AppWidgetProvider receiver</td></tr>
         <tr><td>WidgetTransactionActivity</td><td>Widget quick-add activity</td></tr>
         <tr><td>FcmService</td><td>Firebase Cloud Messaging handler</td></tr>
@@ -2650,13 +2650,13 @@ with icons, tip/note callout boxes, key-value description rows, and numbered ste
             <td>2.3</td>
             <td>March 2026</td>
             <td>BudgeTrak Development Team</td>
-            <td>Background sync and period refresh. Added PeriodRefreshWorker (435 lines, 15-min periodic) replacing WidgetRefreshWorker (105 lines, removed): opens short-lived Firestore listener, processes sync via SyncMergeProcessor, runs period refresh via PeriodRefreshService, recomputes cash, updates widget. Extracted shared code: SyncMergeProcessor (263 lines) for merge logic used by both foreground listeners and background worker; PeriodRefreshService (275 lines) for period refresh logic shared by foreground LaunchedEffect and background worker with @Synchronized race prevention. Fixed ImageLedgerService SNAPSHOT_DOC_ID from "__snapshot_request__" to "_snapshot_request" to avoid Firestore reserved ID error. SyncWorker no longer updates widget (delegated to PeriodRefreshWorker). Net +868 lines, 3 new files, 1 removed. 89 source files, 43,374 lines.</td>
+            <td>Background sync and period refresh. Added BackgroundSyncWorker (435 lines, 15-min periodic) replacing WidgetRefreshWorker (105 lines, removed): opens short-lived Firestore listener, processes sync via SyncMergeProcessor, runs period refresh via PeriodRefreshService, recomputes cash, updates widget. Extracted shared code: SyncMergeProcessor (263 lines) for merge logic used by both foreground listeners and background worker; PeriodRefreshService (275 lines) for period refresh logic shared by foreground LaunchedEffect and background worker with @Synchronized race prevention. Fixed ImageLedgerService SNAPSHOT_DOC_ID from "__snapshot_request__" to "_snapshot_request" to avoid Firestore reserved ID error. SyncWorker no longer updates widget (delegated to BackgroundSyncWorker). Net +868 lines, 3 new files, 1 removed. 89 source files, 43,374 lines.</td>
         </tr>
         <tr>
             <td>2.3.1</td>
             <td>March 2026</td>
             <td>BudgeTrak Development Team</td>
-            <td>Post-v2.3 improvements. Widget throttle: BudgetWidgetProvider.updateAllWidgets() debounces to once per 5 seconds, preventing frame drops from rapid RE/SG accrual pushes. DiagDumpBuilder (239 lines): new utility generating diagnostic dumps from disk data (SharedPrefs + JSON repos), used by foreground and SyncWorker; holds writeDiagToMediaStore() and sanitizeDeviceName() (extracted from MainActivity). SyncWorker generates fresh dump via DiagDumpBuilder.build() before FCM debug upload instead of uploading potentially stale files. PeriodRefreshWorker publishes availableCash in device metadata via fingerprintJson for background cross-device cash comparison; skips execution when MainActivity.isAppActive (foreground handles refresh). JIT optimization: TransactionsScreen had 6 dialogs extracted into private @Composable functions; MainActivity had DashboardDialogs(), 3 screen branches, and diagnostic utilities extracted. isAppActive: static @Volatile boolean on MainActivity set ON_START/cleared ON_STOP. Net +868 lines, 1 new file. 90 source files, 44,242 lines.</td>
+            <td>Post-v2.3 improvements. Widget throttle: BudgetWidgetProvider.updateAllWidgets() debounces to once per 5 seconds, preventing frame drops from rapid RE/SG accrual pushes. DiagDumpBuilder (239 lines): new utility generating diagnostic dumps from disk data (SharedPrefs + JSON repos), used by foreground and SyncWorker; holds writeDiagToMediaStore() and sanitizeDeviceName() (extracted from MainActivity). SyncWorker generates fresh dump via DiagDumpBuilder.build() before FCM debug upload instead of uploading potentially stale files. BackgroundSyncWorker publishes availableCash in device metadata via fingerprintJson for background cross-device cash comparison; skips execution when MainActivity.isAppActive (foreground handles refresh). JIT optimization: TransactionsScreen had 6 dialogs extracted into private @Composable functions; MainActivity had DashboardDialogs(), 3 screen branches, and diagnostic utilities extracted. isAppActive: static @Volatile boolean on MainActivity set ON_START/cleared ON_STOP. Net +868 lines, 1 new file. 90 source files, 44,242 lines.</td>
         </tr>
         <tr>
             <td>2.4</td>

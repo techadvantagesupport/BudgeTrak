@@ -254,7 +254,7 @@ pre code { background: none; padding: 0; color: inherit; }
             <li><a href="#s7-16">ReceiptSyncManager</a></li>
             <li><a href="#s7-17">ImageLedgerService</a></li>
             <li><a href="#s7-18">SyncMergeProcessor</a></li>
-            <li><a href="#s7-19">PeriodRefreshWorker</a></li>
+            <li><a href="#s7-19">BackgroundSyncWorker</a></li>
             <li><a href="#s7-20">PeriodRefreshService</a></li>
             <li><a href="#s7-21">RealtimePresenceService</a></li>
             <li><a href="#s7-22">Removed Classes (v2.0 &rarr; v2.4)</a></li>
@@ -286,7 +286,7 @@ pre code { background: none; padding: 0; color: inherit; }
 <p>In v2.2, the hand-rolled CRDT sync system (~4,000 lines: LamportClock, DeltaBuilder, DeltaSerializer, CrdtMerge, SnapshotManager, SyncEngine, IntegrityChecker, PeriodLedgerCorrector, SyncFileLock) was replaced with Firestore-native document storage (~1,860 lines). Each record is a separate Firestore document with per-field encryption. Firestore handles transport, offline queue, retry, and ordering. Data classes no longer carry per-field <code>_clock</code> values; only <code>deviceId</code> and <code>deleted</code> remain as sync fields. Real-time snapshot listeners replace the old periodic pull/push cycle. Receipt photo sync via Cloud Storage was added.</p>
 
 <h4>v2.3 Architecture Change: Shared Services &amp; Background Period Refresh</h4>
-<p>In v2.3, sync merge logic and period refresh logic were extracted from <code>MainActivity</code> into shared services (<code>SyncMergeProcessor</code>, <code>PeriodRefreshService</code>) usable by both the foreground activity and a new <code>PeriodRefreshWorker</code>. The <code>WidgetRefreshWorker</code> was removed and replaced by <code>PeriodRefreshWorker</code>, which performs a short-lived Firestore sync, period refresh, cash recompute, and Firestore push &mdash; all from the background. Net result: ~220 lines moved out of <code>MainActivity</code> into 3 new files totaling 984 lines, and 1 file (105 lines) removed.</p>
+<p>In v2.3, sync merge logic and period refresh logic were extracted from <code>MainActivity</code> into shared services (<code>SyncMergeProcessor</code>, <code>PeriodRefreshService</code>) usable by both the foreground activity and a new <code>BackgroundSyncWorker</code>. The <code>WidgetRefreshWorker</code> was removed and replaced by <code>BackgroundSyncWorker</code>, which performs a short-lived Firestore sync, period refresh, cash recompute, and Firestore push &mdash; all from the background. Net result: ~220 lines moved out of <code>MainActivity</code> into 3 new files totaling 984 lines, and 1 file (105 lines) removed.</p>
 
 <h4>v2.4 Architecture Change: ViewModel Extraction, RTDB Presence, Filtered Listeners</h4>
 <p>In v2.4, all application state and business logic were extracted from <code>MainActivity.setContent</code> into <code>MainViewModel</code> (<code>AndroidViewModel</code>). <code>MainActivity</code> is now UI-only (~2,181 lines); <code>MainViewModel</code> holds all ~80 state vars, save functions, business logic, sync lifecycle, and background loops via <code>viewModelScope</code>. Sync infrastructure was overhauled: <strong>RTDB Presence</strong> replaces Firestore device polling with instant online/offline detection via <code>RealtimePresenceService</code>. <strong>Filtered listeners</strong> with per-collection <code>updatedAt</code> cursors drastically reduce Firestore read costs. <strong><code>awaitInitialSync()</code></strong> replaces fixed delays with a <code>CompletableDeferred</code> that completes when all 8 collection listeners have delivered. The <strong>health check loop is eliminated</strong> &mdash; all checks run once on startup after <code>awaitInitialSync()</code>. <strong>Integrity checks</strong> now use <code>Source.CACHE</code> for zero-network local Firestore cache reads. A persistent <strong>image ledger listener</strong> replaces receipt sync polling. <strong>Background receipt sync</strong> runs in <code>SyncWorker</code>. Tombstone cleanup is time-gated to 30 days, and 14-day receipt pruning is simplified with no CAS. The <code>firebase-database</code> and <code>lifecycle-viewmodel-compose:2.8.6</code> dependencies were added.</p>
@@ -298,7 +298,7 @@ pre code { background: none; padding: 0; color: inherit; }
 <tr><th>Package / Directory</th><th>Files</th><th>Lines</th><th>Description</th></tr>
 <tr><td>com.syncbudget.app</td><td>2</td><td>3,976</td><td>MainActivity + MainViewModel</td></tr>
 <tr><td>com.syncbudget.app.data</td><td>30</td><td>5,159</td><td>Data classes, repositories, utilities, PeriodRefreshService, DiagDumpBuilder</td></tr>
-<tr><td>com.syncbudget.app.data.sync</td><td>21</td><td>6,000</td><td>Sync engine, encryption, receipts, SyncMergeProcessor, PeriodRefreshWorker, RealtimePresenceService</td></tr>
+<tr><td>com.syncbudget.app.data.sync</td><td>21</td><td>6,000</td><td>Sync engine, encryption, receipts, SyncMergeProcessor, BackgroundSyncWorker, RealtimePresenceService</td></tr>
 <tr><td>com.syncbudget.app.ui.screens</td><td>22</td><td>18,141</td><td>Main screens + help screens</td></tr>
 <tr><td>com.syncbudget.app.ui.components</td><td>5</td><td>2,005</td><td>Flip display, charts, photo row</td></tr>
 <tr><td>com.syncbudget.app.ui.theme</td><td>3</td><td>712</td><td>Theme, colors, typography</td></tr>
@@ -369,7 +369,7 @@ Cloud Storage:
 
 <h4>Companion Object</h4>
 <div class="method"><span class="method-name">companion object { @Volatile var isAppActive = false }</span></div>
-<div class="method-desc">Set to <code>true</code> on <code>ON_START</code> lifecycle event, cleared to <code>false</code> on <code>ON_STOP</code>. Checked by <code>PeriodRefreshWorker</code> to skip background work when the app is in the foreground.</div>
+<div class="method-desc">Set to <code>true</code> on <code>ON_START</code> lifecycle event, cleared to <code>false</code> on <code>ON_STOP</code>. Checked by <code>BackgroundSyncWorker</code> to skip background work when the app is in the foreground.</div>
 
 <h4>Screen Navigation Routes</h4>
 <table>
@@ -535,7 +535,7 @@ Cloud Storage:
 <li>Saves to disk, recomputes cash, updates SharedPrefs.</li>
 <li>Returns <code>RefreshResult</code> with only changed records (for Firestore push by caller).</li>
 </ol>
-When in a sync group, period refresh is deferred until after <code>awaitInitialSync()</code> completes (suspends the coroutine, does not block UI) to allow incoming period ledger entries from other devices to arrive first. Solo users skip the wait. <code>PeriodRefreshService</code> returns null if no periods are missed. The same service is called by <code>PeriodRefreshWorker</code> for background refresh.
+When in a sync group, period refresh is deferred until after <code>awaitInitialSync()</code> completes (suspends the coroutine, does not block UI) to allow incoming period ledger entries from other devices to arrive first. Solo users skip the wait. <code>PeriodRefreshService</code> returns null if no periods are missed. The same service is called by <code>BackgroundSyncWorker</code> for background refresh.
 </div>
 
 <div class="method"><span class="method-name">Save Functions Pattern (v2.2+, hint support v2.3+)</span></div>
@@ -553,7 +553,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <div class="method-desc"><code>snapshotFlow { lastSyncActivity }</code> in <code>viewModelScope</code> immediately updates <code>lastSyncTimeDisplay</code> when any sync push/receive occurs. A parallel 10-second ticker coroutine in <code>viewModelScope</code> refreshes the elapsed time string so it ticks forward ("5s ago" to "15s ago" etc.).</div>
 
 <div class="method"><span class="method-name">Background Worker Scheduling</span></div>
-<div class="method-desc">Schedules <code>PeriodRefreshWorker.schedule(context)</code> alongside <code>SyncWorker.schedule(context)</code> during sync setup. PeriodRefreshWorker handles background period refresh, cash recompute, and widget update when the app is not in the foreground.</div>
+<div class="method-desc">Schedules <code>BackgroundSyncWorker.schedule(context)</code> alongside <code>SyncWorker.schedule(context)</code> during sync setup. BackgroundSyncWorker handles background period refresh, cash recompute, and widget update when the app is not in the foreground.</div>
 
 <div class="method"><span class="method-name">disposeSyncListeners()</span></div>
 <div class="method-desc">Disposes <code>FirestoreDocSync</code>, <code>SyncWriteHelper</code>, <code>RealtimePresenceService</code>, and the image ledger listener. Called on group leave.</div>
@@ -1379,7 +1379,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 <h3 id="s7-5">7.5 SyncWorker</h3>
 <div class="file-info"><strong>File:</strong> <code>data/sync/SyncWorker.kt</code> (145 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>CoroutineWorker</code></div>
-<p class="desc">Background worker for sync housekeeping. With Firestore-native sync, the foreground FirestoreDocSync handles all real-time data sync via snapshot listeners. This worker handles: (1) Firebase anonymous auth, (2) FCM debug dump requests, (3) background receipt photo sync (loads transactions from disk, gets devices from RTDB via <code>RealtimePresenceService.getDevices()</code>, runs <code>ReceiptSyncManager.syncReceipts()</code>), (4) Firestore lastSeen heartbeat as fallback for RTDB presence. Widget updates are handled by <code>PeriodRefreshWorker</code>.</p>
+<p class="desc">Background worker for sync housekeeping. With Firestore-native sync, the foreground FirestoreDocSync handles all real-time data sync via snapshot listeners. This worker handles: (1) Firebase anonymous auth, (2) FCM debug dump requests, (3) background receipt photo sync (loads transactions from disk, gets devices from RTDB via <code>RealtimePresenceService.getDevices()</code>, runs <code>ReceiptSyncManager.syncReceipts()</code>), (4) Firestore lastSeen heartbeat as fallback for RTDB presence. Widget updates are handled by <code>BackgroundSyncWorker</code>.</p>
 <h4>doWork() Steps</h4>
 <ol>
 <li>Ensure Firebase anonymous auth (retry on failure).</li>
@@ -1591,7 +1591,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 <h3 id="s7-18">7.18 SyncMergeProcessor (Object Singleton)</h3>
 <div class="file-info"><strong>File:</strong> <code>data/sync/SyncMergeProcessor.kt</code> (263 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
-<p class="desc">Stateless object singleton that processes batches of <code>DataChangeEvent</code>s into merged data. Extracted from <code>MainActivity.onBatchChanged</code> in v2.3 to enable reuse by both the foreground ViewModel and <code>PeriodRefreshWorker</code>.</p>
+<p class="desc">Stateless object singleton that processes batches of <code>DataChangeEvent</code>s into merged data. Extracted from <code>MainActivity.onBatchChanged</code> in v2.3 to enable reuse by both the foreground ViewModel and <code>BackgroundSyncWorker</code>.</p>
 
 <h4>Key Method</h4>
 <div class="method"><span class="method-name">processBatch(events, currentTransactions, currentCategories, currentIncomeSources, currentRecurringExpenses, currentAmortizationEntries, currentSavingsGoals, currentPeriodLedger, catIdRemap, currentBudgetStartDate): MergeResult</span></div>
@@ -1620,15 +1620,15 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>categoriesToDeleteFromFirestore</td><td>List&lt;Pair&lt;String, String&gt;&gt;</td><td>Collection/docId pairs to delete</td></tr>
 <tr><td>settingsPrefsToApply</td><td>Map&lt;String, Any&gt;?</td><td>SharedPreferences entries to apply, or null</td></tr>
 </table>
-<p><strong>Used by:</strong> foreground (<code>MainViewModel.onBatchChanged</code>) and background (<code>PeriodRefreshWorker</code>).</p>
+<p><strong>Used by:</strong> foreground (<code>MainViewModel.onBatchChanged</code>) and background (<code>BackgroundSyncWorker</code>).</p>
 
 
-<h3 id="s7-19">7.19 PeriodRefreshWorker</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/PeriodRefreshWorker.kt</code> (436 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>CoroutineWorker</code></div>
+<h3 id="s7-19">7.19 BackgroundSyncWorker</h3>
+<div class="file-info"><strong>File:</strong> <code>data/sync/BackgroundSyncWorker.kt</code> (436 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>CoroutineWorker</code></div>
 <p class="desc">15-minute periodic background worker that performs a short-lived Firestore sync, processes incoming changes via <code>SyncMergeProcessor</code>, runs period refresh via <code>PeriodRefreshService</code>, pushes results back to Firestore, and updates the home screen widget. Replaces <code>WidgetRefreshWorker</code> from v2.2.</p>
 
 <h4>Constructor</h4>
-<div class="method"><span class="method-name">PeriodRefreshWorker(appContext: Context, workerParams: WorkerParameters)</span></div>
+<div class="method"><span class="method-name">BackgroundSyncWorker(appContext: Context, workerParams: WorkerParameters)</span></div>
 
 <h4>Companion Methods</h4>
 <table>
@@ -1658,7 +1658,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 <h3 id="s7-20">7.20 PeriodRefreshService (Object Singleton)</h3>
 <div class="file-info"><strong>File:</strong> <code>data/PeriodRefreshService.kt</code> (275 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
-<p class="desc">Shared service for period refresh logic, extracted from <code>MainActivity</code> in v2.3. Provides a single <code>@Synchronized</code> entry point usable by both the foreground ViewModel and <code>PeriodRefreshWorker</code>.</p>
+<p class="desc">Shared service for period refresh logic, extracted from <code>MainActivity</code> in v2.3. Provides a single <code>@Synchronized</code> entry point usable by both the foreground ViewModel and <code>BackgroundSyncWorker</code>.</p>
 
 <h4>Data Classes</h4>
 <table>
@@ -1727,9 +1727,9 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr class="removed"><td>PeriodLedgerCorrector</td><td>58</td><td>Clock-based correction replaced by create-if-absent Firestore transactions</td></tr>
 <tr class="removed"><td>SyncFileLock</td><td>45</td><td>File-based locking unnecessary with Firestore's built-in concurrency handling</td></tr>
 <tr class="removed"><td>ReceiptMetadata</td><td>~40</td><td>Replaced by ImageLedgerEntry data class with richer possession tracking</td></tr>
-<tr class="removed"><td>WidgetRefreshWorker (v2.3)</td><td>105</td><td>Replaced by PeriodRefreshWorker which handles sync, period refresh, cash recompute, and widget update</td></tr>
+<tr class="removed"><td>WidgetRefreshWorker (v2.3)</td><td>105</td><td>Replaced by BackgroundSyncWorker which handles sync, period refresh, cash recompute, and widget update</td></tr>
 </table>
-<p><strong>Total lines removed:</strong> ~2,541 (v2.0&rarr;v2.2: ~2,436; v2.2&rarr;v2.3: 105). <strong>Total lines added:</strong> v2.2: ~1,860 (EncryptedDocSerializer + FirestoreDocService + FirestoreDocSync + SyncWriteHelper); v2.3: 984 (SyncMergeProcessor + PeriodRefreshWorker + PeriodRefreshService); v2.4: ~1,975 (MainViewModel + RealtimePresenceService + expanded FirestoreDocService/FirestoreDocSync).</p>
+<p><strong>Total lines removed:</strong> ~2,541 (v2.0&rarr;v2.2: ~2,436; v2.2&rarr;v2.3: 105). <strong>Total lines added:</strong> v2.2: ~1,860 (EncryptedDocSerializer + FirestoreDocService + FirestoreDocSync + SyncWriteHelper); v2.3: 984 (SyncMergeProcessor + BackgroundSyncWorker + PeriodRefreshService); v2.4: ~1,975 (MainViewModel + RealtimePresenceService + expanded FirestoreDocService/FirestoreDocSync).</p>
 
 
 <!-- ================================================================== -->
@@ -1858,9 +1858,9 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <h4>Key Methods</h4>
 <table>
 <tr><th>Method</th><th>Description</th></tr>
-<tr><td>onUpdate(context, appWidgetManager, appWidgetIds)</td><td>Update all widgets, schedule PeriodRefreshWorker, schedule reset alarm</td></tr>
-<tr><td>onReceive(context, intent)</td><td>Handles ACTION_RESET_REFRESH: calls <code>PeriodRefreshWorker.runOnce()</code></td></tr>
-<tr><td>onDisabled(context)</td><td>No longer cancels any worker (PeriodRefreshWorker serves both widget and sync)</td></tr>
+<tr><td>onUpdate(context, appWidgetManager, appWidgetIds)</td><td>Update all widgets, schedule BackgroundSyncWorker, schedule reset alarm</td></tr>
+<tr><td>onReceive(context, intent)</td><td>Handles ACTION_RESET_REFRESH: calls <code>BackgroundSyncWorker.runOnce()</code></td></tr>
+<tr><td>onDisabled(context)</td><td>No longer cancels any worker (BackgroundSyncWorker serves both widget and sync)</td></tr>
 <tr><td>onAppWidgetOptionsChanged(...)</td><td>Re-renders widget on size change</td></tr>
 <tr><td>updateAllWidgets(context) [companion]</td><td>Public entry point; throttled &mdash; delegates to <code>doUpdateAllWidgets()</code> with 5-second cooldown</td></tr>
 <tr><td>doUpdateAllWidgets(context) [private]</td><td>Performs the actual widget render: reads prefs, calls WidgetRenderer, pushes RemoteViews</td></tr>
@@ -1883,8 +1883,8 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <p class="desc">Quick-add transaction activity launched from widget +/- buttons. Full Compose UI with dark theme, category selection, amount entry, and receipt photo capture. Pushes transactions and income via SyncWriteHelper. Non-paid users limited to 1 widget transaction per day.</p>
 
 <h3>11.4 WidgetRefreshWorker (Removed in v2.3)</h3>
-<div class="removed-banner">REMOVED in v2.3 &mdash; replaced by PeriodRefreshWorker (see Section 7.19)</div>
-<p class="desc">Was a 30-minute periodic CoroutineWorker that loaded local data, called <code>BudgetCalculator.recomputeAvailableCash()</code>, saved to SharedPrefs, and called <code>BudgetWidgetProvider.updateAllWidgets()</code>. This functionality is now part of <code>PeriodRefreshWorker</code>, which additionally performs Firestore sync, period refresh, and data push.</p>
+<div class="removed-banner">REMOVED in v2.3 &mdash; replaced by BackgroundSyncWorker (see Section 7.19)</div>
+<p class="desc">Was a 30-minute periodic CoroutineWorker that loaded local data, called <code>BudgetCalculator.recomputeAvailableCash()</code>, saved to SharedPrefs, and called <code>BudgetWidgetProvider.updateAllWidgets()</code>. This functionality is now part of <code>BackgroundSyncWorker</code>, which additionally performs Firestore sync, period refresh, and data push.</p>
 
 
 <!-- ================================================================== -->
@@ -2107,7 +2107,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>ImageLedgerEntry.kt</td><td>25</td><td>Receipt/snapshot ledger data classes</td></tr>
 <tr><td>ImageLedgerService.kt</td><td>641</td><td>Cloud Storage + Firestore ledger CRUD + CleanupState</td></tr>
 <tr><td>PeriodLedger.kt</td><td>73</td><td>Data class + repository</td></tr>
-<tr><td>PeriodRefreshWorker.kt</td><td>436</td><td>Background period refresh + sync + widget update</td></tr>
+<tr><td>BackgroundSyncWorker.kt</td><td>436</td><td>Background period refresh + sync + widget update</td></tr>
 <tr><td>RealtimePresenceService.kt</td><td>180</td><td>RTDB presence: online/offline, device capabilities</td></tr>
 <tr><td>ReceiptManager.kt</td><td>391</td><td>Local receipt management</td></tr>
 <tr><td>ReceiptSyncManager.kt</td><td>660</td><td>Receipt cloud sync coordination (takes DeviceInfo)</td></tr>
@@ -2197,9 +2197,9 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr>
     <td>2.3</td><td>March 2026</td><td>BudgeTrak Team</td>
     <td>Shared services extraction and background period refresh.
-    <strong>New classes:</strong> SyncMergeProcessor (263 lines) &mdash; stateless batch event processor shared by foreground and background. PeriodRefreshService (275 lines) &mdash; synchronized period refresh logic shared by foreground and background. PeriodRefreshWorker (446 lines) &mdash; 15-minute periodic background worker performing short-lived Firestore sync, merge processing, period refresh, cash recompute, Firestore push, and widget update.
-    <strong>Removed:</strong> WidgetRefreshWorker (105 lines) &mdash; replaced by PeriodRefreshWorker.
-    <strong>Modified:</strong> MainActivity (~220 lines moved to shared services): companion object with <code>isAppActive</code> volatile flag, <code>onBatchChanged</code> delegates to SyncMergeProcessor, period refresh delegates to PeriodRefreshService, schedules PeriodRefreshWorker. SyncWorker: removed <code>BudgetWidgetProvider.updateAllWidgets()</code> call. BudgetWidgetProvider: <code>onUpdate()</code> schedules PeriodRefreshWorker, <code>onReceive(ACTION_RESET_REFRESH)</code> calls <code>PeriodRefreshWorker.runOnce()</code>, <code>onDisabled()</code> no longer cancels any worker. ImageLedgerService: <code>SNAPSHOT_DOC_ID</code> changed from <code>"__snapshot_request__"</code> to <code>"_snapshot_request"</code>. DiagDumpBuilder extracted from MainActivity. JIT composable extraction for TransactionsScreen and MainActivity. Widget throttle (5s cooldown).
+    <strong>New classes:</strong> SyncMergeProcessor (263 lines) &mdash; stateless batch event processor shared by foreground and background. PeriodRefreshService (275 lines) &mdash; synchronized period refresh logic shared by foreground and background. BackgroundSyncWorker (446 lines) &mdash; 15-minute periodic background worker performing short-lived Firestore sync, merge processing, period refresh, cash recompute, Firestore push, and widget update.
+    <strong>Removed:</strong> WidgetRefreshWorker (105 lines) &mdash; replaced by BackgroundSyncWorker.
+    <strong>Modified:</strong> MainActivity (~220 lines moved to shared services): companion object with <code>isAppActive</code> volatile flag, <code>onBatchChanged</code> delegates to SyncMergeProcessor, period refresh delegates to PeriodRefreshService, schedules BackgroundSyncWorker. SyncWorker: removed <code>BudgetWidgetProvider.updateAllWidgets()</code> call. BudgetWidgetProvider: <code>onUpdate()</code> schedules BackgroundSyncWorker, <code>onReceive(ACTION_RESET_REFRESH)</code> calls <code>BackgroundSyncWorker.runOnce()</code>, <code>onDisabled()</code> no longer cancels any worker. ImageLedgerService: <code>SNAPSHOT_DOC_ID</code> changed from <code>"__snapshot_request__"</code> to <code>"_snapshot_request"</code>. DiagDumpBuilder extracted from MainActivity. JIT composable extraction for TransactionsScreen and MainActivity. Widget throttle (5s cooldown).
     <strong>Metrics:</strong> 89 source files, ~43,405 lines.</td>
 </tr>
 <tr>
