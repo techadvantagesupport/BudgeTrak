@@ -240,7 +240,7 @@ pre code { background: none; padding: 0; color: inherit; }
             <li><a href="#s7-2">FirestoreDocService</a></li>
             <li><a href="#s7-3">FirestoreDocSync</a></li>
             <li><a href="#s7-4">SyncWriteHelper</a></li>
-            <li><a href="#s7-5">SyncWorker</a></li>
+            <li><a href="#s7-5">DebugDumpWorker</a></li>
             <li><a href="#s7-6">FirestoreService</a></li>
             <li><a href="#s7-7">GroupManager</a></li>
             <li><a href="#s7-8">SyncFilters</a></li>
@@ -289,7 +289,7 @@ pre code { background: none; padding: 0; color: inherit; }
 <p>In v2.3, sync merge logic and period refresh logic were extracted from <code>MainActivity</code> into shared services (<code>SyncMergeProcessor</code>, <code>PeriodRefreshService</code>) usable by both the foreground activity and a new <code>BackgroundSyncWorker</code>. The <code>WidgetRefreshWorker</code> was removed and replaced by <code>BackgroundSyncWorker</code>, which performs a short-lived Firestore sync, period refresh, cash recompute, and Firestore push &mdash; all from the background. Net result: ~220 lines moved out of <code>MainActivity</code> into 3 new files totaling 984 lines, and 1 file (105 lines) removed.</p>
 
 <h4>v2.4 Architecture Change: ViewModel Extraction, RTDB Presence, Filtered Listeners</h4>
-<p>In v2.4, all application state and business logic were extracted from <code>MainActivity.setContent</code> into <code>MainViewModel</code> (<code>AndroidViewModel</code>). <code>MainActivity</code> is now UI-only (~2,181 lines); <code>MainViewModel</code> holds all ~80 state vars, save functions, business logic, sync lifecycle, and background loops via <code>viewModelScope</code>. Sync infrastructure was overhauled: <strong>RTDB Presence</strong> replaces Firestore device polling with instant online/offline detection via <code>RealtimePresenceService</code>. <strong>Filtered listeners</strong> with per-collection <code>updatedAt</code> cursors drastically reduce Firestore read costs. <strong><code>awaitInitialSync()</code></strong> replaces fixed delays with a <code>CompletableDeferred</code> that completes when all 8 collection listeners have delivered. The <strong>health check loop is eliminated</strong> &mdash; all checks run once on startup after <code>awaitInitialSync()</code>. <strong>Integrity checks</strong> now use <code>Source.CACHE</code> for zero-network local Firestore cache reads. A persistent <strong>image ledger listener</strong> replaces receipt sync polling. <strong>Background receipt sync</strong> runs in <code>SyncWorker</code>. Tombstone cleanup is time-gated to 30 days, and 14-day receipt pruning is simplified with no CAS. The <code>firebase-database</code> and <code>lifecycle-viewmodel-compose:2.8.6</code> dependencies were added.</p>
+<p>In v2.4, all application state and business logic were extracted from <code>MainActivity.setContent</code> into <code>MainViewModel</code> (<code>AndroidViewModel</code>). <code>MainActivity</code> is now UI-only (~2,181 lines); <code>MainViewModel</code> holds all ~80 state vars, save functions, business logic, sync lifecycle, and background loops via <code>viewModelScope</code>. Sync infrastructure was overhauled: <strong>RTDB Presence</strong> replaces Firestore device polling with instant online/offline detection via <code>RealtimePresenceService</code>. <strong>Filtered listeners</strong> with per-collection <code>updatedAt</code> cursors drastically reduce Firestore read costs. <strong><code>awaitInitialSync()</code></strong> replaces fixed delays with a <code>CompletableDeferred</code> that completes when all 8 collection listeners have delivered. The <strong>health check loop is eliminated</strong> &mdash; all checks run once on startup after <code>awaitInitialSync()</code>. <strong>Integrity checks</strong> now use <code>Source.CACHE</code> for zero-network local Firestore cache reads. A persistent <strong>image ledger listener</strong> replaces receipt sync polling. <strong>Background receipt sync</strong> runs in <code>BackgroundSyncWorker</code>. Tombstone cleanup is time-gated to 30 days, and 14-day receipt pruning is simplified with no CAS. The <code>firebase-database</code> and <code>lifecycle-viewmodel-compose:2.8.6</code> dependencies were added.</p>
 
 <p>This Low-Level Design document describes every class, composable function, data model, utility object, and persistence schema in the BudgeTrak application. Each entry includes its file path, line count, purpose, key methods, and relevant design notes.</p>
 
@@ -1161,7 +1161,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 <h3 id="s6-14">6.14 DiagDumpBuilder (Object Singleton)</h3>
 <div class="file-info"><strong>File:</strong> <code>data/DiagDumpBuilder.kt</code> (239 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
-<p class="desc">Builds comprehensive diagnostic dump text for debug support. Extracted from <code>MainActivity</code> in v2.3+ to allow reuse by both the foreground activity (Settings &rarr; "Dump &amp; Sync Debug") and background <code>SyncWorker</code> (FCM debug request flow). Loads all repositories and preferences, computes budget amounts, and assembles a structured text dump.</p>
+<p class="desc">Builds comprehensive diagnostic dump text for debug support. Extracted from <code>MainActivity</code> in v2.3+ to allow reuse by both the foreground (Settings &rarr; "Dump &amp; Sync Debug") and background <code>DebugDumpWorker</code> (FCM debug request flow). Loads all repositories and preferences, computes budget amounts, and assembles a structured text dump.</p>
 <h4>Methods</h4>
 <table>
 <tr><th>Method</th><th>Description</th></tr>
@@ -1377,8 +1377,8 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 </table>
 
 
-<h3 id="s7-5">7.5 SyncWorker</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/SyncWorker.kt</code> (145 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>CoroutineWorker</code></div>
+<h3 id="s7-5">7.5 DebugDumpWorker</h3>
+<div class="file-info"><strong>File:</strong> <code>data/sync/DebugDumpWorker.kt</code> (80 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>CoroutineWorker</code></div>
 <p class="desc">Background worker for sync housekeeping. With Firestore-native sync, the foreground FirestoreDocSync handles all real-time data sync via snapshot listeners. This worker handles: (1) Firebase anonymous auth, (2) FCM debug dump requests, (3) background receipt photo sync (loads transactions from disk, gets devices from RTDB via <code>RealtimePresenceService.getDevices()</code>, runs <code>ReceiptSyncManager.syncReceipts()</code>), (4) Firestore lastSeen heartbeat as fallback for RTDB presence. Widget updates are handled by <code>BackgroundSyncWorker</code>.</p>
 <h4>doWork() Steps</h4>
 <ol>
@@ -1416,7 +1416,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 <table>
 <tr><th>Method</th><th>Description</th></tr>
 <tr><td>updateDeviceMetadata(groupId, deviceId, syncVersion, ..., photoCapable)</td><td>Write device capabilities once on launch. Does NOT write <code>lastSeen</code> &mdash; RTDB handles foreground presence. Optional <code>fingerprintJson</code> parameter still accepted for backward compatibility.</td></tr>
-<tr><td>updateDeviceLastSeen(groupId, deviceId)</td><td>Background-only: writes lastSeen to Firestore devices/{deviceId} as a fallback heartbeat. Called by SyncWorker.</td></tr>
+<tr><td>updateDeviceLastSeen(groupId, deviceId)</td><td>REMOVED in v2.4 — RTDB handles presence. Firestore lastSeen no longer written.</td></tr>
 <tr><td>getGroupHealthStatus(groupId): GroupHealthStatus</td><td>Single group doc read returning dissolution and subscription expiry status. Used by startup health check instead of separate <code>isGroupDissolved()</code> + <code>getSubscriptionExpiry()</code> calls.</td></tr>
 <tr><td>isDeviceRemoved(groupId, deviceId): Boolean</td><td>Separate single doc read to check if device was removed by admin.</td></tr>
 <tr><td>getDeviceRecord(groupId, deviceId): DeviceRecord?</td><td>Read single device record</td></tr>
@@ -1503,10 +1503,10 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 <h3 id="s7-12">7.12 FcmService</h3>
 <div class="file-info"><strong>File:</strong> <code>data/sync/FcmService.kt</code> (47 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>FirebaseMessagingService</code></div>
-<p class="desc">Firebase Cloud Messaging service. Handles FCM token rotation and debug_request messages. On debug_request (debug builds only), triggers a one-shot SyncWorker to upload diagnostic files.</p>
+<p class="desc">Firebase Cloud Messaging service. Handles FCM token rotation and debug_request messages. On debug_request (debug builds only), triggers a one-shot DebugDumpWorker to upload diagnostic files.</p>
 <h4>Methods</h4>
 <div class="method"><span class="method-name">onNewToken(token)</span> &mdash; Stores new FCM token in <code>"fcm_prefs"</code>, flags for upload on next sync.</div>
-<div class="method"><span class="method-name">onMessageReceived(message)</span> &mdash; Handles "debug_request" type: sets <code>fcm_debug_requested</code> flag, enqueues one-shot SyncWorker.</div>
+<div class="method"><span class="method-name">onMessageReceived(message)</span> &mdash; Handles "debug_request" type: sets <code>fcm_debug_requested</code> flag, enqueues one-shot DebugDumpWorker.</div>
 
 
 <h3 id="s7-13">7.13 FcmSender (Object Singleton)</h3>
@@ -1641,7 +1641,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <h4>doWork() Flow</h4>
 <ol>
 <li><strong>Foreground check:</strong> Reads <code>MainActivity.isAppActive</code> volatile flag; returns <code>Result.success()</code> immediately if the app is in the foreground (foreground handles its own sync and refresh).</li>
-<li><strong>Firebase auth:</strong> Signs in anonymously (same pattern as SyncWorker).</li>
+<li><strong>Firebase auth:</strong> Signs in anonymously (same pattern as DebugDumpWorker).</li>
 <li><strong>Firestore sync (if configured):</strong> Creates a temporary <code>FirestoreDocSync</code> instance, opens short-lived listeners with ~60-second timeout via <code>CompletableDeferred</code>, accumulates <code>DataChangeEvent</code>s, then calls <code>stopListeners()</code>.</li>
 <li><strong>Process events:</strong> Calls <code>SyncMergeProcessor.processBatch()</code>. Saves merged data to disk via repositories. Applies settings to SharedPreferences.</li>
 <li><strong>Period refresh:</strong> Builds <code>RefreshConfig</code> from SharedPreferences, calls <code>PeriodRefreshService.refreshIfNeeded()</code>.</li>
@@ -2078,7 +2078,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>CryptoHelper.kt</td><td>93</td><td>ChaCha20-Poly1305 encryption</td></tr>
 <tr><td>CsvParser.kt</td><td>996</td><td>CSV import/export</td></tr>
 <tr><td>DefaultCategories.kt</td><td>50</td><td>System category definitions</td></tr>
-<tr><td>DiagDumpBuilder.kt</td><td>239</td><td>Diagnostic dump builder (shared by foreground + SyncWorker)</td></tr>
+<tr><td>DiagDumpBuilder.kt</td><td>239</td><td>Diagnostic dump builder (shared by foreground + DebugDumpWorker)</td></tr>
 <tr><td>DuplicateDetector.kt</td><td>213</td><td>Transaction matching functions</td></tr>
 <tr><td>ExpenseReportGenerator.kt</td><td>365</td><td>PDF expense report generation</td></tr>
 <tr><td>FullBackupSerializer.kt</td><td>243</td><td>Complete state serialization</td></tr>
@@ -2116,7 +2116,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>SyncFilters.kt</td><td>37</td><td>.active extension filters</td></tr>
 <tr><td>SyncIdGenerator.kt</td><td>20</td><td>UUID device ID generation</td></tr>
 <tr><td>SyncMergeProcessor.kt</td><td>263</td><td>Batch sync event processing (shared service)</td></tr>
-<tr><td>SyncWorker.kt</td><td>145</td><td>Background housekeeping + receipt sync + RTDB device read</td></tr>
+<tr><td>DebugDumpWorker.kt</td><td>80</td><td>One-shot FCM debug dump upload (debug builds only)</td></tr>
 <tr><td>SyncWriteHelper.kt</td><td>67</td><td>Fire-and-forget push dispatcher</td></tr>
 <tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.syncbudget.app.ui.screens</td></tr>
 <tr><td>AmortizationHelpScreen.kt</td><td>269</td><td>Amortization help documentation</td></tr>
@@ -2206,7 +2206,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
     <td>2.4</td><td>March 2026</td><td>BudgeTrak Team</td>
     <td>ViewModel extraction, RTDB presence, filtered listeners, and sync architecture overhaul.
     <strong>New classes:</strong> MainViewModel (1,795 lines) &mdash; AndroidViewModel holding all ~80 state vars, save functions, business logic, sync lifecycle, and background loops via viewModelScope. RealtimePresenceService (180 lines) &mdash; RTDB-based online/offline presence with server-side onDisconnect, device capabilities, group presence listener, and one-shot device read for background workers.
-    <strong>Modified (major):</strong> MainActivity (3,944 &rarr; 2,181 lines) &mdash; reduced to UI-only shell; all state/logic moved to MainViewModel. FirestoreDocSync (595 &rarr; 683 lines) &mdash; added per-collection updatedAt cursors (sync_cursor SharedPrefs), awaitInitialSync() with CompletableDeferred, markCollectionDelivered() tracking. FirestoreDocService (193 &rarr; 240 lines) &mdash; added listenToCollectionSince() with whereGreaterThan("updatedAt", cursor) filter, readDocIdsFromCache() using Source.CACHE for zero-network integrity checks. FirestoreService (540 &rarr; 560 lines) &mdash; added GroupHealthStatus data class and getGroupHealthStatus() for single-read startup checks, updateDeviceLastSeen() background-only heartbeat; updateDeviceMetadata() no longer writes lastSeen. GroupManager &mdash; DeviceInfo gained online, photoCapable, uploadSpeedBps, uploadSpeedMeasuredAt fields. SyncWorker (117 &rarr; 145 lines) &mdash; added background receipt sync using RealtimePresenceService.getDevices() for RTDB device reads, Firestore lastSeen fallback heartbeat. ReceiptSyncManager &mdash; takes DeviceInfo instead of DeviceRecord everywhere. ImageLedgerService &mdash; CleanupState reduced to just lastCleanupDate; markCleanupDone() is simple write (no CAS).
+    <strong>Modified (major):</strong> MainActivity (3,944 &rarr; 2,181 lines) &mdash; reduced to UI-only shell; all state/logic moved to MainViewModel. FirestoreDocSync (595 &rarr; 683 lines) &mdash; added per-collection updatedAt cursors (sync_cursor SharedPrefs), awaitInitialSync() with CompletableDeferred, markCollectionDelivered() tracking. FirestoreDocService (193 &rarr; 240 lines) &mdash; added listenToCollectionSince() with whereGreaterThan("updatedAt", cursor) filter, readDocIdsFromCache() using Source.CACHE for zero-network integrity checks. FirestoreService (540 &rarr; 560 lines) &mdash; added GroupHealthStatus data class and getGroupHealthStatus() for single-read startup checks, updateDeviceLastSeen() background-only heartbeat; updateDeviceMetadata() no longer writes lastSeen. GroupManager &mdash; DeviceInfo gained online, photoCapable, uploadSpeedBps, uploadSpeedMeasuredAt fields. SyncWorker replaced by DebugDumpWorker (80 lines, one-shot FCM debug only) + BackgroundSyncWorker absorbs receipt sync, RTDB lastSeen ping. ReceiptSyncManager &mdash; takes DeviceInfo instead of DeviceRecord everywhere. ImageLedgerService &mdash; CleanupState reduced to just lastCleanupDate; markCleanupDone() is simple write (no CAS).
     <strong>Sync architecture changes:</strong> Health check loop eliminated &mdash; all checks run once after awaitInitialSync(). Integrity check uses local Firestore cache (Source.CACHE, zero network). Image ledger persistent listener replaces 60s polling. Immediate photo download in onBatchChanged. Tombstone cleanup time-gated to 30 days (lastAdminCleanup). 14-day receipt pruning simplified (local 24h gate, no CAS). Device metadata written once on launch (RTDB handles presence). Fingerprint/cash comparison removed from periodic writes. Sync time display uses snapshotFlow + 10s ticker in viewModelScope. Listeners managed by ViewModel lifecycle, not DisposableEffect.
     <strong>Dependencies added:</strong> firebase-database (from BOM), lifecycle-viewmodel-compose:2.8.6.
     <strong>Metrics:</strong> 92 source files, ~43,924 lines.</td>

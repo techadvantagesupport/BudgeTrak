@@ -555,7 +555,7 @@ and business logic, and Composable-based screen navigation:</p>
         <tr><td>FirestoreService</td><td>FirestoreService.kt</td><td>560</td><td>Device/group management, pairing, admin claims, subscriptions, getGroupHealthStatus()</td></tr>
         <tr><td>RealtimePresenceService</td><td>RealtimePresenceService.kt</td><td>180</td><td>Firebase RTDB presence: online/offline detection via server-side onDisconnect(), device capabilities (photoCapable, uploadSpeedBps), syncDevices node for lastSeen</td></tr>
         <tr><td>SyncWriteHelper</td><td>SyncWriteHelper.kt</td><td>67</td><td>Singleton push dispatcher on IO thread (fire-and-forget)</td></tr>
-        <tr><td>SyncWorker</td><td>SyncWorker.kt</td><td>145</td><td>Background: Firebase auth, FCM debug upload (fresh dump via DiagDumpBuilder), syncReceipts() every 15 min</td></tr>
+        <tr><td>DebugDumpWorker</td><td>DebugDumpWorker.kt</td><td>80</td><td>One-shot: FCM debug dump upload (debug builds only)</td></tr>
         <tr><td>GroupManager</td><td>GroupManager.kt</td><td>195</td><td>Group create/join/leave/dissolve lifecycle</td></tr>
         <tr><td>ImageLedgerService</td><td>ImageLedgerService.kt</td><td>641</td><td>Firestore image ledger operations, collection listener for event-driven receipt sync, orphan scan</td></tr>
         <tr><td>ReceiptSyncManager</td><td>ReceiptSyncManager.kt</td><td>660</td><td>Cloud Storage upload/download, encryption, hash assignment, recovery; takes DeviceInfo (from RTDB) instead of DeviceRecord</td></tr>
@@ -579,7 +579,7 @@ and business logic, and Composable-based screen navigation:</p>
         <tr><td>CryptoHelper</td><td>CryptoHelper.kt</td><td>93</td><td>ChaCha20-Poly1305 encrypt/decrypt (password and direct-key modes)</td></tr>
         <tr><td>AutoCategorizer</td><td>AutoCategorizer.kt</td><td>49</td><td>Merchant-based auto-categorization from 6-month transaction history</td></tr>
         <tr><td>BackupManager</td><td>BackupManager.kt</td><td>390</td><td>Full app backup and restore</td></tr>
-        <tr><td>DiagDumpBuilder</td><td>DiagDumpBuilder.kt</td><td>239</td><td>Diagnostic dump generator from disk data (SharedPrefs + JSON repos); writeDiagToMediaStore(); sanitizeDeviceName(). Used by foreground and SyncWorker background.</td></tr>
+        <tr><td>DiagDumpBuilder</td><td>DiagDumpBuilder.kt</td><td>239</td><td>Diagnostic dump generator from disk data (SharedPrefs + JSON repos); writeDiagToMediaStore(); sanitizeDeviceName(). Used by foreground and DebugDumpWorker background.</td></tr>
         <tr><td>ExpenseReportGenerator</td><td>ExpenseReportGenerator.kt</td><td>365</td><td>Expense report generation</td></tr>
         <tr><td>CategoryIcons</td><td>CategoryIcons.kt</td><td>327</td><td>CATEGORY_ICON_MAP with 120+ Material icon entries</td></tr>
         <tr><td>AppStrings</td><td>AppStrings.kt</td><td>1,405</td><td>Interface definitions for 16 string groups (~800+ fields)</td></tr>
@@ -1807,7 +1807,7 @@ Firestore is the single source of truth, and cursor-based listeners ensure local
         <tr><td>FirestoreDocService</td><td>FirestoreDocService.kt</td><td>240</td><td>Low-level Firestore operations, Source.CACHE reads, filtered listenToCollection</td></tr>
         <tr><td>FirestoreDocSync</td><td>FirestoreDocSync.kt</td><td>683</td><td>Main sync coordinator: filtered listeners with per-collection cursors, push, conflict detection, awaitInitialSync(), markCollectionDelivered()</td></tr>
         <tr><td>SyncWriteHelper</td><td>SyncWriteHelper.kt</td><td>67</td><td>Singleton push dispatcher</td></tr>
-        <tr><td>SyncWorker</td><td>SyncWorker.kt</td><td>145</td><td>Background: auth, FCM debug (fresh dump via DiagDumpBuilder), syncReceipts() every 15 min</td></tr>
+        <tr><td>DebugDumpWorker</td><td>DebugDumpWorker.kt</td><td>80</td><td>One-shot: FCM debug dump upload (debug builds only)</td></tr>
         <tr><td>SyncMergeProcessor</td><td>SyncMergeProcessor.kt</td><td>263</td><td>Shared merge logic for incoming sync events (foreground + background)</td></tr>
         <tr><td>PeriodRefreshService</td><td>PeriodRefreshService.kt</td><td>275</td><td>Shared period refresh logic: ledger, SG/RE accrual (@Synchronized)</td></tr>
         <tr><td>BackgroundSyncWorker</td><td>BackgroundSyncWorker.kt</td><td>436</td><td>Background: Firestore sync + period refresh + widget update (15 min); publishes availableCash fingerprint; skips when isAppActive</td></tr>
@@ -1926,7 +1926,7 @@ document ID error (Firestore rejects IDs starting and ending with double undersc
     <li>Immediate download: <code>onBatchChanged</code> checks newly-arrived transactions for missing receipt files and downloads from Cloud Storage immediately</li>
     <li>Pending upload queue persisted to JSON (survives app kill)</li>
     <li>Upload speed measured and reported to RTDB for assignment optimization</li>
-    <li>Background: <code>SyncWorker</code> runs full <code>syncReceipts()</code> every 15 minutes</li>
+    <li>Background: <code>BackgroundSyncWorker</code> runs full <code>syncReceipts()</code> every 15 minutes</li>
 </ol>
 
 <h3>17.6 Delete Chain</h3>
@@ -2470,7 +2470,7 @@ with icons, tip/note callout boxes, key-value description rows, and numbered ste
 <table>
     <thead><tr><th>Component</th><th>Purpose</th></tr></thead>
     <tbody>
-        <tr><td>SyncWorker</td><td>WorkManager periodic background sync (15 min): auth, FCM debug upload, syncReceipts()</td></tr>
+        <tr><td>DebugDumpWorker</td><td>One-shot WorkManager: FCM debug dump upload (debug builds only)</td></tr>
         <tr><td>BackgroundSyncWorker</td><td>Background: Firestore sync + period refresh + cash fingerprint publish + widget update (15 min); skips when isAppActive</td></tr>
         <tr><td>BudgetWidgetProvider</td><td>AppWidgetProvider receiver</td></tr>
         <tr><td>WidgetTransactionActivity</td><td>Widget quick-add activity</td></tr>
@@ -2662,7 +2662,7 @@ with icons, tip/note callout boxes, key-value description rows, and numbered ste
             <td>2.4</td>
             <td>March 2026</td>
             <td>BudgeTrak Development Team</td>
-            <td>Major sync architecture redesign and ViewModel extraction. <strong>Architecture:</strong> Extracted MainViewModel (AndroidViewModel, 1,795 lines) from MainActivity; all ~80 state vars, save functions, business logic, sync lifecycle, and background loops moved to ViewModel with viewModelScope. MainActivity reduced to UI-only shell (2,181 lines). Added lifecycle-viewmodel-compose:2.8.6 dependency. <strong>Sync cost optimization:</strong> Listeners now use per-collection updatedAt cursors (whereGreaterThan) — only changed docs read on reconnect after >30 min gap; reduces Firestore cost from ~$50K/mo to ~$160/mo at 100K devices. Added awaitInitialSync() completion signal replacing fixed 3s/5s delays — tracks per-collection delivery via markCollectionDelivered(), suspends until all 8 report. <strong>RTDB Presence:</strong> New RealtimePresenceService.kt (180 lines) uses Firebase Realtime Database for instant online/offline detection via server-side onDisconnect(); replaces Firestore device polling entirely. DeviceInfo carries online, photoCapable, uploadSpeedBps fields from RTDB. Added firebase-database dependency. <strong>Receipt sync:</strong> Image ledger collection listener replaces 60s polling. Immediate photo download in onBatchChanged. SyncWorker runs full syncReceipts() every 15 min. ReceiptSyncManager takes DeviceInfo (from RTDB) instead of DeviceRecord. <strong>Health checks:</strong> 5-minute polling loop eliminated; all checks (group dissolution, device removal, subscription expiry, integrity) run once on startup with single group doc read via getGroupHealthStatus(). Integrity check uses Source.CACHE (zero network). Fingerprint cash comparison removed (was log-only diagnostic). <strong>Cleanup:</strong> Tombstone/orphan cleanup time-gated to 30 days (lastAdminCleanup). 14-day receipt pruning simplified (no CAS, 24-hour local gate). Device metadata written once on launch. <strong>UI:</strong> "Last synced" label changed to "Last data sent/received"; sync time uses snapshotFlow for immediate update + 10s ticker. 92 source files, 43,924 lines.</td>
+            <td>Major sync architecture redesign and ViewModel extraction. <strong>Architecture:</strong> Extracted MainViewModel (AndroidViewModel, 1,795 lines) from MainActivity; all ~80 state vars, save functions, business logic, sync lifecycle, and background loops moved to ViewModel with viewModelScope. MainActivity reduced to UI-only shell (2,181 lines). Added lifecycle-viewmodel-compose:2.8.6 dependency. <strong>Sync cost optimization:</strong> Listeners now use per-collection updatedAt cursors (whereGreaterThan) — only changed docs read on reconnect after >30 min gap; reduces Firestore cost from ~$50K/mo to ~$160/mo at 100K devices. Added awaitInitialSync() completion signal replacing fixed 3s/5s delays — tracks per-collection delivery via markCollectionDelivered(), suspends until all 8 report. <strong>RTDB Presence:</strong> New RealtimePresenceService.kt (180 lines) uses Firebase Realtime Database for instant online/offline detection via server-side onDisconnect(); replaces Firestore device polling entirely. DeviceInfo carries online, photoCapable, uploadSpeedBps fields from RTDB. Added firebase-database dependency. <strong>Receipt sync:</strong> Image ledger collection listener replaces 60s polling. Immediate photo download in onBatchChanged. BackgroundSyncWorker runs full syncReceipts() every 15 min. ReceiptSyncManager takes DeviceInfo (from RTDB) instead of DeviceRecord. <strong>Health checks:</strong> 5-minute polling loop eliminated; all checks (group dissolution, device removal, subscription expiry, integrity) run once on startup with single group doc read via getGroupHealthStatus(). Integrity check uses Source.CACHE (zero network). Fingerprint cash comparison removed (was log-only diagnostic). <strong>Cleanup:</strong> Tombstone/orphan cleanup time-gated to 30 days (lastAdminCleanup). 14-day receipt pruning simplified (no CAS, 24-hour local gate). Device metadata written once on launch. <strong>UI:</strong> "Last synced" label changed to "Last data sent/received"; sync time uses snapshotFlow for immediate update + 10s ticker. 92 source files, 43,924 lines.</td>
         </tr>
     </tbody>
 </table>
