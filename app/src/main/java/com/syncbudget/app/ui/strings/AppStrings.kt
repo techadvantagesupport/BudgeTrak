@@ -229,7 +229,16 @@ data class SettingsStrings(
     val photoGallery: String,
     val deletePhotoTitle: String,
     val deletePhotoConfirm: String,
-    val upgradeForPhotos: String
+    val upgradeForPhotos: String,
+    // Data Management
+    val dataManagementSection: String,
+    val activeTransactionsTally: (Int, Int) -> String,
+    val activeTransactionsCount: (Int) -> String,
+    val archiveThresholdLabel: String,
+    val archiveOff: String,
+    val lastArchivedInfo: (String, Int) -> String,
+    val totalArchivedCount: (Int) -> String,
+    val archivedToast: (Int) -> String
 )
 
 data class BudgetConfigStrings(
@@ -441,7 +450,17 @@ data class TransactionsStrings(
     val discardChangesTitle: String,
     val discardChangesBody: String,
     val discard: String,
-    val keepEditing: String
+    val keepEditing: String,
+    // Range toggle
+    val range6mo: String,
+    val range1yr: String,
+    val range2yr: String,
+    val rangeAll: String,
+    // Archived transactions
+    val archivedNotEditable: String,
+    val editDescriptionAlso: String,
+    val newDescription: String,
+    val clearDescriptionConfirm: (Int) -> String
 )
 
 data class FutureExpendituresStrings(

@@ -9,9 +9,10 @@ import java.time.LocalDate
 object TransactionRepository {
 
     private const val FILE_NAME = "transactions.json"
+    private const val ARCHIVE_FILE_NAME = "archived_transactions.json"
     private const val TAG = "TransactionRepo"
 
-    fun save(context: Context, transactions: List<Transaction>) {
+    private fun serializeToArray(transactions: List<Transaction>): JSONArray {
         val jsonArray = JSONArray()
         for (t in transactions) {
             val obj = JSONObject()
@@ -52,11 +53,10 @@ object TransactionRepository {
             obj.put("receiptId5", t.receiptId5 ?: JSONObject.NULL)
             jsonArray.put(obj)
         }
-        SafeIO.atomicWriteJson(context, FILE_NAME, jsonArray)
+        return jsonArray
     }
 
-    fun load(context: Context): List<Transaction> {
-        val jsonArray = SafeIO.readJsonArray(context, FILE_NAME)
+    private fun deserializeFromArray(jsonArray: JSONArray): List<Transaction> {
         val list = mutableListOf<Transaction>()
         for (i in 0 until jsonArray.length()) {
             try {
@@ -76,29 +76,21 @@ object TransactionRepository {
                 } else {
                     emptyList()
                 }
-                val isUserCategorized = if (obj.has("isUserCategorized")) obj.getBoolean("isUserCategorized") else true
-                val excludeFromBudget = if (obj.has("excludeFromBudget")) obj.getBoolean("excludeFromBudget") else false
-                val isBudgetIncome = if (obj.has("isBudgetIncome")) obj.getBoolean("isBudgetIncome") else false
-                val linkedRecurringExpenseId = if (obj.has("linkedRecurringExpenseId") && !obj.isNull("linkedRecurringExpenseId")) obj.getInt("linkedRecurringExpenseId") else null
-                val linkedAmortizationEntryId = if (obj.has("linkedAmortizationEntryId") && !obj.isNull("linkedAmortizationEntryId")) obj.getInt("linkedAmortizationEntryId") else null
-                val linkedIncomeSourceId = if (obj.has("linkedIncomeSourceId") && !obj.isNull("linkedIncomeSourceId")) obj.getInt("linkedIncomeSourceId") else null
-                val type = try { TransactionType.valueOf(obj.getString("type")) } catch (_: Exception) { TransactionType.EXPENSE }
-                val date = try { LocalDate.parse(obj.getString("date")) } catch (_: Exception) { LocalDate.now() }
                 list.add(
                     Transaction(
                         id = obj.getInt("id"),
-                        type = type,
-                        date = date,
+                        type = try { TransactionType.valueOf(obj.getString("type")) } catch (_: Exception) { TransactionType.EXPENSE },
+                        date = try { LocalDate.parse(obj.getString("date")) } catch (_: Exception) { LocalDate.now() },
                         source = obj.getString("source"),
                         description = obj.optString("description", ""),
                         categoryAmounts = categoryAmounts,
                         amount = amount,
-                        isUserCategorized = isUserCategorized,
-                        excludeFromBudget = excludeFromBudget,
-                        isBudgetIncome = isBudgetIncome,
-                        linkedRecurringExpenseId = linkedRecurringExpenseId,
-                        linkedAmortizationEntryId = linkedAmortizationEntryId,
-                        linkedIncomeSourceId = linkedIncomeSourceId,
+                        isUserCategorized = if (obj.has("isUserCategorized")) obj.getBoolean("isUserCategorized") else true,
+                        excludeFromBudget = if (obj.has("excludeFromBudget")) obj.getBoolean("excludeFromBudget") else false,
+                        isBudgetIncome = if (obj.has("isBudgetIncome")) obj.getBoolean("isBudgetIncome") else false,
+                        linkedRecurringExpenseId = if (obj.has("linkedRecurringExpenseId") && !obj.isNull("linkedRecurringExpenseId")) obj.getInt("linkedRecurringExpenseId") else null,
+                        linkedAmortizationEntryId = if (obj.has("linkedAmortizationEntryId") && !obj.isNull("linkedAmortizationEntryId")) obj.getInt("linkedAmortizationEntryId") else null,
+                        linkedIncomeSourceId = if (obj.has("linkedIncomeSourceId") && !obj.isNull("linkedIncomeSourceId")) obj.getInt("linkedIncomeSourceId") else null,
                         amortizationAppliedAmount = SafeIO.safeDouble(obj.optDouble("amortizationAppliedAmount", 0.0)),
                         linkedRecurringExpenseAmount = SafeIO.safeDouble(obj.optDouble("linkedRecurringExpenseAmount", 0.0)),
                         linkedIncomeSourceAmount = SafeIO.safeDouble(obj.optDouble("linkedIncomeSourceAmount", 0.0)),
@@ -118,5 +110,21 @@ object TransactionRepository {
             }
         }
         return list
+    }
+
+    fun save(context: Context, transactions: List<Transaction>) {
+        SafeIO.atomicWriteJson(context, FILE_NAME, serializeToArray(transactions))
+    }
+
+    fun load(context: Context): List<Transaction> {
+        return deserializeFromArray(SafeIO.readJsonArray(context, FILE_NAME))
+    }
+
+    fun saveArchive(context: Context, transactions: List<Transaction>) {
+        SafeIO.atomicWriteJson(context, ARCHIVE_FILE_NAME, serializeToArray(transactions))
+    }
+
+    fun loadArchive(context: Context): List<Transaction> {
+        return deserializeFromArray(SafeIO.readJsonArray(context, ARCHIVE_FILE_NAME))
     }
 }

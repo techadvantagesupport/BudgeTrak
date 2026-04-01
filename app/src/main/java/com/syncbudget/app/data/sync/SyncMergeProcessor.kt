@@ -45,7 +45,9 @@ object SyncMergeProcessor {
         /** Category IDs that were remapped (duplicates) — caller should delete from Firestore. */
         val categoriesToDeleteFromFirestore: List<Int>,
         /** Pref key→value map for SharedPreferences. Null if no settings event arrived. */
-        val settingsPrefsToApply: Map<String, Any>?
+        val settingsPrefsToApply: Map<String, Any>?,
+        /** Transactions that belong in the archive (date before archiveCutoffDate). */
+        val archivedIncoming: List<Transaction> = emptyList()
     )
 
     /**
@@ -79,7 +81,8 @@ object SyncMergeProcessor {
         currentPeriodLedger: List<PeriodLedgerEntry>,
         currentSharedSettings: SharedSettings,
         catIdRemap: MutableMap<Int, Int>,
-        currentBudgetStartDate: LocalDate?
+        currentBudgetStartDate: LocalDate?,
+        archiveCutoffDate: LocalDate? = null
     ): MergeResult {
 
         // --- Work on mutable copies so originals are never touched ---
@@ -120,6 +123,7 @@ object SyncMergeProcessor {
         var conflictDetected = false
         val conflictedTransactionsToPushBack = mutableListOf<Transaction>()
         val categoriesToDeleteFromFirestore = mutableListOf<Int>()
+        val archivedIncoming = mutableListOf<Transaction>()
         var settingsPrefsToApply: MutableMap<String, Any>? = null
 
         // --- Process each event ---
@@ -139,9 +143,14 @@ object SyncMergeProcessor {
                         conflictDetected = true
                     }
 
-                    val idx = txnIndex[txn.id]
-                    if (idx != null) transactions[idx] = txn
-                    else { txnIndex[txn.id] = transactions.size; transactions.add(txn) }
+                    // Route pre-cutoff transactions to archive instead of active list
+                    if (archiveCutoffDate != null && txn.date.isBefore(archiveCutoffDate)) {
+                        archivedIncoming.add(txn)
+                    } else {
+                        val idx = txnIndex[txn.id]
+                        if (idx != null) transactions[idx] = txn
+                        else { txnIndex[txn.id] = transactions.size; transactions.add(txn) }
+                    }
 
                     // Push conflict flag back so other devices also see unverified
                     if (event.isConflict) {
@@ -287,7 +296,8 @@ object SyncMergeProcessor {
             conflictDetected = conflictDetected,
             conflictedTransactionsToPushBack = conflictedTransactionsToPushBack.toList(),
             categoriesToDeleteFromFirestore = categoriesToDeleteFromFirestore.toList(),
-            settingsPrefsToApply = settingsPrefsToApply?.toMap()
+            settingsPrefsToApply = settingsPrefsToApply?.toMap(),
+            archivedIncoming = archivedIncoming.toList()
         )
     }
 }

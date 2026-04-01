@@ -199,6 +199,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var pendingAdminClaim by mutableStateOf<AdminClaim?>(null)
     var dataLoaded by mutableStateOf(false)
         private set
+
+    // ── Archive State ──
+    var archiveThreshold by mutableIntStateOf(prefs.getInt("archiveThreshold", 10_000))
+    var archiveToastMessage by mutableStateOf<String?>(null)
+    var loadedArchivedTransactions by mutableStateOf<List<Transaction>>(emptyList())
+        private set
+
+    val archiveCutoffDate: java.time.LocalDate? get() = sharedSettings.archiveCutoffDate?.let {
+        try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
+    }
+    val carryForwardBalance: Double get() = sharedSettings.carryForwardBalance
+
+    fun loadArchivedTransactionsAsync() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val archived = TransactionRepository.loadArchive(context)
+            withContext(Dispatchers.Main) {
+                loadedArchivedTransactions = archived.filter { !it.deleted }
+            }
+        }
+    }
+
+    fun updateArchivedTransaction(updated: Transaction) {
+        val idx = loadedArchivedTransactions.indexOfFirst { it.id == updated.id }
+        if (idx >= 0) {
+            loadedArchivedTransactions = loadedArchivedTransactions.toMutableList().also { it[idx] = updated }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val archive = TransactionRepository.loadArchive(context).toMutableList()
+            val archIdx = archive.indexOfFirst { it.id == updated.id }
+            if (archIdx >= 0) { archive[archIdx] = updated; TransactionRepository.saveArchive(context, archive) }
+        }
+        if (com.syncbudget.app.data.sync.SyncWriteHelper.isInitialized()) {
+            com.syncbudget.app.data.sync.SyncWriteHelper.pushTransaction(updated)
+        }
+    }
+
     var syncRepairAlert by mutableStateOf(prefs.getBoolean("syncRepairAlert", false))
     var lastSyncTimeDisplay by mutableStateOf<String?>(null)
     private var imageLedgerListener: com.google.firebase.firestore.ListenerRegistration? = null
@@ -428,6 +464,91 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.syncbudget.app.widget.BudgetWidgetProvider.updateAllWidgets(context)
     }
 
+    // ── Archive: move pre-cutoff transactions to archive file ──
+    private fun applyArchiveCutoff(cutoff: java.time.LocalDate) {
+        val toArchive = transactions.filter { !it.deleted && it.date.isBefore(cutoff) }
+        if (toArchive.isEmpty()) return
+        val archiveIds = toArchive.map { it.id }.toSet()
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = TransactionRepository.loadArchive(context)
+            val existingIds = existing.map { it.id }.toSet()
+            val newEntries = toArchive.filter { it.id !in existingIds }
+            if (newEntries.isNotEmpty()) {
+                TransactionRepository.saveArchive(context, existing + newEntries)
+            }
+        }
+        transactions.removeAll { it.id in archiveIds }
+        saveTransactions()
+        android.util.Log.i("Archive", "Applied archive cutoff $cutoff: moved ${toArchive.size} transactions")
+    }
+
+    // ── Archive Trigger ──
+    fun checkAndTriggerArchive() {
+        if (archiveThreshold <= 0) return
+        val count = activeTransactions.size
+        if (count <= archiveThreshold) return
+        if (!initialSyncReceived && isSyncConfigured) return
+
+        val bsd = budgetStartDate ?: return
+        val sorted = activeTransactions.sortedBy { it.date }
+        val archiveCount = (archiveThreshold * 0.25).toInt()
+        val toArchive = sorted.take(archiveCount)
+        val cutoffDate = toArchive.last().date.plusDays(1)
+
+        // Compute carry-forward balance for the archived subset
+        val newCfb = BudgetCalculator.recomputeAvailableCash(
+            budgetStartDate = bsd,
+            periodLedgerEntries = periodLedger.toList().filter {
+                val d = it.periodStartDate.toLocalDate()
+                !d.isBefore(archiveCutoffDate ?: bsd) && d.isBefore(cutoffDate)
+            },
+            activeTransactions = toArchive.filter {
+                !it.date.isBefore(archiveCutoffDate ?: bsd) && it.date.isBefore(cutoffDate)
+            },
+            activeRecurringExpenses = activeRecurringExpenses,
+            incomeMode = incomeMode,
+            activeIncomeSources = activeIncomeSources,
+            carryForwardBalance = carryForwardBalance
+        )
+
+        // Build archive info
+        val existingTotal = try {
+            sharedSettings.lastArchiveInfo?.let { org.json.JSONObject(it) }?.optInt("totalArchived", 0) ?: 0
+        } catch (_: Exception) { 0 }
+        val totalArchived = existingTotal + archiveCount
+        val archiveInfoJson = org.json.JSONObject().apply {
+            put("date", java.time.LocalDate.now().toString())
+            put("count", archiveCount)
+            put("totalArchived", totalArchived)
+        }.toString()
+
+        // Append to archive file
+        val archiveIds = toArchive.map { it.id }.toSet()
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = TransactionRepository.loadArchive(context)
+            val existingIds = existing.map { it.id }.toSet()
+            val newEntries = toArchive.filter { it.id !in existingIds }
+            TransactionRepository.saveArchive(context, existing + newEntries)
+        }
+
+        // Remove from active list
+        transactions.removeAll { it.id in archiveIds }
+
+        // Update SharedSettings
+        sharedSettings = sharedSettings.copy(
+            archiveCutoffDate = cutoffDate.toString(),
+            carryForwardBalance = newCfb,
+            lastArchiveInfo = archiveInfoJson,
+            lastChangedBy = localDeviceId
+        )
+        saveSharedSettings()
+        saveTransactions()
+        recomputeCash()
+
+        archiveToastMessage = "Archived $archiveCount old transactions to keep the app fast"
+        android.util.Log.i("Archive", "Archived $archiveCount transactions, cutoff=$cutoffDate, cfb=$newCfb")
+    }
+
     // Deterministic cash recomputation from synced data.
     // All devices with the same synced data compute the same result.
     // Runs on background thread to avoid blocking UI.
@@ -438,9 +559,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val re = activeRecurringExpenses
         val mode = incomeMode
         val is_ = activeIncomeSources
+        val cfb = carryForwardBalance
+        val acd = archiveCutoffDate
         viewModelScope.launch(Dispatchers.Default) {
             val cash = BudgetCalculator.recomputeAvailableCash(
-                bsd, ledger, txns, re, mode, is_
+                bsd, ledger, txns, re, mode, is_, cfb, acd
             )
             withContext(Dispatchers.Main) {
                 availableCash = cash
@@ -493,6 +616,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         saveTransactions(listOf(stamped))
         recomputeCash()
+        if (archiveThreshold > 0 && activeTransactions.size > archiveThreshold) {
+            checkAndTriggerArchive()
+        }
     }
 
     // Linking chain: recurring/amortization/income match (no duplicate check).
@@ -700,7 +826,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 currentPeriodLedger = periodLedger.toList(),
                 currentSharedSettings = sharedSettings,
                 catIdRemap = catIdRemap,
-                currentBudgetStartDate = budgetStartDate
+                currentBudgetStartDate = budgetStartDate,
+                archiveCutoffDate = archiveCutoffDate
             )
 
             // Apply merged data to in-memory Compose state
@@ -749,6 +876,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            // Handle incoming archiveCutoffDate from another device
+            result.sharedSettings?.let { merged ->
+                val newCutoff = merged.archiveCutoffDate?.let {
+                    try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
+                }
+                if (newCutoff != null) {
+                    val oldCutoff = archiveCutoffDate
+                    if (oldCutoff == null || newCutoff.isAfter(oldCutoff)) {
+                        applyArchiveCutoff(newCutoff)
+                    }
+                }
+            }
+
+            // Check if archive trigger needed after receiving new transactions
+            if (result.transactions != null && archiveThreshold > 0 && activeTransactions.size > archiveThreshold) {
+                checkAndTriggerArchive()
+            }
+
             // Apply settings prefs
             result.settingsPrefsToApply?.let { prefsMap ->
                 val editor = prefs.edit()
@@ -773,6 +918,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Recompute cash (skip if only categories changed)
             val hasNonCatChanges = events.any { it.collection != EncryptedDocSerializer.COLLECTION_CATEGORIES }
             if (hasNonCatChanges) recomputeCash()
+
+            // Save archived incoming transactions to archive file
+            val archivedSnap = result.archivedIncoming
+            if (archivedSnap.isNotEmpty()) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    val existing = TransactionRepository.loadArchive(context)
+                    val existingIds = existing.map { it.id }.toSet()
+                    val newEntries = archivedSnap.filter { it.id !in existingIds }
+                    if (newEntries.isNotEmpty()) {
+                        TransactionRepository.saveArchive(context, existing + newEntries)
+                    }
+                }
+            }
 
             // Save changed collections to JSON on background thread
             val txnSnap = result.transactions
@@ -1244,6 +1402,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Recompute cash from local data
                 recomputeCash()
                 android.util.Log.i("Integrity", "Startup cash verification: $availableCash")
+
+                // Post-initial-sync: sort pre-cutoff transactions into archive
+                // Handles new device (full Firestore read) and SharedSettings arriving
+                // after transactions in the same initial sync batch
+                val cutoff = archiveCutoffDate
+                if (cutoff != null) {
+                    applyArchiveCutoff(cutoff)
+                }
             } catch (e: Exception) {
                 android.util.Log.w("SyncLoop", "Startup health check failed", e)
             }
@@ -1495,14 +1661,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val iSrc: List<IncomeSource>, val bAmt: Double,
                     val syncCfg: Boolean, val tz: String,
                     val period: BudgetPeriod, val dow: Int, val dom: Int, val rh: Int,
-                    val cash: Double
+                    val cash: Double,
+                    val cfb: Double, val acd: java.time.LocalDate?
                 )
                 SimInputs(
                     budgetStartDate, activeTransactions.toList(), periodLedger.toList(),
                     activeRecurringExpenses, incomeMode, activeIncomeSources, budgetAmount,
                     isSyncConfigured, sharedSettings.familyTimezone,
                     budgetPeriod, resetDayOfWeek, resetDayOfMonth, resetHour,
-                    availableCash
+                    availableCash,
+                    carryForwardBalance, archiveCutoffDate
                 )
             }.collectLatest { inputs ->
                 if (inputs.bsd == null) {
@@ -1523,7 +1691,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     BudgetCalculator.recomputeAvailableCash(
                         inputs.bsd, adjustedLedger,
                         inputs.txns, inputs.re,
-                        inputs.iMode, inputs.iSrc
+                        inputs.iMode, inputs.iSrc,
+                        inputs.cfb, inputs.acd
                     )
                 }
                 simAvailableCash = result

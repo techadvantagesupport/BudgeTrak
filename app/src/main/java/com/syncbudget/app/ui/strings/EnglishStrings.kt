@@ -206,7 +206,15 @@ object EnglishStrings : AppStrings {
         photoGallery = "Gallery",
         deletePhotoTitle = "Delete Photo",
         deletePhotoConfirm = "Remove this receipt photo?",
-        upgradeForPhotos = "Upgrade for receipt photos"
+        upgradeForPhotos = "Upgrade for receipt photos",
+        dataManagementSection = "Data Management",
+        activeTransactionsTally = { count, threshold -> "Active transactions: %,d / %,d".format(count, threshold) },
+        activeTransactionsCount = { count -> "Active transactions: %,d".format(count) },
+        archiveThresholdLabel = "Archive threshold",
+        archiveOff = "Off",
+        lastArchivedInfo = { date, count -> "Last archived: $date ($count transactions)" },
+        totalArchivedCount = { count -> "Total archived: %,d transactions".format(count) },
+        archivedToast = { count -> "Archived $count old transactions to keep the app fast" }
     )
 
     override val budgetConfig = BudgetConfigStrings(
@@ -417,7 +425,15 @@ object EnglishStrings : AppStrings {
         discardChangesTitle = "Discard Changes?",
         discardChangesBody = "You have unsaved changes. Discard them?",
         discard = "Discard",
-        keepEditing = "Keep Editing"
+        keepEditing = "Keep Editing",
+        range6mo = "6mo",
+        range1yr = "1yr",
+        range2yr = "2yr",
+        rangeAll = "All",
+        archivedNotEditable = "Archived transactions cannot be edited",
+        editDescriptionAlso = "Edit Description also",
+        newDescription = "New description",
+        clearDescriptionConfirm = { count -> "This will clear the description on all $count selected transactions. Continue?" }
     )
 
     override val futureExpenditures = FutureExpendituresStrings(

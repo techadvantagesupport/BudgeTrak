@@ -404,12 +404,16 @@ object BudgetCalculator {
         activeTransactions: List<Transaction>,
         activeRecurringExpenses: List<RecurringExpense>,
         incomeMode: IncomeMode = IncomeMode.FIXED,
-        activeIncomeSources: List<IncomeSource> = emptyList()
+        activeIncomeSources: List<IncomeSource> = emptyList(),
+        carryForwardBalance: Double = 0.0,
+        archiveCutoffDate: LocalDate? = null
     ): Double {
-        // Sum period credits from synced ledger (dedup by date)
-        var cash = 0.0
+        // Start from carry-forward balance (captures archived transactions + ledger)
+        var cash = carryForwardBalance
+        // When archiving is active, only process ledger/transactions after the cutoff
+        val effectiveStartDate = archiveCutoffDate ?: budgetStartDate
         val dedupedLedger = periodLedgerEntries
-            .filter { !it.periodStartDate.toLocalDate().isBefore(budgetStartDate) }
+            .filter { !it.periodStartDate.toLocalDate().isBefore(effectiveStartDate) }
             .groupBy { it.periodStartDate.toLocalDate() }
             .values.map { entries -> entries.maxByOrNull { it.periodStartDate } ?: entries.first() }
         for (entry in dedupedLedger) {
@@ -422,6 +426,7 @@ object BudgetCalculator {
         // Apply transaction effects
         for (txn in activeTransactions) {
             if (txn.date.isBefore(budgetStartDate)) continue
+            if (archiveCutoffDate != null && txn.date.isBefore(archiveCutoffDate)) continue
             if (txn.excludeFromBudget) continue
             if (txn.type == TransactionType.EXPENSE) {
                 // Savings-goal-linked: savings covers part/all; remainder hits budget

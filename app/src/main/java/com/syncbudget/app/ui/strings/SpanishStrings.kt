@@ -206,7 +206,15 @@ object SpanishStrings : AppStrings {
         photoGallery = "Galer\u00eda",
         deletePhotoTitle = "Eliminar Foto",
         deletePhotoConfirm = "\u00bfEliminar esta foto de recibo?",
-        upgradeForPhotos = "Actualiza para fotos de recibos"
+        upgradeForPhotos = "Actualiza para fotos de recibos",
+        dataManagementSection = "Gesti\u00f3n de Datos",
+        activeTransactionsTally = { count, threshold -> "Transacciones activas: %,d / %,d".format(count, threshold) },
+        activeTransactionsCount = { count -> "Transacciones activas: %,d".format(count) },
+        archiveThresholdLabel = "Umbral de archivo",
+        archiveOff = "Desactivado",
+        lastArchivedInfo = { date, count -> "\u00daltimo archivo: $date ($count transacciones)" },
+        totalArchivedCount = { count -> "Total archivadas: %,d transacciones".format(count) },
+        archivedToast = { count -> "Se archivaron $count transacciones antiguas para mantener la app \u00e1gil" }
     )
 
     override val budgetConfig = BudgetConfigStrings(
@@ -417,7 +425,15 @@ object SpanishStrings : AppStrings {
         discardChangesTitle = "¿Descartar cambios?",
         discardChangesBody = "Tiene cambios sin guardar. ¿Desea descartarlos?",
         discard = "Descartar",
-        keepEditing = "Seguir editando"
+        keepEditing = "Seguir editando",
+        range6mo = "6m",
+        range1yr = "1a",
+        range2yr = "2a",
+        rangeAll = "Todo",
+        archivedNotEditable = "Las transacciones archivadas no se pueden editar",
+        editDescriptionAlso = "Editar descripci\u00f3n tambi\u00e9n",
+        newDescription = "Nueva descripci\u00f3n",
+        clearDescriptionConfirm = { count -> "Esto borrar\u00e1 la descripci\u00f3n en las $count transacciones seleccionadas. \u00bfContinuar?" }
     )
 
     override val futureExpenditures = FutureExpendituresStrings(

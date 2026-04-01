@@ -31,6 +31,9 @@ object SharedSettingsRepository {
         json.put("deviceRoster", settings.deviceRoster)
         json.put("receiptPruneAgeDays", settings.receiptPruneAgeDays ?: JSONObject.NULL)
         json.put("lastChangedBy", settings.lastChangedBy)
+        json.put("archiveCutoffDate", settings.archiveCutoffDate ?: JSONObject.NULL)
+        json.put("carryForwardBalance", settings.carryForwardBalance)
+        json.put("lastArchiveInfo", settings.lastArchiveInfo ?: JSONObject.NULL)
 
         SafeIO.atomicWriteJson(context, FILE_NAME, json)
     }
@@ -58,7 +61,10 @@ object SharedSettingsRepository {
                 incomeMode = json.optString("incomeMode", "FIXED"),
                 deviceRoster = json.optString("deviceRoster", "{}"),
                 receiptPruneAgeDays = if (json.has("receiptPruneAgeDays") && !json.isNull("receiptPruneAgeDays")) json.getInt("receiptPruneAgeDays") else null,
-                lastChangedBy = json.optString("lastChangedBy", "")
+                lastChangedBy = json.optString("lastChangedBy", ""),
+                archiveCutoffDate = if (json.isNull("archiveCutoffDate")) null else json.optString("archiveCutoffDate", null),
+                carryForwardBalance = SafeIO.safeDouble(json.optDouble("carryForwardBalance", 0.0)),
+                lastArchiveInfo = if (json.has("lastArchiveInfo") && !json.isNull("lastArchiveInfo")) json.getString("lastArchiveInfo") else null
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse shared settings: ${e.message}")
@@ -88,6 +94,9 @@ object SharedSettingsRepository {
         json.put("deviceRoster", settings.deviceRoster)
         json.put("receiptPruneAgeDays", settings.receiptPruneAgeDays ?: JSONObject.NULL)
         json.put("lastChangedBy", settings.lastChangedBy)
+        json.put("archiveCutoffDate", settings.archiveCutoffDate ?: JSONObject.NULL)
+        json.put("carryForwardBalance", settings.carryForwardBalance)
+        json.put("lastArchiveInfo", settings.lastArchiveInfo ?: JSONObject.NULL)
         return json
     }
 
@@ -112,7 +121,10 @@ object SharedSettingsRepository {
             incomeMode = json.optString("incomeMode", "FIXED"),
             deviceRoster = json.optString("deviceRoster", "{}"),
             receiptPruneAgeDays = if (json.has("receiptPruneAgeDays") && !json.isNull("receiptPruneAgeDays")) json.getInt("receiptPruneAgeDays") else null,
-            lastChangedBy = json.optString("lastChangedBy", "")
+            lastChangedBy = json.optString("lastChangedBy", ""),
+            archiveCutoffDate = if (json.isNull("archiveCutoffDate")) null else json.optString("archiveCutoffDate", null),
+            carryForwardBalance = SafeIO.safeDouble(json.optDouble("carryForwardBalance", 0.0)),
+            lastArchiveInfo = if (json.has("lastArchiveInfo") && !json.isNull("lastArchiveInfo")) json.getString("lastArchiveInfo") else null
         )
     }
 }

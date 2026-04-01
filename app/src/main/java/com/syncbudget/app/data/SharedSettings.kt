@@ -20,5 +20,8 @@ data class SharedSettings(
     val incomeMode: String = "FIXED",
     val deviceRoster: String = "{}",   // JSON map: deviceId → nickname
     val receiptPruneAgeDays: Int? = null,  // null = no pruning (admin-only)
-    val lastChangedBy: String = ""
+    val lastChangedBy: String = "",
+    val archiveCutoffDate: String? = null,    // ISO date for transaction archiving
+    val carryForwardBalance: Double = 0.0,    // cumulative cash effect of archived transactions
+    val lastArchiveInfo: String? = null        // JSON: {"date","count","totalArchived"}
 )

@@ -213,9 +213,12 @@ class BackgroundSyncWorker(
             } else mutableMapOf()
         } catch (_: Exception) { mutableMapOf() }
 
-        // Get current budget start date
+        // Get current budget start date and archive cutoff
         val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val currentBudgetStartDate = appPrefs.getString("budgetStartDate", null)?.let {
+            try { LocalDate.parse(it) } catch (_: Exception) { null }
+        }
+        val archiveCutoff = sharedSettings.archiveCutoffDate?.let {
             try { LocalDate.parse(it) } catch (_: Exception) { null }
         }
 
@@ -232,7 +235,8 @@ class BackgroundSyncWorker(
                 currentPeriodLedger = periodLedger,
                 currentSharedSettings = sharedSettings,
                 catIdRemap = catIdRemap,
-                currentBudgetStartDate = currentBudgetStartDate
+                currentBudgetStartDate = currentBudgetStartDate,
+                archiveCutoffDate = archiveCutoff
             )
         }
 
@@ -254,6 +258,14 @@ class BackgroundSyncWorker(
         syncPrefs: android.content.SharedPreferences
     ) {
         result.transactions?.let { TransactionRepository.save(applicationContext, it) }
+        if (result.archivedIncoming.isNotEmpty()) {
+            val existing = TransactionRepository.loadArchive(applicationContext)
+            val existingIds = existing.map { it.id }.toSet()
+            val newEntries = result.archivedIncoming.filter { it.id !in existingIds }
+            if (newEntries.isNotEmpty()) {
+                TransactionRepository.saveArchive(applicationContext, existing + newEntries)
+            }
+        }
         result.recurringExpenses?.let { RecurringExpenseRepository.save(applicationContext, it) }
         result.incomeSources?.let { IncomeSourceRepository.save(applicationContext, it) }
         result.savingsGoals?.let { SavingsGoalRepository.save(applicationContext, it) }
@@ -337,10 +349,16 @@ class BackgroundSyncWorker(
         val recurringExpenses = RecurringExpenseRepository.load(applicationContext)
         val incomeSources = IncomeSourceRepository.load(applicationContext)
 
+        val settings = SharedSettingsRepository.load(applicationContext)
+        val archiveCutoff = settings.archiveCutoffDate?.let {
+            try { LocalDate.parse(it) } catch (_: Exception) { null }
+        }
+
         val cash = BudgetCalculator.recomputeAvailableCash(
             budgetStartDate, periodLedger,
             transactions.active, recurringExpenses.active,
-            incomeMode, incomeSources.active
+            incomeMode, incomeSources.active,
+            settings.carryForwardBalance, archiveCutoff
         )
 
         val currentCash = appPrefs.getDoubleCompat("availableCash")
