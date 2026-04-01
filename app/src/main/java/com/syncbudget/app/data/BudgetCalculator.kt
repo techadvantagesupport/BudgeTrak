@@ -415,6 +415,10 @@ object BudgetCalculator {
         for (entry in dedupedLedger) {
             cash += entry.appliedAmount
         }
+        // Pre-build ID maps for O(1) lookup in legacy fallback paths
+        val reById = activeRecurringExpenses.associateBy { it.id }
+        val isById = activeIncomeSources.associateBy { it.id }
+
         // Apply transaction effects
         for (txn in activeTransactions) {
             if (txn.date.isBefore(budgetStartDate)) continue
@@ -438,7 +442,7 @@ object BudgetCalculator {
                         cash += (txn.linkedRecurringExpenseAmount - txn.amount)
                     } else {
                         // Legacy: no remembered amount, fall back to live lookup
-                        val re = activeRecurringExpenses.find { it.id == txn.linkedRecurringExpenseId }
+                        val re = reById[txn.linkedRecurringExpenseId]
                         if (re != null) cash += (re.amount - txn.amount)
                         else cash -= txn.amount
                     }
@@ -456,7 +460,7 @@ object BudgetCalculator {
                             cash += (txn.amount - txn.linkedIncomeSourceAmount)
                         } else {
                             // Legacy: no remembered amount, fall back to live lookup
-                            val src = activeIncomeSources.find { it.id == txn.linkedIncomeSourceId }
+                            val src = isById[txn.linkedIncomeSourceId]
                             if (src != null) cash += (txn.amount - src.amount)
                             else cash += txn.amount
                         }

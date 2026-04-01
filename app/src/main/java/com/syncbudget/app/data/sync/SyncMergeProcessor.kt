@@ -90,6 +90,29 @@ object SyncMergeProcessor {
         val amortizationEntries = currentAmortizationEntries.toMutableList()
         val categories = currentCategories.toMutableList()
         val periodLedger = currentPeriodLedger.toMutableList()
+
+        // Pre-build ID→index maps for O(1) lookup during event processing
+        val txnIndex = HashMap<Int, Int>(transactions.size * 2).also {
+            for (i in transactions.indices) it[transactions[i].id] = i
+        }
+        val reIndex = HashMap<Int, Int>(recurringExpenses.size * 2).also {
+            for (i in recurringExpenses.indices) it[recurringExpenses[i].id] = i
+        }
+        val isIndex = HashMap<Int, Int>(incomeSources.size * 2).also {
+            for (i in incomeSources.indices) it[incomeSources[i].id] = i
+        }
+        val sgIndex = HashMap<Int, Int>(savingsGoals.size * 2).also {
+            for (i in savingsGoals.indices) it[savingsGoals[i].id] = i
+        }
+        val aeIndex = HashMap<Int, Int>(amortizationEntries.size * 2).also {
+            for (i in amortizationEntries.indices) it[amortizationEntries[i].id] = i
+        }
+        val catIndex = HashMap<Int, Int>(categories.size * 2).also {
+            for (i in categories.indices) it[categories[i].id] = i
+        }
+        val pleIndex = HashMap<Int, Int>(periodLedger.size * 2).also {
+            for (i in periodLedger.indices) it[periodLedger[i].id] = i
+        }
         var mergedSettings: SharedSettings? = null
 
         // Track which collections were actually modified
@@ -116,8 +139,9 @@ object SyncMergeProcessor {
                         conflictDetected = true
                     }
 
-                    val idx = transactions.indexOfFirst { it.id == txn.id }
-                    if (idx >= 0) transactions[idx] = txn else transactions.add(txn)
+                    val idx = txnIndex[txn.id]
+                    if (idx != null) transactions[idx] = txn
+                    else { txnIndex[txn.id] = transactions.size; transactions.add(txn) }
 
                     // Push conflict flag back so other devices also see unverified
                     if (event.isConflict) {
@@ -128,29 +152,33 @@ object SyncMergeProcessor {
                 // ── RECURRING EXPENSES ──────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES -> {
                     val re = event.record as RecurringExpense
-                    val idx = recurringExpenses.indexOfFirst { it.id == re.id }
-                    if (idx >= 0) recurringExpenses[idx] = re else recurringExpenses.add(re)
+                    val idx = reIndex[re.id]
+                    if (idx != null) recurringExpenses[idx] = re
+                    else { reIndex[re.id] = recurringExpenses.size; recurringExpenses.add(re) }
                 }
 
                 // ── INCOME SOURCES ──────────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_INCOME_SOURCES -> {
                     val src = event.record as IncomeSource
-                    val idx = incomeSources.indexOfFirst { it.id == src.id }
-                    if (idx >= 0) incomeSources[idx] = src else incomeSources.add(src)
+                    val idx = isIndex[src.id]
+                    if (idx != null) incomeSources[idx] = src
+                    else { isIndex[src.id] = incomeSources.size; incomeSources.add(src) }
                 }
 
                 // ── SAVINGS GOALS ───────────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS -> {
                     val sg = event.record as SavingsGoal
-                    val idx = savingsGoals.indexOfFirst { it.id == sg.id }
-                    if (idx >= 0) savingsGoals[idx] = sg else savingsGoals.add(sg)
+                    val idx = sgIndex[sg.id]
+                    if (idx != null) savingsGoals[idx] = sg
+                    else { sgIndex[sg.id] = savingsGoals.size; savingsGoals.add(sg) }
                 }
 
                 // ── AMORTIZATION ENTRIES ────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES -> {
                     val ae = event.record as AmortizationEntry
-                    val idx = amortizationEntries.indexOfFirst { it.id == ae.id }
-                    if (idx >= 0) amortizationEntries[idx] = ae else amortizationEntries.add(ae)
+                    val idx = aeIndex[ae.id]
+                    if (idx != null) amortizationEntries[idx] = ae
+                    else { aeIndex[ae.id] = amortizationEntries.size; amortizationEntries.add(ae) }
                 }
 
                 // ── CATEGORIES (tag-based dedup) ────────────────────────
@@ -187,16 +215,18 @@ object SyncMergeProcessor {
                         categoriesToDeleteFromFirestore.add(cat.id)
                     } else {
                         // Normal add-or-replace
-                        val idx = categories.indexOfFirst { it.id == cat.id }
-                        if (idx >= 0) categories[idx] = cat else categories.add(cat)
+                        val idx = catIndex[cat.id]
+                        if (idx != null) categories[idx] = cat
+                        else { catIndex[cat.id] = categories.size; categories.add(cat) }
                     }
                 }
 
                 // ── PERIOD LEDGER ───────────────────────────────────────
                 EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER -> {
                     val ple = event.record as PeriodLedgerEntry
-                    val idx = periodLedger.indexOfFirst { it.id == ple.id }
-                    if (idx >= 0) periodLedger[idx] = ple else periodLedger.add(ple)
+                    val idx = pleIndex[ple.id]
+                    if (idx != null) periodLedger[idx] = ple
+                    else { pleIndex[ple.id] = periodLedger.size; periodLedger.add(ple) }
                 }
 
                 // ── SHARED SETTINGS ─────────────────────────────────────

@@ -9,11 +9,15 @@ import java.time.LocalDateTime
 
 object FullBackupSerializer {
 
-    fun serialize(context: Context): String {
+    fun serialize(context: Context, mode: String = "backup"): String {
+        val isJoinSnapshot = mode == "joinSnapshot"
         val json = JSONObject()
-        json.put("type", "syncbudget_full_backup")
+        json.put("type", if (isJoinSnapshot) "syncbudget_join_snapshot" else "syncbudget_full_backup")
         json.put("version", 1)
         json.put("savedAt", LocalDateTime.now().toString())
+        if (isJoinSnapshot) {
+            json.put("snapshotTimestamp", System.currentTimeMillis())
+        }
 
         // Read each repo file and embed its raw JSON
         fun readFileArray(fileName: String): JSONArray? {
@@ -33,42 +37,48 @@ object FullBackupSerializer {
             }
             return active
         }
-        readFileArray("transactions.json")?.let { json.put("transactions", filterActive(it)) }
-        readFileArray("categories.json")?.let { json.put("categories", filterActive(it)) }
-        readFileArray("recurring_expenses.json")?.let { json.put("recurringExpenses", filterActive(it)) }
-        readFileArray("income_sources.json")?.let { json.put("incomeSources", filterActive(it)) }
-        readFileArray("amortization_entries.json")?.let { json.put("amortizationEntries", filterActive(it)) }
-        readFileArray("future_expenditures.json")?.let { json.put("savingsGoals", filterActive(it)) }
+
+        // joinSnapshot keeps tombstones (needed for sync); backup filters them out
+        fun maybeFilter(arr: JSONArray): JSONArray = if (isJoinSnapshot) arr else filterActive(arr)
+
+        readFileArray("transactions.json")?.let { json.put("transactions", maybeFilter(it)) }
+        readFileArray("categories.json")?.let { json.put("categories", maybeFilter(it)) }
+        readFileArray("recurring_expenses.json")?.let { json.put("recurringExpenses", maybeFilter(it)) }
+        readFileArray("income_sources.json")?.let { json.put("incomeSources", maybeFilter(it)) }
+        readFileArray("amortization_entries.json")?.let { json.put("amortizationEntries", maybeFilter(it)) }
+        readFileArray("future_expenditures.json")?.let { json.put("savingsGoals", maybeFilter(it)) }
         readFileArray("period_ledger.json")?.let { json.put("periodLedger", it) }
 
         // Shared settings
         val sharedSettings = SharedSettingsRepository.load(context)
         json.put("sharedSettings", SharedSettingsRepository.toJson(sharedSettings))
 
-        // Local prefs
-        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val localPrefs = JSONObject()
-        localPrefs.put("availableCash", prefs.getDoubleCompat("availableCash"))
-        localPrefs.put("lastRefreshDate", prefs.getString("lastRefreshDate", null) ?: JSONObject.NULL)
-        localPrefs.put("budgetStartDate", prefs.getString("budgetStartDate", null) ?: JSONObject.NULL)
-        localPrefs.put("currencySymbol", prefs.getString("currencySymbol", "$"))
-        localPrefs.put("digitCount", prefs.getInt("digitCount", 3))
-        localPrefs.put("showDecimals", prefs.getBoolean("showDecimals", false))
-        localPrefs.put("dateFormatPattern", prefs.getString("dateFormatPattern", "yyyy-MM-dd"))
-        localPrefs.put("chartPalette", prefs.getString("chartPalette", "Sunset"))
-        localPrefs.put("appLanguage", prefs.getString("appLanguage", "en"))
-        localPrefs.put("budgetPeriod", prefs.getString("budgetPeriod", "DAILY"))
-        localPrefs.put("resetHour", prefs.getInt("resetHour", 0))
-        localPrefs.put("resetDayOfWeek", prefs.getInt("resetDayOfWeek", 7))
-        localPrefs.put("resetDayOfMonth", prefs.getInt("resetDayOfMonth", 1))
-        localPrefs.put("isManualBudgetEnabled", prefs.getBoolean("isManualBudgetEnabled", false))
-        localPrefs.put("manualBudgetAmount", prefs.getDoubleCompat("manualBudgetAmount"))
-        localPrefs.put("weekStartSunday", prefs.getBoolean("weekStartSunday", true))
-        localPrefs.put("matchDays", prefs.getInt("matchDays", 7))
-        localPrefs.put("matchPercent", prefs.getDoubleCompat("matchPercent", 1.0))
-        localPrefs.put("matchDollar", prefs.getInt("matchDollar", 1))
-        localPrefs.put("matchChars", prefs.getInt("matchChars", 5))
-        json.put("localPrefs", localPrefs)
+        // Local prefs — only for backup mode
+        if (!isJoinSnapshot) {
+            val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            val localPrefs = JSONObject()
+            localPrefs.put("availableCash", prefs.getDoubleCompat("availableCash"))
+            localPrefs.put("lastRefreshDate", prefs.getString("lastRefreshDate", null) ?: JSONObject.NULL)
+            localPrefs.put("budgetStartDate", prefs.getString("budgetStartDate", null) ?: JSONObject.NULL)
+            localPrefs.put("currencySymbol", prefs.getString("currencySymbol", "$"))
+            localPrefs.put("digitCount", prefs.getInt("digitCount", 3))
+            localPrefs.put("showDecimals", prefs.getBoolean("showDecimals", false))
+            localPrefs.put("dateFormatPattern", prefs.getString("dateFormatPattern", "yyyy-MM-dd"))
+            localPrefs.put("chartPalette", prefs.getString("chartPalette", "Sunset"))
+            localPrefs.put("appLanguage", prefs.getString("appLanguage", "en"))
+            localPrefs.put("budgetPeriod", prefs.getString("budgetPeriod", "DAILY"))
+            localPrefs.put("resetHour", prefs.getInt("resetHour", 0))
+            localPrefs.put("resetDayOfWeek", prefs.getInt("resetDayOfWeek", 7))
+            localPrefs.put("resetDayOfMonth", prefs.getInt("resetDayOfMonth", 1))
+            localPrefs.put("isManualBudgetEnabled", prefs.getBoolean("isManualBudgetEnabled", false))
+            localPrefs.put("manualBudgetAmount", prefs.getDoubleCompat("manualBudgetAmount"))
+            localPrefs.put("weekStartSunday", prefs.getBoolean("weekStartSunday", true))
+            localPrefs.put("matchDays", prefs.getInt("matchDays", 7))
+            localPrefs.put("matchPercent", prefs.getDoubleCompat("matchPercent", 1.0))
+            localPrefs.put("matchDollar", prefs.getInt("matchDollar", 1))
+            localPrefs.put("matchChars", prefs.getInt("matchChars", 5))
+            json.put("localPrefs", localPrefs)
+        }
 
         return json.toString()
     }
@@ -158,6 +168,31 @@ object FullBackupSerializer {
      */
     fun backupBeforeRestore(context: Context): String {
         return serialize(context)
+    }
+
+    /**
+     * Restore data from a join snapshot JSONObject (already parsed).
+     * Simpler than restoreFullState: no local prefs, no pre-restore backup.
+     */
+    fun restoreFromSnapshot(context: Context, json: JSONObject) {
+        fun writeArray(key: String, fileName: String) {
+            val arr = json.optJSONArray(key)
+            if (arr != null) {
+                SafeIO.atomicWriteJson(context, fileName, arr)
+            }
+        }
+        writeArray("transactions", "transactions.json")
+        writeArray("categories", "categories.json")
+        writeArray("recurringExpenses", "recurring_expenses.json")
+        writeArray("incomeSources", "income_sources.json")
+        writeArray("amortizationEntries", "amortization_entries.json")
+        writeArray("savingsGoals", "future_expenditures.json")
+        writeArray("periodLedger", "period_ledger.json")
+
+        if (json.has("sharedSettings")) {
+            val settings = SharedSettingsRepository.fromJson(json.getJSONObject("sharedSettings"))
+            SharedSettingsRepository.save(context, settings)
+        }
     }
 
     fun restoreFullState(context: Context, content: String) {

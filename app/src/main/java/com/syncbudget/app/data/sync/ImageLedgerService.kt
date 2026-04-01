@@ -604,6 +604,44 @@ object ImageLedgerService {
         }
     }
 
+    suspend fun uploadJoinSnapshot(groupId: String, encryptedData: ByteArray): Boolean {
+        return try {
+            withTimeout(120_000L) {
+                storage.reference.child("groups/$groupId/joinSnapshot.enc")
+                    .putBytes(encryptedData).await()
+            }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Join snapshot upload failed: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun downloadJoinSnapshot(groupId: String): ByteArray? {
+        return try {
+            withTimeout(120_000L) {
+                storage.reference.child("groups/$groupId/joinSnapshot.enc")
+                    .getBytes(10 * 1024 * 1024).await()  // 10MB max
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Join snapshot download failed: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun deleteJoinSnapshot(groupId: String): Boolean {
+        return try {
+            withTimeout(TIMEOUT_MS) {
+                storage.reference.child("groups/$groupId/joinSnapshot.enc")
+                    .delete().await()
+            }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Join snapshot delete failed: ${e.message}")
+            false
+        }
+    }
+
     suspend fun deleteSnapshotArchive(groupId: String): Boolean {
         return try {
             withTimeout(TIMEOUT_MS) {

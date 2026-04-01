@@ -530,6 +530,27 @@ object FirestoreService {
             .set(mapOf("debugRequestedAt" to System.currentTimeMillis()), SetOptions.merge())
             .await()
     }
+
+    /** Returns age of join snapshot in millis, or Long.MAX_VALUE if none exists. */
+    suspend fun getJoinSnapshotAge(groupId: String): Long = withTimeout(OP_TIMEOUT_MS) {
+        val doc = db.collection("groups").document(groupId).get().await()
+        val ts = doc.getLong("joinSnapshotAt") ?: return@withTimeout Long.MAX_VALUE
+        System.currentTimeMillis() - ts
+    }
+
+    /** Record when a join snapshot was uploaded, for TTL reuse. */
+    suspend fun setJoinSnapshotTimestamp(groupId: String) = withTimeout(OP_TIMEOUT_MS) {
+        db.collection("groups").document(groupId)
+            .set(mapOf("joinSnapshotAt" to System.currentTimeMillis()), SetOptions.merge())
+            .await()
+    }
+
+    /** Remove the join snapshot timestamp after cleanup. */
+    suspend fun clearJoinSnapshotTimestamp(groupId: String) = withTimeout(OP_TIMEOUT_MS) {
+        db.collection("groups").document(groupId)
+            .update(mapOf("joinSnapshotAt" to FieldValue.delete()))
+            .await()
+    }
 }
 
 data class DebugFileSet(val deviceName: String, val syncLog: String, val syncDiag: String, val updatedAt: Long = 0L)

@@ -21,16 +21,20 @@ fun filterAlreadyLoadedDays(
             continue
         }
 
-        // Build a mutable pool of app amounts (rounded to cents)
-        val appPool = appTxns.map { Math.round(it.amount * 100) }.toMutableList()
+        // Build a count map of app amounts (rounded to cents) for O(1) lookup
+        val appPool = HashMap<Long, Int>()
+        for (t in appTxns) {
+            val cents = Math.round(t.amount * 100)
+            appPool[cents] = (appPool[cents] ?: 0) + 1
+        }
         val matched = mutableListOf<Transaction>()
         val unmatched = mutableListOf<Transaction>()
 
         for (txn in fileTxns) {
             val fileCents = Math.round(txn.amount * 100)
-            val idx = appPool.indexOf(fileCents)
-            if (idx >= 0) {
-                appPool.removeAt(idx)
+            val count = appPool[fileCents] ?: 0
+            if (count > 0) {
+                appPool[fileCents] = count - 1
                 matched.add(txn)
             } else {
                 unmatched.add(txn)

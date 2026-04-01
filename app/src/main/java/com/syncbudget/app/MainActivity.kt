@@ -48,6 +48,9 @@ import com.syncbudget.app.data.sync.PeriodLedgerRepository
 import com.syncbudget.app.data.sync.SyncIdGenerator
 import com.syncbudget.app.data.sync.SyncWriteHelper
 import com.syncbudget.app.data.PeriodRefreshService
+import com.syncbudget.app.data.CryptoHelper
+import com.syncbudget.app.data.sync.FirestoreDocSync
+import com.syncbudget.app.data.sync.ImageLedgerService
 import com.syncbudget.app.data.sync.EncryptedDocSerializer
 import com.syncbudget.app.data.sync.FirestoreDocService
 import kotlinx.coroutines.CoroutineScope
@@ -2030,6 +2033,7 @@ class MainActivity : ComponentActivity() {
                 coroutineScope.launch {
                     try {
                         GroupManager.setDeviceName(context, nickname)
+                        vm.syncProgressMessage = "Joining group..."
                         val success = GroupManager.joinGroup(context, code)
                         if (success) {
                             vm.transactions.clear()
@@ -2039,13 +2043,50 @@ class MainActivity : ComponentActivity() {
                             vm.amortizationEntries.clear()
                             vm.categories.clear()
                             vm.periodLedger.clear()
-                            TransactionRepository.save(context, emptyList())
-                            RecurringExpenseRepository.save(context, emptyList())
-                            IncomeSourceRepository.save(context, emptyList())
-                            SavingsGoalRepository.save(context, emptyList())
-                            AmortizationRepository.save(context, emptyList())
-                            CategoryRepository.save(context, emptyList())
-                            PeriodLedgerRepository.save(context, emptyList())
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                TransactionRepository.save(context, emptyList())
+                                RecurringExpenseRepository.save(context, emptyList())
+                                IncomeSourceRepository.save(context, emptyList())
+                                SavingsGoalRepository.save(context, emptyList())
+                                AmortizationRepository.save(context, emptyList())
+                                CategoryRepository.save(context, emptyList())
+                                PeriodLedgerRepository.save(context, emptyList())
+                            }
+
+                            val gId = GroupManager.getGroupId(context)
+                            val key = GroupManager.getEncryptionKey(context)
+
+                            // Try to download join snapshot
+                            if (gId != null && key != null) {
+                                vm.syncProgressMessage = "Downloading group data..."
+                                val encryptedSnapshot = ImageLedgerService.downloadJoinSnapshot(gId)
+                                if (encryptedSnapshot != null) {
+                                    vm.syncProgressMessage = "Installing data..."
+                                    val decrypted = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                        CryptoHelper.decryptWithKey(encryptedSnapshot, key)
+                                    }
+                                    val json = org.json.JSONObject(String(decrypted))
+
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        FullBackupSerializer.restoreFromSnapshot(context, json)
+                                    }
+
+                                    // Reload into ViewModel
+                                    vm.transactions.addAll(TransactionRepository.load(context))
+                                    vm.recurringExpenses.addAll(RecurringExpenseRepository.load(context))
+                                    vm.incomeSources.addAll(IncomeSourceRepository.load(context))
+                                    vm.savingsGoals.addAll(SavingsGoalRepository.load(context))
+                                    vm.amortizationEntries.addAll(AmortizationRepository.load(context))
+                                    vm.categories.addAll(CategoryRepository.load(context))
+                                    vm.periodLedger.addAll(PeriodLedgerRepository.load(context))
+
+                                    // Set sync cursors so filtered listeners start from snapshot
+                                    val snapshotTs = json.optLong("snapshotTimestamp", 0L)
+                                    if (snapshotTs > 0) {
+                                        FirestoreDocSync.setCursorsFromTimestamp(context, snapshotTs)
+                                    }
+                                }
+                            }
 
                             vm.syncPrefs.edit()
                                 .putBoolean("migration_native_docs_done", true)
@@ -2056,10 +2097,13 @@ class MainActivity : ComponentActivity() {
                             vm.isSyncAdmin = false
                             vm.isSyncConfigured = true
                             vm.syncStatus = "synced"
+                            vm.syncProgressMessage = null
                         } else {
+                            vm.syncProgressMessage = null
                             vm.syncErrorMessage = "Invalid or expired pairing code"
                         }
                     } catch (e: Exception) {
+                        vm.syncProgressMessage = null
                         vm.syncStatus = "error"
                         vm.syncErrorMessage = e.message
                     }
@@ -2136,8 +2180,27 @@ class MainActivity : ComponentActivity() {
                 if (gId != null && key != null) {
                     coroutineScope.launch {
                         try {
+                            // Build join snapshot if stale or missing (7-day TTL)
+                            val snapshotAge = FirestoreService.getJoinSnapshotAge(gId)
+                            if (snapshotAge > 7 * 24 * 60 * 60 * 1000L) {
+                                vm.syncProgressMessage = "Preparing sync data..."
+                                val json = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    FullBackupSerializer.serialize(context, mode = "joinSnapshot")
+                                }
+                                val encrypted = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                    CryptoHelper.encryptWithKey(json.toByteArray(), key)
+                                }
+                                val uploaded = ImageLedgerService.uploadJoinSnapshot(gId, encrypted)
+                                if (uploaded) {
+                                    FirestoreService.setJoinSnapshotTimestamp(gId)
+                                }
+                                vm.syncProgressMessage = null
+                            }
                             vm.generatedPairingCode = GroupManager.generatePairingCode(context, gId, key)
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            vm.syncProgressMessage = null
+                            vm.syncErrorMessage = "Failed to prepare pairing: ${e.message}"
+                        }
                     }
                 }
             },

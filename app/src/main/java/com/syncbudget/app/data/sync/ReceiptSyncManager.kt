@@ -623,6 +623,18 @@ class ReceiptSyncManager(
             syncLog("Receipt sync: snapshot cleanup failed: ${e.message}")
         }
 
+        // Clean up stale join snapshot (>7 days)
+        try {
+            val joinSnapshotAge = FirestoreService.getJoinSnapshotAge(groupId)
+            if (joinSnapshotAge > 7L * 24 * 60 * 60 * 1000) {
+                ImageLedgerService.deleteJoinSnapshot(groupId)
+                FirestoreService.clearJoinSnapshotTimestamp(groupId)
+                syncLog("Receipt sync: cleaned up stale join snapshot (>7 days)")
+            }
+        } catch (e: Exception) {
+            syncLog("Receipt sync: join snapshot cleanup failed: ${e.message}")
+        }
+
         prefs.edit().putLong("lastStalePruneRun", now).apply()
     }
 

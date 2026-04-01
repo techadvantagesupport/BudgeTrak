@@ -662,7 +662,7 @@ fun TransactionsScreen(
             SortMode.CATEGORY -> {
                 // Sort by category usage frequency (least used first)
                 val catCount = mutableMapOf<Int, Int>()
-                for (t in transactions) {
+                for (t in list) {
                     for (ca in t.categoryAmounts) {
                         catCount[ca.categoryId] = (catCount[ca.categoryId] ?: 0) + 1
                     }

@@ -36,6 +36,25 @@ class FirestoreDocSync(
         private const val ECHO_SUPPRESS_MS = 5_000L
         private const val LOG_FILE = "native_sync_log.txt"
         private const val MAX_LOG_SIZE = 512_000L // 512KB
+
+        /**
+         * Set all per-collection sync cursors from a snapshot timestamp.
+         * Called at join time before FirestoreDocSync is instantiated, so listeners
+         * start filtered from the snapshot point instead of reading all docs.
+         */
+        fun setCursorsFromTimestamp(context: Context, timestampMillis: Long) {
+            val prefs = context.getSharedPreferences("sync_cursor", Context.MODE_PRIVATE)
+            val seconds = timestampMillis / 1000
+            val nanos = ((timestampMillis % 1000) * 1_000_000).toInt()
+            val editor = prefs.edit()
+            for (collection in EncryptedDocSerializer.ALL_COLLECTIONS) {
+                editor.putLong("cursor_${collection}_seconds", seconds)
+                editor.putInt("cursor_${collection}_nanos", nanos)
+            }
+            editor.putLong("cursor_${EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS}_seconds", seconds)
+            editor.putInt("cursor_${EncryptedDocSerializer.COLLECTION_SHARED_SETTINGS}_nanos", nanos)
+            editor.apply()
+        }
     }
 
     /** File-based sync log for debugging (readable via dump button). */
