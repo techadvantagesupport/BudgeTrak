@@ -15,7 +15,7 @@ import java.time.LocalDate
  * Shared merge processor for incoming Firestore sync events.
  *
  * Extracted from MainActivity's onBatchChanged callback so that both the
- * foreground (MainActivity) and background (PeriodRefreshWorker) can process
+ * foreground (MainViewModel) and background (BackgroundSyncWorker) can process
  * incoming DataChangeEvent batches identically.
  *
  * This object is stateless — all mutable state is passed in and returned via

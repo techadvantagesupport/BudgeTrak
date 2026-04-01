@@ -80,9 +80,18 @@ class SyncWorker(
                 fcmPrefs.edit().putBoolean("fcm_debug_requested", false).apply()
             }
 
-            // Background receipt photo sync (paid users only)
+            // Update RTDB lastSeen so device roster shows recent background activity
             val groupId = syncPrefs.getString("groupId", null)
             val deviceId = SyncIdGenerator.getOrCreateDeviceId(applicationContext)
+            if (groupId != null) {
+                try {
+                    val db = com.google.firebase.database.FirebaseDatabase.getInstance()
+                    db.reference.child("groups/$groupId/presence/$deviceId/lastSeen")
+                        .setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
+                } catch (_: Exception) {}
+            }
+
+            // Background receipt photo sync (paid users only)
             val keyBase64Bg = SecurePrefs.get(applicationContext).getString("encryptionKey", null)
                 ?: syncPrefs.getString("encryptionKey", null)
             if (groupId != null && keyBase64Bg != null) {
@@ -105,7 +114,7 @@ class SyncWorker(
                 }
             }
 
-            // Widget update handled by PeriodRefreshWorker
+            // Widget update handled by BackgroundSyncWorker
 
             return Result.success()
         } catch (e: Exception) {

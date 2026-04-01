@@ -1412,7 +1412,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // ── Schedule background sync when configured ──
         if (isSyncConfigured) {
             SyncWorker.schedule(context)
-            com.syncbudget.app.data.sync.PeriodRefreshWorker.schedule(context)
+            com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
         }
 
         // ── One-time migrations ──

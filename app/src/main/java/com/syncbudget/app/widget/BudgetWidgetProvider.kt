@@ -30,7 +30,7 @@ class BudgetWidgetProvider : AppWidgetProvider() {
             updateWidget(context, appWidgetManager, appWidgetId)
         }
         // Ensure background refresh is scheduled whenever widgets exist
-        com.syncbudget.app.data.sync.PeriodRefreshWorker.schedule(context)
+        com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
         scheduleResetAlarm(context)
     }
 
@@ -38,7 +38,7 @@ class BudgetWidgetProvider : AppWidgetProvider() {
         super.onReceive(context, intent)
         if (intent.action == ACTION_RESET_REFRESH) {
             // Budget period just reset — trigger immediate refresh
-            com.syncbudget.app.data.sync.PeriodRefreshWorker.runOnce(context)
+            com.syncbudget.app.data.sync.BackgroundSyncWorker.runOnce(context)
             // Schedule the next reset alarm
             scheduleResetAlarm(context)
         }
@@ -46,7 +46,7 @@ class BudgetWidgetProvider : AppWidgetProvider() {
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        // PeriodRefreshWorker serves broader purpose (sync + period refresh),
+        // BackgroundSyncWorker serves broader purpose (data sync + period refresh),
         // so we do NOT cancel it when the last widget is removed.
     }
 

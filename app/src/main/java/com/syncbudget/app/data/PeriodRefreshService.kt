@@ -10,8 +10,8 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 /**
- * Extracted period refresh logic, shared by both foreground (MainActivity) and
- * background (PeriodRefreshWorker).
+ * Extracted period refresh logic, shared by both foreground (MainViewModel) and
+ * background (BackgroundSyncWorker).
  *
  * Loads ALL data from disk, performs accrual updates, saves changed data back
  * to disk, and returns only the records that changed so the caller can push

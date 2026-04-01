@@ -24,20 +24,21 @@ import java.util.concurrent.TimeUnit
  * Background worker that syncs from Firestore, runs period refresh, updates
  * the widget, and pushes changes back to Firestore.
  *
- * Replaces WidgetRefreshWorker. Runs every 15 minutes via WorkManager.
- * Skips if the app is active in the foreground (MainActivity handles everything).
+ * Runs every 15 minutes via WorkManager. Handles full data sync, period
+ * refresh, cash recomputation, and widget updates.
+ * Skips if the app is active in the foreground (MainViewModel handles everything).
  */
-class PeriodRefreshWorker(
+class BackgroundSyncWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
     companion object {
-        private const val TAG = "PeriodRefreshWorker"
+        private const val TAG = "BackgroundSyncWorker"
         private const val WORK_NAME = "period_refresh"
 
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<PeriodRefreshWorker>(
+            val request = PeriodicWorkRequestBuilder<BackgroundSyncWorker>(
                 15, TimeUnit.MINUTES
             ).build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -46,7 +47,7 @@ class PeriodRefreshWorker(
         }
 
         fun runOnce(context: Context) {
-            val request = OneTimeWorkRequestBuilder<PeriodRefreshWorker>().build()
+            val request = OneTimeWorkRequestBuilder<BackgroundSyncWorker>().build()
             WorkManager.getInstance(context).enqueue(request)
         }
 
@@ -129,7 +130,7 @@ class PeriodRefreshWorker(
 
             return Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "PeriodRefreshWorker failed: ${e.message}", e)
+            Log.e(TAG, "BackgroundSyncWorker failed: ${e.message}", e)
             return Result.success() // don't retry, wait for next scheduled run
         }
     }
