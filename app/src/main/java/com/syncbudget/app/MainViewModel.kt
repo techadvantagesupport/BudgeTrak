@@ -1279,7 +1279,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            syncStatus = "synced"
+            syncStatus = if (isNetworkAvailable) "synced" else "offline"
             lastSyncActivity = System.currentTimeMillis()
 
             // ── One-time startup health check ──
@@ -1564,6 +1564,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val activeNetwork = connectivityManager.activeNetwork
             val capabilities = activeNetwork?.let { connectivityManager.getNetworkCapabilities(it) }
             isNetworkAvailable = capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+            // Set initial sync status based on actual network state
+            if (!isNetworkAvailable && isSyncConfigured) syncStatus = "offline"
 
             connectivityManager.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: android.net.Network) {
