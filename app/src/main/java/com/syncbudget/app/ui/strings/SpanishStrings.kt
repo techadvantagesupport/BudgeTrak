@@ -771,12 +771,12 @@ object SpanishStrings : AppStrings {
         featureBullet8 = "Importaci\u00f3n de extractos bancarios con categorizaci\u00f3n autom\u00e1tica",
         featureBullet9 = "Detecci\u00f3n de transacciones duplicadas",
         featureBullet10 = "Categor\u00edas totalmente personalizables con selecci\u00f3n de iconos",
-        featureBullet11 = "Soporte para m\u00faltiples monedas y formatos de fecha",
+        featureBullet11 = "Soporte para m\u00faltiples monedas y formatos de fecha con archivado de transacciones",
         featureBullet12 = "Sincronizaci\u00f3n Familiar \u2014 comparte presupuestos entre dispositivos con cifrado de extremo a extremo",
         syncIndicatorTitle = "Indicador de sincronizaci\u00f3n",
         syncIndicatorBody = "Cuando la Sincronizaci\u00f3n Familiar est\u00e1 activada, un indicador aparece en la esquina inferior izquierda de la pantalla Solari:",
-        syncArrowsBullet = "Flechas de sincronizaci\u00f3n \u2014 muestran el estado de conexi\u00f3n con la nube (verde = conectado, amarillo = sincronizando, naranja = obsoleto, rojo = error)",
-        syncDotsBullet = "Puntos de colores \u2014 uno por dispositivo familiar (hasta 4), mostrando cu\u00e1ndo sincroniz\u00f3 cada dispositivo: verde (< 5 min), amarillo (< 2 hrs), naranja (< 24 hrs), rojo (> 24 hrs), gris (nunca)",
+        syncArrowsBullet = "\u00cdcono de sincronizaci\u00f3n \u2014 muestra el estado de conexi\u00f3n: verde = en l\u00ednea y sincronizando, amarillo = reconectando, rojo = sin internet o error",
+        syncDotsBullet = "Puntos de colores \u2014 uno por dispositivo familiar (hasta 4), mostrando presencia en tiempo real: verde = en l\u00ednea, azul oscuro = visto < 1 hr, amarillo = 1\u20132 hrs, rojo = > 2 hrs",
         privacyTitle = "Privacidad y seguridad",
         privacyBody = "Tus datos financieros permanecen en tu dispositivo por defecto. BudgeTrak no " +
             "recopila an\u00e1lisis y no comparte tus datos con nadie. Al exportar tus transacciones, puedes elegir formato cifrado " +
@@ -1573,11 +1573,12 @@ object SpanishStrings : AppStrings {
             "con los datos compartidos del grupo. Tus transacciones, metas y configuraciones " +
             "actuales ser\u00e1n sobrescritas. Aseg\u00farate de hacer una copia de seguridad primero.",
         syncStatusTitle = "Estado de Sincronizaci\u00f3n",
-        syncStatusBody = "El punto de color en el panel principal y la tarjeta de estado en esta pantalla " +
-            "muestran el estado actual: Verde (Sincronizado) significa que todo est\u00e1 actualizado. " +
-            "Amarillo (Sincronizando) significa que hay una sincronizaci\u00f3n en progreso. Naranja (Desactualizado) " +
-            "significa que ha pasado tiempo desde la \u00faltima sincronizaci\u00f3n. Rojo (Error) " +
-            "significa que el \u00faltimo intento fall\u00f3.",
+        syncStatusBody = "El \u00edcono de sincronizaci\u00f3n en el panel principal y la tarjeta de estado en esta pantalla " +
+            "muestran el estado actual: Verde significa en l\u00ednea y sincronizando normalmente. " +
+            "Amarillo significa que los oyentes se est\u00e1n reconectando. Rojo significa sin conexi\u00f3n " +
+            "a internet o un error de sincronizaci\u00f3n. La lista de dispositivos muestra la presencia " +
+            "en tiempo real: verde = en l\u00ednea, azul oscuro = visto recientemente, " +
+            "amarillo = hace 1\u20132 horas, rojo = hace m\u00e1s de 2 horas.",
         staleWarningsTitle = "Advertencias de Desactualizaci\u00f3n",
         staleWarningsBody = "Si tu dispositivo no se ha sincronizado por un per\u00edodo extendido, " +
             "aparecer\u00e1n advertencias escalonadas en el panel: a los 60 d\u00edas un recordatorio suave, " +

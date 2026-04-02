@@ -633,6 +633,133 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Deterministic cash recomputation from synced data.
     // All devices with the same synced data compute the same result.
     // Runs on background thread to avoid blocking UI.
+    // ═══════════════════════════════════════════════════════════════════
+    // PERIODIC MAINTENANCE (called from onResume, 24h gate)
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun runPeriodicMaintenance() {
+        android.util.Log.i("Maintenance", "Running periodic maintenance")
+
+        // ── Backup check ──
+        try {
+            if (BackupManager.isBackupDue(context)) {
+                val pwd = BackupManager.getPassword(context)
+                if (pwd != null) {
+                    withContext(Dispatchers.IO) { BackupManager.performBackup(context, pwd) }
+                    lastBackupDate = backupPrefs.getString("last_backup_date", null)
+                    android.util.Log.i("Maintenance", "Auto-backup completed")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("Maintenance", "Backup failed: ${e.message}")
+        }
+
+        // ── Integrity check (sync users only) ──
+        if (isSyncConfigured && syncGroupId != null) {
+            runIntegrityCheck()
+            recomputeCash()
+        }
+
+        // ── Receipt orphan cleanup ──
+        try {
+            // Clean orphaned receiptIds (transaction references a file that doesn't exist)
+            if (!isSyncConfigured) {
+                var orphansCleaned = 0
+                val receiptDir = java.io.File(context.filesDir, "receipts")
+                transactions.forEachIndexed { idx, txn ->
+                    var changed = false
+                    var t = txn
+                    fun fileExists(rid: String?) = rid != null && java.io.File(receiptDir, "$rid.jpg").exists()
+                    if (t.receiptId1 != null && !fileExists(t.receiptId1)) { t = t.copy(receiptId1 = null); changed = true }
+                    if (t.receiptId2 != null && !fileExists(t.receiptId2)) { t = t.copy(receiptId2 = null); changed = true }
+                    if (t.receiptId3 != null && !fileExists(t.receiptId3)) { t = t.copy(receiptId3 = null); changed = true }
+                    if (t.receiptId4 != null && !fileExists(t.receiptId4)) { t = t.copy(receiptId4 = null); changed = true }
+                    if (t.receiptId5 != null && !fileExists(t.receiptId5)) { t = t.copy(receiptId5 = null); changed = true }
+                    if (changed) { transactions[idx] = t; orphansCleaned++ }
+                }
+                if (orphansCleaned > 0) {
+                    saveTransactions()
+                    android.util.Log.i("Maintenance", "Cleaned $orphansCleaned orphaned receiptId references")
+                }
+            }
+            // Clean orphaned files (on disk but not referenced by any transaction)
+            val allReceiptIds = com.syncbudget.app.data.sync.ReceiptManager.collectAllReceiptIds(transactions)
+            com.syncbudget.app.data.sync.ReceiptManager.cleanOrphans(context, allReceiptIds)
+        } catch (e: Exception) {
+            android.util.Log.w("Maintenance", "Receipt orphan cleanup failed: ${e.message}")
+        }
+
+        // ── Receipt local storage pruning ──
+        try {
+            val pruneAge = sharedSettings.receiptPruneAgeDays
+            if (pruneAge != null) {
+                val pruneDate = java.time.LocalDate.now().minusDays(pruneAge.toLong())
+                var pruned = 0
+                transactions.forEachIndexed { idx, txn ->
+                    if (txn.date.isBefore(pruneDate)) {
+                        val ids = com.syncbudget.app.data.sync.ReceiptManager.getReceiptIds(txn)
+                        if (ids.isNotEmpty()) {
+                            for (rid in ids) com.syncbudget.app.data.sync.ReceiptManager.deleteLocalReceipt(context, rid)
+                            transactions[idx] = txn.copy(
+                                receiptId1 = null, receiptId2 = null, receiptId3 = null,
+                                receiptId4 = null, receiptId5 = null
+                            )
+                            pruned += ids.size
+                        }
+                    }
+                }
+                if (pruned > 0) {
+                    saveTransactions()
+                    android.util.Log.i("Maintenance", "Pruned $pruned receipt references older than $pruneAge days")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("Maintenance", "Receipt pruning failed: ${e.message}")
+        }
+
+        // ── Admin: tombstone + cloud orphan cleanup (30-day sub-gate) ──
+        if (isSyncAdmin && isSyncConfigured) {
+            val groupId = syncGroupId ?: return
+            val lastCleanup = syncPrefs.getLong("lastAdminCleanup", 0L)
+            val cleanupInterval = 30L * 24 * 60 * 60 * 1000
+            if (System.currentTimeMillis() - lastCleanup > cleanupInterval) {
+                try {
+                    val devices = syncDevices
+                    if (devices.size >= 2) {
+                        val oldestLastSeen = devices.minOf { it.lastSeen }
+                        val cutoff = oldestLastSeen - 24 * 60 * 60 * 1000L
+                        if (cutoff > 0) {
+                            var totalPurged = 0
+                            for (collection in EncryptedDocSerializer.ALL_COLLECTIONS) {
+                                val docs = FirestoreDocService.readAllDocs(groupId, collection)
+                                for (doc in docs) {
+                                    val deleted = doc.getBoolean("deleted") ?: false
+                                    if (!deleted) continue
+                                    val updatedAt = doc.getTimestamp("updatedAt")?.toDate()?.time ?: continue
+                                    if (updatedAt < cutoff) {
+                                        FirestoreDocService.deleteDoc(groupId, collection, doc.id)
+                                        totalPurged++
+                                    }
+                                }
+                            }
+                            if (totalPurged > 0) android.util.Log.i("Maintenance", "Purged $totalPurged old tombstones")
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("Maintenance", "Tombstone cleanup failed: ${e.message}")
+                }
+                try {
+                    com.syncbudget.app.data.sync.ImageLedgerService.purgeOrphanedCloudFiles(groupId)
+                } catch (e: Exception) {
+                    android.util.Log.w("Maintenance", "Orphan cloud cleanup failed: ${e.message}")
+                }
+                syncPrefs.edit().putLong("lastAdminCleanup", System.currentTimeMillis()).apply()
+            }
+        }
+
+        android.util.Log.i("Maintenance", "Periodic maintenance complete")
+    }
+
     private suspend fun runIntegrityCheck() {
         val groupId = syncGroupId ?: return
         try {
@@ -1304,52 +1431,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            // Admin: tombstone + orphan cleanup (skip if ran within last 30 days)
-            if (isSyncAdmin) {
-                val lastCleanup = syncPrefs.getLong("lastAdminCleanup", 0L)
-                val cleanupInterval = 30L * 24 * 60 * 60 * 1000 // 30 days
-                if (System.currentTimeMillis() - lastCleanup > cleanupInterval) {
-                    // Clean up Firestore tombstones that all devices have seen.
-                    // Uses RTDB-maintained syncDevices for lastSeen (1-day buffer for safety).
-                    try {
-                        val devices = syncDevices
-                        if (devices.size >= 2) {
-                            val oldestLastSeen = devices.minOf { it.lastSeen }
-                            val cutoff = oldestLastSeen - 24 * 60 * 60 * 1000L // 1-day buffer
-                            if (cutoff > 0) {
-                                var totalPurged = 0
-                                for (collection in EncryptedDocSerializer.ALL_COLLECTIONS) {
-                                    val docs = FirestoreDocService.readAllDocs(groupId, collection)
-                                    for (doc in docs) {
-                                        val deleted = doc.getBoolean("deleted") ?: false
-                                        if (!deleted) continue
-                                        val updatedAt = doc.getTimestamp("updatedAt")?.toDate()?.time ?: continue
-                                        if (updatedAt < cutoff) {
-                                            FirestoreDocService.deleteDoc(groupId, collection, doc.id)
-                                            totalPurged++
-                                        }
-                                    }
-                                }
-                                if (totalPurged > 0) {
-                                    android.util.Log.i("SyncLoop", "Purged $totalPurged old tombstones from Firestore")
-                                }
-                            }
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.w("SyncLoop", "Tombstone cleanup failed: ${e.message}")
-                    }
-
-                    // Clean up orphaned Cloud Storage receipt files (no matching ledger entry)
-                    try {
-                        com.syncbudget.app.data.sync.ImageLedgerService.purgeOrphanedCloudFiles(groupId)
-                    } catch (e: Exception) {
-                        android.util.Log.w("SyncLoop", "Orphan cloud cleanup failed: ${e.message}")
-                    }
-
-                    syncPrefs.edit().putLong("lastAdminCleanup", System.currentTimeMillis()).apply()
-                }
-            }
-
             // Image ledger listener — replaces receipt sync polling in health check
             if (isPaidUser || isSubscriber) {
                 val ledgerRef = com.google.firebase.firestore.FirebaseFirestore.getInstance()
@@ -1554,26 +1635,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.i("OnResume", "Transactions match disk, no reload needed")
         }
 
-        // Time-gated maintenance (once per 24h) — keeps long-lived ViewModels healthy
+        // Periodic maintenance (time-gated) — keeps long-lived ViewModels healthy
         val now = System.currentTimeMillis()
-        val lastMaintenance = prefs.getLong("lastMaintenanceCheck", 0L)
-        if (now - lastMaintenance > 24 * 60 * 60 * 1000L) {
+        if (now - prefs.getLong("lastMaintenanceCheck", 0L) > 24 * 60 * 60 * 1000L) {
             prefs.edit().putLong("lastMaintenanceCheck", now).apply()
-            viewModelScope.launch {
-                // Backup check
-                if (BackupManager.isBackupDue(context)) {
-                    val pwd = BackupManager.getPassword(context)
-                    if (pwd != null) {
-                        withContext(Dispatchers.IO) { BackupManager.performBackup(context, pwd) }
-                        lastBackupDate = backupPrefs.getString("last_backup_date", null)
-                    }
-                }
-                // Integrity check
-                if (isSyncConfigured && syncGroupId != null) {
-                    runIntegrityCheck()
-                    recomputeCash()
-                }
-            }
+            viewModelScope.launch { runPeriodicMaintenance() }
         }
     }
 
@@ -2016,106 +2082,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             BackupManager.getBudgetrakDir()
             BackupManager.getSupportDir()
             BackupManager.getBackupDir()
-
-            // Dump receipt file inventory to support dir
-            try {
-                val receiptDir = java.io.File(context.filesDir, "receipts")
-                val thumbDir = java.io.File(context.filesDir, "receipt_thumbs")
-                val sb = StringBuilder()
-                sb.appendLine("=== Receipt File Inventory ${java.time.LocalDateTime.now()} ===")
-                val receiptFiles = receiptDir.listFiles()?.sortedBy { it.name } ?: emptyList()
-                sb.appendLine("Full-size receipts: ${receiptFiles.size} files")
-                for (f in receiptFiles) {
-                    val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    android.graphics.BitmapFactory.decodeFile(f.absolutePath, opts)
-                    val kb = "%.1f".format(f.length() / 1024.0)
-                    sb.appendLine("  ${f.name}  ${opts.outWidth}x${opts.outHeight}  ${kb} KB")
-                }
-                val thumbFiles = thumbDir.listFiles()?.sortedBy { it.name } ?: emptyList()
-                sb.appendLine("Thumbnails: ${thumbFiles.size} files")
-                for (f in thumbFiles) {
-                    val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    android.graphics.BitmapFactory.decodeFile(f.absolutePath, opts)
-                    val kb = "%.1f".format(f.length() / 1024.0)
-                    sb.appendLine("  ${f.name}  ${opts.outWidth}x${opts.outHeight}  ${kb} KB")
-                }
-                // Check for orphaned receiptIds (transaction references a file that doesn't exist)
-                if (!isSyncConfigured) {
-                    var orphansCleaned = 0
-                    transactions.forEachIndexed { idx, txn ->
-                        var changed = false
-                        var t = txn
-                        val receiptDir2 = java.io.File(context.filesDir, "receipts")
-                        fun fileExists(rid: String?) = rid != null && java.io.File(receiptDir2, "$rid.jpg").exists()
-                        if (t.receiptId1 != null && !fileExists(t.receiptId1)) { t = t.copy(receiptId1 = null); changed = true }
-                        if (t.receiptId2 != null && !fileExists(t.receiptId2)) { t = t.copy(receiptId2 = null); changed = true }
-                        if (t.receiptId3 != null && !fileExists(t.receiptId3)) { t = t.copy(receiptId3 = null); changed = true }
-                        if (t.receiptId4 != null && !fileExists(t.receiptId4)) { t = t.copy(receiptId4 = null); changed = true }
-                        if (t.receiptId5 != null && !fileExists(t.receiptId5)) { t = t.copy(receiptId5 = null); changed = true }
-                        if (changed) {
-                            transactions[idx] = t
-                            orphansCleaned++
-                        }
-                    }
-                    if (orphansCleaned > 0) {
-                        sb.appendLine("Cleaned $orphansCleaned transactions with orphaned receiptIds (solo device)")
-                        saveTransactions()
-                    }
-                }
-
-                // Clean orphaned files (on disk but not referenced by any transaction)
-                val allReceiptIds = com.syncbudget.app.data.sync.ReceiptManager.collectAllReceiptIds(transactions)
-                com.syncbudget.app.data.sync.ReceiptManager.cleanOrphans(context, allReceiptIds)
-
-                java.io.File(BackupManager.getSupportDir(), "receipts.txt").writeText(sb.toString())
-
-                // Photo ledger: which transactions reference which receiptIds
-                val ledger = StringBuilder()
-                ledger.appendLine("=== Photo Ledger ${java.time.LocalDateTime.now()} ===")
-                val linkedTxns = mutableListOf<String>()
-                for (txn in transactions) {
-                    val rids = listOfNotNull(txn.receiptId1, txn.receiptId2, txn.receiptId3, txn.receiptId4, txn.receiptId5)
-                    if (rids.isNotEmpty()) {
-                        linkedTxns.add("  txn#${txn.id} ${txn.date} ${txn.source.take(25)}: ${rids.joinToString(", ") { it.take(8) }}")
-                    }
-                }
-                ledger.appendLine("Transactions with photos: ${linkedTxns.size}")
-                linkedTxns.forEach { ledger.appendLine(it) }
-                java.io.File(BackupManager.getSupportDir(), "photo_ledger.txt").writeText(ledger.toString())
-            } catch (_: Exception) {}
-
-            // Receipt local storage pruning
-            val pruneAge = sharedSettings.receiptPruneAgeDays
-            if (pruneAge != null) {
-                try {
-                    val pruneDate = java.time.LocalDate.now().minusDays(pruneAge.toLong())
-                    var pruned = 0
-                    transactions.forEachIndexed { idx, txn ->
-                        if (txn.date.isBefore(pruneDate)) {
-                            val ids = com.syncbudget.app.data.sync.ReceiptManager.getReceiptIds(txn)
-                            if (ids.isNotEmpty()) {
-                                for (rid in ids) {
-                                    com.syncbudget.app.data.sync.ReceiptManager.deleteLocalReceipt(context, rid)
-                                }
-                                transactions[idx] = txn.copy(
-                                    receiptId1 = null,
-                                    receiptId2 = null,
-                                    receiptId3 = null,
-                                    receiptId4 = null,
-                                    receiptId5 = null
-                                )
-                                pruned += ids.size
-                            }
-                        }
-                    }
-                    if (pruned > 0) {
-                        saveTransactions()
-                        android.util.Log.d("ReceiptPrune", "Pruned $pruned receipt references older than $pruneAge days")
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.w("ReceiptPrune", "Pruning failed: ${e.message}")
-                }
-            }
         }
 
         // ── Quick start auto-launch (one-time) ──
@@ -2127,29 +2093,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // ── One-time simulation trace on startup ──
-        viewModelScope.launch {
-            snapshotFlow { dataLoaded }.first { it }
-            try {
-                val trace = SavingsSimulator.traceSimulation(
-                    incomeSources = activeIncomeSources,
-                    recurringExpenses = activeRecurringExpenses,
-                    budgetPeriod = budgetPeriod,
-                    baseBudget = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount,
-                    amortizationEntries = activeAmortizationEntries,
-                    savingsGoals = activeSavingsGoals,
-                    availableCash = simAvailableCash,
-                    resetDayOfWeek = resetDayOfWeek,
-                    resetDayOfMonth = resetDayOfMonth,
-                    currencySymbol = currencySymbol,
-                    today = budgetToday
-                )
-                val file = java.io.File(BackupManager.getSupportDir(), "simulation_trace.txt")
-                file.writeText(trace)
-            } catch (_: Exception) { }
-        }
-
-        // ── Period refresh loop (every 30s, waits for initialSyncReceived) ──
+        // ── Period refresh (sleeps until next boundary, rechecks on wake) ──
         viewModelScope.launch {
             snapshotFlow { dataLoaded }.first { it }
             // Wait for initial sync if needed
@@ -2192,26 +2136,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         if (result.updatedRecurringExpenses.isNotEmpty()) saveRecurringExpenses(result.updatedRecurringExpenses)
                     }
                 }
-                delay(30_000) // Re-check every 30 seconds
+                // Sleep until next period boundary + 60s buffer, minimum 60s
+                val tz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
+                    java.time.ZoneId.of(sharedSettings.familyTimezone) else java.time.ZoneId.systemDefault()
+                val currentStart = BudgetCalculator.currentPeriodStart(
+                    budgetPeriod, resetDayOfWeek, resetDayOfMonth, tz, resetHour
+                )
+                val nextBoundary = when (budgetPeriod) {
+                    BudgetPeriod.DAILY -> currentStart.plusDays(1).atTime(resetHour, 0)
+                    BudgetPeriod.WEEKLY -> currentStart.plusWeeks(1).atStartOfDay()
+                    BudgetPeriod.MONTHLY -> currentStart.plusMonths(1).atStartOfDay()
+                }
+                val nowMs = System.currentTimeMillis()
+                val boundaryMs = nextBoundary.atZone(tz).toInstant().toEpochMilli()
+                val sleepMs = (boundaryMs - nowMs + 60_000).coerceAtLeast(60_000)
+                android.util.Log.i("PeriodRefresh", "Next boundary: $nextBoundary, sleeping ${sleepMs / 1000}s")
+                delay(sleepMs)
             }
         }
 
-        // ── Debug dump (one-time, debug builds only) ──
-        if (BuildConfig.DEBUG) {
-            viewModelScope.launch {
-                snapshotFlow { dataLoaded }.first { it }
-                try {
-                    val diagText = DiagDumpBuilder.build(context, simAvailableCash = simAvailableCash)
-                    DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag.txt", diagText)
-                    val devName = DiagDumpBuilder.sanitizeDeviceName(GroupManager.getDeviceName(context))
-                    if (devName.isNotEmpty()) {
-                        DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag_${devName}.txt", diagText)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("DiagDump", "Diag write failed: ${e.message}")
-                }
-            }
-        }
     }
 
     // ═══════════════════════════════════════════════════════════════════

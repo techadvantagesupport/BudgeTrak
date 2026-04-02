@@ -772,12 +772,12 @@ object EnglishStrings : AppStrings {
         featureBullet8 = "Bank statement import with auto-categorization",
         featureBullet9 = "Duplicate transaction detection",
         featureBullet10 = "Fully customizable categories with icon selection",
-        featureBullet11 = "Multiple currency and date format support",
+        featureBullet11 = "Multiple currency and date format support with transaction archiving",
         featureBullet12 = "Sync \u2014 share budgets across devices with end-to-end encryption",
         syncIndicatorTitle = "Sync Indicator",
         syncIndicatorBody = "When Sync is enabled, a sync indicator appears in the bottom-left corner of the Solari display:",
-        syncArrowsBullet = "Sync arrows \u2014 show cloud connectivity status (green = connected, yellow = syncing, orange = stale, red = error)",
-        syncDotsBullet = "Colored dots \u2014 one per family member device (up to 4), showing how recently each device synced: green (< 5 min), yellow (< 2 hrs), orange (< 24 hrs), red (> 24 hrs), gray (never)",
+        syncArrowsBullet = "Sync icon \u2014 shows connection status: green = online and syncing, yellow = listeners recovering, red = no internet or error",
+        syncDotsBullet = "Colored dots \u2014 one per family member device (up to 4), showing real-time presence: green = online now, dark blue = seen < 1 hr, yellow = 1\u20132 hrs, red = > 2 hrs",
         privacyTitle = "Privacy & Security",
         privacyBody = "Your financial data stays on your device by default. BudgeTrak does not collect analytics " +
             "and does not share your data with anyone. When you export your transactions, you can choose encrypted " +
@@ -1575,11 +1575,12 @@ object EnglishStrings : AppStrings {
             "with the group's shared data. Your current transactions, goals, and settings " +
             "will be overwritten. Make sure to back up first if needed.",
         syncStatusTitle = "Sync Status",
-        syncStatusBody = "The colored dot on the dashboard and the status card on this screen " +
-            "show the current sync state: Green (Synced) means all data is up to date. " +
-            "Yellow (Syncing) means a sync is in progress. Orange (Stale) means " +
-            "it has been a while since the last sync. Red (Error) means the last " +
-            "sync attempt failed.",
+        syncStatusBody = "The sync icon on the dashboard and the status card on this screen " +
+            "show the current sync state: Green means online and syncing normally. " +
+            "Yellow means listeners are recovering. Red means no internet connection " +
+            "or a sync error. The device roster shows real-time presence for each " +
+            "family member: green = online now, dark blue = seen recently, " +
+            "yellow = 1\u20132 hours ago, red = over 2 hours ago.",
         staleWarningsTitle = "Stale Warnings",
         staleWarningsBody = "If your device hasn't synced for an extended period, escalating " +
             "warnings appear on the dashboard: at 60 days a gentle reminder, " +
