@@ -350,9 +350,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         BudgetCalculator.roundCents(maxOf(0.0, base - amortDeductions - savingsDeductions - acceleratedDeductions))
     }
 
-    // Simulation-adjusted available cash (computed on background thread)
-    var simAvailableCash by mutableStateOf(availableCash)
-        private set
+    // Simulation-adjusted available cash
+    val simAvailableCash by derivedStateOf {
+        if (!dataLoaded) return@derivedStateOf availableCash
+        val bsd = budgetStartDate ?: return@derivedStateOf availableCash
+        val simTz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
+            java.time.ZoneId.of(sharedSettings.familyTimezone) else null
+        val currentPeriod = BudgetCalculator.currentPeriodStart(
+            budgetPeriod, resetDayOfWeek, resetDayOfMonth, simTz, resetHour
+        )
+        val adjustedLedger = periodLedger.map { entry ->
+            if (entry.periodStartDate.toLocalDate() == currentPeriod) {
+                entry.copy(appliedAmount = budgetAmount)
+            } else entry
+        }
+        BudgetCalculator.recomputeAvailableCash(
+            bsd, adjustedLedger,
+            activeTransactions, activeRecurringExpenses,
+            incomeMode, activeIncomeSources,
+            carryForwardBalance, archiveCutoffDate
+        )
+    }
 
     // Percent tolerance for matching
     val percentTolerance by derivedStateOf { matchPercent / 100.0 }
@@ -1685,55 +1703,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     elapsed < 3600 -> "${elapsed / 60}m ago"
                     else -> "${elapsed / 3600}h ago"
                 }
-            }
-        }
-
-        // ── simAvailableCash: compute on background thread via snapshotFlow ──
-        viewModelScope.launch {
-            snapshotFlow {
-                // Read all dependencies so changes trigger recomputation
-                data class SimInputs(
-                    val bsd: java.time.LocalDate?, val txns: List<Transaction>,
-                    val ledger: List<com.syncbudget.app.data.sync.PeriodLedgerEntry>,
-                    val re: List<RecurringExpense>, val iMode: IncomeMode,
-                    val iSrc: List<IncomeSource>, val bAmt: Double,
-                    val syncCfg: Boolean, val tz: String,
-                    val period: BudgetPeriod, val dow: Int, val dom: Int, val rh: Int,
-                    val cash: Double,
-                    val cfb: Double, val acd: java.time.LocalDate?
-                )
-                SimInputs(
-                    budgetStartDate, activeTransactions.toList(), periodLedger.toList(),
-                    activeRecurringExpenses, incomeMode, activeIncomeSources, budgetAmount,
-                    isSyncConfigured, sharedSettings.familyTimezone,
-                    budgetPeriod, resetDayOfWeek, resetDayOfMonth, resetHour,
-                    availableCash,
-                    carryForwardBalance, archiveCutoffDate
-                )
-            }.collectLatest { inputs ->
-                if (inputs.bsd == null) {
-                    simAvailableCash = inputs.cash
-                    return@collectLatest
-                }
-                val result = withContext(Dispatchers.Default) {
-                    val simTz = if (inputs.syncCfg && inputs.tz.isNotEmpty())
-                        java.time.ZoneId.of(inputs.tz) else null
-                    val currentPeriod = BudgetCalculator.currentPeriodStart(
-                        inputs.period, inputs.dow, inputs.dom, simTz, inputs.rh
-                    )
-                    val adjustedLedger = inputs.ledger.map { entry ->
-                        if (entry.periodStartDate.toLocalDate() == currentPeriod) {
-                            entry.copy(appliedAmount = inputs.bAmt)
-                        } else entry
-                    }
-                    BudgetCalculator.recomputeAvailableCash(
-                        inputs.bsd, adjustedLedger,
-                        inputs.txns, inputs.re,
-                        inputs.iMode, inputs.iSrc,
-                        inputs.cfb, inputs.acd
-                    )
-                }
-                simAvailableCash = result
             }
         }
 
