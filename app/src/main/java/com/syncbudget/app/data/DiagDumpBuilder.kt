@@ -18,7 +18,7 @@ import java.time.LocalDateTime
  */
 object DiagDumpBuilder {
 
-    fun build(context: Context): String {
+    fun build(context: Context, simAvailableCash: Double? = null): String {
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val syncPrefs = context.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
         val deviceId = SyncIdGenerator.getOrCreateDeviceId(context)
@@ -94,7 +94,9 @@ object DiagDumpBuilder {
         dump.appendLine()
         dump.appendLine("── App Prefs ──")
         dump.appendLine("availableCash (prefs): $availableCashPrefs")
-        dump.appendLine("availableCash (state): $availableCashPrefs")
+        if (simAvailableCash != null) {
+            dump.appendLine("simAvailableCash (display): $simAvailableCash")
+        }
         dump.appendLine("budgetStartDate: $budgetStartDate")
         dump.appendLine("lastRefreshDate: $lastRefreshDate")
         dump.appendLine("budgetPeriod: $budgetPeriod")

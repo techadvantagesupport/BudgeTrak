@@ -15,6 +15,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import com.syncbudget.app.data.AmortizationEntry
 import com.syncbudget.app.data.AmortizationRepository
@@ -1569,43 +1570,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.w("Network", "Connectivity monitor failed: ${e.message}")
         }
 
-        // ── Load data from repositories (background IO) ──
-        viewModelScope.launch(Dispatchers.IO) {
-            val loadedTxns = TransactionRepository.load(context)
-            val loadedIS = IncomeSourceRepository.load(context)
-            val loadedRE = RecurringExpenseRepository.load(context)
-            val loadedAE = AmortizationRepository.load(context)
-            val loadedSG = SavingsGoalRepository.load(context)
-            val loadedPL = PeriodLedgerRepository.load(context)
+        // ── Load data from repositories ──
+        transactions.addAll(TransactionRepository.load(context))
 
-            val loadedCats = CategoryRepository.load(context).toMutableList()
-            var catsChanged = false
-            for (def in DEFAULT_CATEGORY_DEFS) {
-                val byTag = loadedCats.indexOfFirst { it.tag == def.tag }
-                if (byTag >= 0) continue
-                val usedIds = loadedCats.map { it.id }.toSet()
-                var id: Int
-                do { id = (0..65535).random() } while (id in usedIds)
-                val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
-                val devId = SyncIdGenerator.getOrCreateDeviceId(context)
-                loadedCats.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag,
-                    charted = def.charted, widgetVisible = def.widgetVisible,
-                    deviceId = devId))
-                catsChanged = true
-            }
-            if (catsChanged) CategoryRepository.save(context, loadedCats)
-
-            withContext(Dispatchers.Main) {
-                transactions.addAll(loadedTxns)
-                categories.addAll(loadedCats)
-                incomeSources.addAll(loadedIS)
-                recurringExpenses.addAll(loadedRE)
-                amortizationEntries.addAll(loadedAE)
-                savingsGoals.addAll(loadedSG)
-                periodLedger.addAll(loadedPL)
-                dataLoaded = true
-            }
+        val loadedCats = CategoryRepository.load(context).toMutableList()
+        var catsChanged = false
+        for (def in DEFAULT_CATEGORY_DEFS) {
+            val byTag = loadedCats.indexOfFirst { it.tag == def.tag }
+            if (byTag >= 0) continue
+            val usedIds = loadedCats.map { it.id }.toSet()
+            var id: Int
+            do { id = (0..65535).random() } while (id in usedIds)
+            val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
+            val devId = SyncIdGenerator.getOrCreateDeviceId(context)
+            loadedCats.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag,
+                charted = def.charted, widgetVisible = def.widgetVisible,
+                deviceId = devId))
+            catsChanged = true
         }
+        if (catsChanged) CategoryRepository.save(context, loadedCats)
+        categories.addAll(loadedCats)
+
+        incomeSources.addAll(IncomeSourceRepository.load(context))
+        recurringExpenses.addAll(RecurringExpenseRepository.load(context))
+        amortizationEntries.addAll(AmortizationRepository.load(context))
+        savingsGoals.addAll(SavingsGoalRepository.load(context))
+        periodLedger.addAll(PeriodLedgerRepository.load(context))
+        dataLoaded = true
 
         // ── Firebase anonymous auth ──
         viewModelScope.launch {
@@ -1699,22 +1690,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // ── Sync group configuration + migrations (wait for data) ──
-        viewModelScope.launch {
-            // Wait for async data loading to complete
-            snapshotFlow { dataLoaded }.collect { if (it) return@collect }
-        }.invokeOnCompletion {
-            if (isSyncConfigured && syncGroupId != null) {
-                configureSyncGroup()
-            }
-            if (isSyncConfigured) {
-                com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
-            }
+        // ── Sync group configuration ──
+        if (isSyncConfigured && syncGroupId != null) {
+            configureSyncGroup()
+        }
+        if (isSyncConfigured) {
+            com.syncbudget.app.data.sync.BackgroundSyncWorker.schedule(context)
         }
 
-        // ── One-time migrations (wait for data) ──
+        // ── One-time migrations ──
         viewModelScope.launch {
-            snapshotFlow { dataLoaded }.collect { if (it) return@collect }
             // Wait for all listeners to deliver before running migrations.
             if (isSyncConfigured && !initialSyncReceived) {
                 val synced = docSync?.awaitInitialSync(30_000) ?: false
@@ -2075,7 +2060,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // ── Debug dump (one-time, debug builds only) ──
         if (BuildConfig.DEBUG) {
             try {
-                val diagText = DiagDumpBuilder.build(context)
+                val diagText = DiagDumpBuilder.build(context, simAvailableCash = simAvailableCash)
                 DiagDumpBuilder.writeDiagToMediaStore(context, "sync_diag.txt", diagText)
                 val devName = DiagDumpBuilder.sanitizeDeviceName(GroupManager.getDeviceName(context))
                 if (devName.isNotEmpty()) {
