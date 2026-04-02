@@ -46,6 +46,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -161,7 +162,14 @@ fun SettingsScreen(
     onSavePhotos: () -> Unit = {},
     onDumpDebug: () -> Unit = {},
     onBack: () -> Unit,
-    onHelpClick: () -> Unit = {}
+    onHelpClick: () -> Unit = {},
+    // Data Management
+    activeTransactionCount: Int = 0,
+    archiveThreshold: Int = 10_000,
+    onArchiveThresholdChange: (Int) -> Unit = {},
+    lastArchiveDate: String? = null,
+    lastArchiveCount: Int = 0,
+    totalArchivedCount: Int = 0
 ) {
     val customColors = LocalSyncBudgetColors.current
     val S = LocalStrings.current
@@ -991,6 +999,83 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                         )
                     }
+                }
+            }
+
+            // Data Management section
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text(
+                    S.settings.dataManagementSection,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = if (archiveThreshold > 0) S.settings.activeTransactionsTally(activeTransactionCount, archiveThreshold)
+                           else S.settings.activeTransactionsCount(activeTransactionCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                if (archiveThreshold > 0) {
+                    Spacer(Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { (activeTransactionCount.toFloat() / archiveThreshold).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                        color = if (activeTransactionCount > archiveThreshold)
+                            MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                var thresholdExpanded by remember { mutableStateOf(false) }
+                val thresholdOptions = listOf(
+                    5_000 to "5,000",
+                    10_000 to "10,000",
+                    25_000 to "25,000",
+                    0 to S.settings.archiveOff
+                )
+                ExposedDropdownMenuBox(
+                    expanded = thresholdExpanded,
+                    onExpandedChange = { thresholdExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = thresholdOptions.find { it.first == archiveThreshold }?.second ?: "10,000",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(S.settings.archiveThresholdLabel) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = thresholdExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(expanded = thresholdExpanded, onDismissRequest = { thresholdExpanded = false }) {
+                        thresholdOptions.forEach { (value, label) ->
+                            DropdownMenuItem(text = { Text(label) }, onClick = {
+                                onArchiveThresholdChange(value)
+                                thresholdExpanded = false
+                            })
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                if (lastArchiveDate != null) {
+                    Text(
+                        S.settings.lastArchivedInfo(lastArchiveDate, lastArchiveCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                    )
+                }
+                if (totalArchivedCount > 0) {
+                    Text(
+                        S.settings.totalArchivedCount(totalArchivedCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                    )
                 }
             }
 

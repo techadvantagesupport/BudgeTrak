@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -204,6 +205,13 @@ class MainActivity : ComponentActivity() {
             val adBannerHeight = if (!vm.isPaidUser) 50.dp else 0.dp
             SyncBudgetTheme(strings = vm.strings, adBannerHeight = adBannerHeight) {
               val toastState = LocalAppToast.current
+              // Archive toast
+              LaunchedEffect(vm.archiveToastMessage) {
+                  vm.archiveToastMessage?.let { msg ->
+                      toastState.show(msg)
+                      vm.archiveToastMessage = null
+                  }
+              }
               Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                 // Ad banner placeholder (320x50 standard banner)
                 if (!vm.isPaidUser) {
@@ -1639,7 +1647,16 @@ class MainActivity : ComponentActivity() {
                 }
             },
             onBack = { vm.currentScreen = "main" },
-            onHelpClick = { vm.currentScreen = "settings_help" }
+            onHelpClick = { vm.currentScreen = "settings_help" },
+            activeTransactionCount = vm.activeTransactions.size,
+            archiveThreshold = vm.archiveThreshold,
+            onArchiveThresholdChange = { threshold ->
+                vm.archiveThreshold = threshold
+                vm.prefs.edit().putInt("archiveThreshold", threshold).apply()
+            },
+            lastArchiveDate = vm.lastArchiveDateDisplay,
+            lastArchiveCount = vm.lastArchiveCountDisplay,
+            totalArchivedCount = vm.totalArchivedCountDisplay
         )
     }
 
@@ -1858,7 +1875,11 @@ class MainActivity : ComponentActivity() {
                 }
             },
             onBack = { vm.currentScreen = "main" },
-            onHelpClick = { vm.currentScreen = "transactions_help" }
+            onHelpClick = { vm.currentScreen = "transactions_help" },
+            archivedTransactions = vm.loadedArchivedTransactions,
+            onRequestArchived = { vm.loadArchivedTransactionsAsync() },
+            archiveCutoffDate = vm.archiveCutoffDate,
+            onUpdateArchivedTransaction = { vm.updateArchivedTransaction(it) }
         )
     }
 

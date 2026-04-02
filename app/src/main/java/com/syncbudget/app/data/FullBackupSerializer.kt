@@ -48,6 +48,7 @@ object FullBackupSerializer {
         readFileArray("amortization_entries.json")?.let { json.put("amortizationEntries", maybeFilter(it)) }
         readFileArray("future_expenditures.json")?.let { json.put("savingsGoals", maybeFilter(it)) }
         readFileArray("period_ledger.json")?.let { json.put("periodLedger", it) }
+        readFileArray("archived_transactions.json")?.let { json.put("archivedTransactions", maybeFilter(it)) }
 
         // Shared settings
         val sharedSettings = SharedSettingsRepository.load(context)
@@ -188,6 +189,7 @@ object FullBackupSerializer {
         writeArray("amortizationEntries", "amortization_entries.json")
         writeArray("savingsGoals", "future_expenditures.json")
         writeArray("periodLedger", "period_ledger.json")
+        writeArray("archivedTransactions", "archived_transactions.json")
 
         if (json.has("sharedSettings")) {
             val settings = SharedSettingsRepository.fromJson(json.getJSONObject("sharedSettings"))
@@ -228,6 +230,7 @@ object FullBackupSerializer {
         writeArray("amortizationEntries", "amortization_entries.json")
         writeArray("savingsGoals", "future_expenditures.json")
         writeArray("periodLedger", "period_ledger.json")
+        writeArray("archivedTransactions", "archived_transactions.json")
 
         // Restore shared settings
         if (json.has("sharedSettings")) {

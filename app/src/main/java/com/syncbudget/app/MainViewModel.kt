@@ -212,6 +212,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     val carryForwardBalance: Double get() = sharedSettings.carryForwardBalance
 
+    val lastArchiveDateDisplay: String? get() = try {
+        sharedSettings.lastArchiveInfo?.let { org.json.JSONObject(it) }?.optString("date")
+    } catch (_: Exception) { null }
+
+    val lastArchiveCountDisplay: Int get() = try {
+        sharedSettings.lastArchiveInfo?.let { org.json.JSONObject(it) }?.optInt("count", 0) ?: 0
+    } catch (_: Exception) { 0 }
+
+    val totalArchivedCountDisplay: Int get() = try {
+        sharedSettings.lastArchiveInfo?.let { org.json.JSONObject(it) }?.optInt("totalArchived", 0) ?: 0
+    } catch (_: Exception) { 0 }
+
     fun loadArchivedTransactionsAsync() {
         viewModelScope.launch(Dispatchers.IO) {
             val archived = TransactionRepository.loadArchive(context)

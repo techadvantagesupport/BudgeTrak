@@ -219,6 +219,13 @@ private enum class SortMode {
     CATEGORY
 }
 
+private enum class DateRange {
+    SIX_MONTHS,
+    ONE_YEAR,
+    TWO_YEARS,
+    ALL
+}
+
 private fun isValidAmountInput(text: String, maxDecimals: Int): Boolean {
     if (text.isEmpty()) return true
     if (maxDecimals == 0) return text.all { it.isDigit() }
@@ -276,7 +283,11 @@ fun TransactionsScreen(
     incomeMode: IncomeMode = IncomeMode.FIXED,
     onAdjustIncomeAmount: (incomeSourceId: Int, newAmount: Double) -> Unit = { _, _ -> },
     onAddAmortization: ((AmortizationEntry) -> Unit)? = null,
-    onDeleteAmortization: ((AmortizationEntry) -> Unit)? = null
+    onDeleteAmortization: ((AmortizationEntry) -> Unit)? = null,
+    archivedTransactions: List<Transaction> = emptyList(),
+    onRequestArchived: () -> Unit = {},
+    archiveCutoffDate: java.time.LocalDate? = null,
+    onUpdateArchivedTransaction: (Transaction) -> Unit = {}
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -296,6 +307,7 @@ fun TransactionsScreen(
     var photoThumbRefreshKey by remember { mutableIntStateOf(0) }
     var viewFilter by remember { mutableStateOf(ViewFilter.ALL) }
     var sortMode by remember { mutableStateOf(SortMode.DATE_DESC) }
+    var dateRange by remember { mutableStateOf(DateRange.SIX_MONTHS) }
     var showAddIncome by remember { mutableStateOf(false) }
     var showAddExpense by remember { mutableStateOf(false) }
     var showSearchMenu by remember { mutableStateOf(false) }
@@ -634,7 +646,19 @@ fun TransactionsScreen(
 
     // Filter and sort transactions (no remember — SnapshotStateList mutations trigger recomposition)
     val filteredTransactions = run {
-        var list = transactions.toList()
+        var list = if (dateRange == DateRange.ALL) {
+            transactions.toList() + archivedTransactions
+        } else {
+            val cutoff = java.time.LocalDate.now().let { today ->
+                when (dateRange) {
+                    DateRange.SIX_MONTHS -> today.minusMonths(6)
+                    DateRange.ONE_YEAR -> today.minusYears(1)
+                    DateRange.TWO_YEARS -> today.minusYears(2)
+                    DateRange.ALL -> java.time.LocalDate.MIN
+                }
+            }
+            transactions.filter { !it.date.isBefore(cutoff) }
+        }
         list = when (viewFilter) {
             ViewFilter.EXPENSES -> list.filter { it.type == TransactionType.EXPENSE }
             ViewFilter.INCOME -> list.filter { it.type == TransactionType.INCOME }
@@ -814,6 +838,35 @@ fun TransactionsScreen(
                             SortMode.AMOUNT_DESC -> S.transactions.sortAmountDesc
                             SortMode.AMOUNT_ASC -> S.transactions.sortAmountAsc
                             SortMode.CATEGORY -> S.transactions.sortCategory
+                        },
+                        fontSize = 18.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(2.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        dateRange = when (dateRange) {
+                            DateRange.SIX_MONTHS -> DateRange.ONE_YEAR
+                            DateRange.ONE_YEAR -> DateRange.TWO_YEARS
+                            DateRange.TWO_YEARS -> DateRange.ALL
+                            DateRange.ALL -> DateRange.SIX_MONTHS
+                        }
+                        if (dateRange == DateRange.ALL) onRequestArchived()
+                        scrollToTopTrigger++
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onBackground
+                    ),
+                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = when (dateRange) {
+                            DateRange.SIX_MONTHS -> S.transactions.range6mo
+                            DateRange.ONE_YEAR -> S.transactions.range1yr
+                            DateRange.TWO_YEARS -> S.transactions.range2yr
+                            DateRange.ALL -> S.transactions.rangeAll
                         },
                         fontSize = 18.sp
                     )
@@ -1023,6 +1076,9 @@ fun TransactionsScreen(
             // Transaction list
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 items(filteredTransactions, key = { it.id }) { transaction ->
+                    val isArchived = archiveCutoffDate != null && transaction.date.isBefore(archiveCutoffDate)
+                    val rowAlpha = if (isArchived) 0.5f else 1f
+                    Box(modifier = Modifier.alpha(rowAlpha)) {
                     val isLinkedRecurring = transaction.linkedRecurringExpenseId != null
                     val linkedRecurringAmount = if (isLinkedRecurring) {
                         if (transaction.linkedRecurringExpenseAmount > 0.0) transaction.linkedRecurringExpenseAmount
@@ -1119,7 +1175,15 @@ fun TransactionsScreen(
                                 selectionMode = selectionMode,
                                 isSelected = selectedIds[transaction.id] == true,
                                 isExpanded = expandedIds[transaction.id] == true,
-                                onTap = { if (selectionMode) { selectedIds[transaction.id] = !(selectedIds[transaction.id] ?: false) } else { editingTransaction = transaction } },
+                                onTap = {
+                                    if (selectionMode) {
+                                        selectedIds[transaction.id] = !(selectedIds[transaction.id] ?: false)
+                                    } else if (archiveCutoffDate != null && transaction.date.isBefore(archiveCutoffDate)) {
+                                        toastState.show(S.transactions.archivedNotEditable)
+                                    } else {
+                                        editingTransaction = transaction
+                                    }
+                                },
                                 onLongPress = { if (!selectionMode) { selectionMode = true; selectedIds.clear() }; selectedIds[transaction.id] = true },
                                 onToggleSelection = { checked -> selectedIds[transaction.id] = checked },
                                 onToggleExpand = { expandedIds[transaction.id] = !(expandedIds[transaction.id] ?: false) },
@@ -1156,6 +1220,7 @@ fun TransactionsScreen(
                             onEffectTap = { effectExplanationTransaction = transaction }
                         )
                     }
+                    } // Box(alpha)
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
                     )
@@ -1481,8 +1546,11 @@ fun TransactionsScreen(
                     DialogPrimaryButton(
                         onClick = {
                             val idsToChange = selectedIds.filter { it.value }.keys
-                            transactions.filter { it.id in idsToChange }.forEach { txn ->
-                                onUpdateTransaction(txn.copy(isUserCategorized = true))
+                            val allTxns = transactions + archivedTransactions
+                            allTxns.filter { it.id in idsToChange }.forEach { txn ->
+                                val updated = txn.copy(isUserCategorized = true)
+                                val isArch = archiveCutoffDate != null && txn.date.isBefore(archiveCutoffDate)
+                                if (isArch) onUpdateArchivedTransaction(updated) else onUpdateTransaction(updated)
                             }
                             selectedIds.clear()
                             selectionMode = false
@@ -1492,8 +1560,11 @@ fun TransactionsScreen(
                     DialogPrimaryButton(
                         onClick = {
                             val idsToChange = selectedIds.filter { it.value }.keys
-                            transactions.filter { it.id in idsToChange }.forEach { txn ->
-                                onUpdateTransaction(txn.copy(isUserCategorized = false))
+                            val allTxns = transactions + archivedTransactions
+                            allTxns.filter { it.id in idsToChange }.forEach { txn ->
+                                val updated = txn.copy(isUserCategorized = false)
+                                val isArch = archiveCutoffDate != null && txn.date.isBefore(archiveCutoffDate)
+                                if (isArch) onUpdateArchivedTransaction(updated) else onUpdateTransaction(updated)
                             }
                             selectedIds.clear()
                             selectionMode = false
@@ -1561,12 +1632,11 @@ fun TransactionsScreen(
                     onClick = {
                         val catId = bulkSelectedCatId ?: return@DialogPrimaryButton
                         val idsToChange = selectedIds.filter { it.value }.keys
-                        transactions.filter { it.id in idsToChange }.forEach { txn ->
-                            onUpdateTransaction(
-                                txn.copy(
-                                    categoryAmounts = listOf(CategoryAmount(catId, txn.amount))
-                                )
-                            )
+                        val allTxns = transactions + archivedTransactions
+                        allTxns.filter { it.id in idsToChange }.forEach { txn ->
+                            val updated = txn.copy(categoryAmounts = listOf(CategoryAmount(catId, txn.amount)))
+                            val isArch = archiveCutoffDate != null && txn.date.isBefore(archiveCutoffDate)
+                            if (isArch) onUpdateArchivedTransaction(updated) else onUpdateTransaction(updated)
                         }
                         selectedIds.clear()
                         selectionMode = false
@@ -1585,9 +1655,12 @@ fun TransactionsScreen(
         )
     }
 
-    // Bulk merchant/source edit dialog
+    // Bulk merchant/source edit dialog (with optional description edit)
     if (showBulkMerchantEdit) {
         var newMerchant by remember { mutableStateOf("") }
+        var editDescription by remember { mutableStateOf(false) }
+        var newDescription by remember { mutableStateOf("") }
+        var showClearDescriptionConfirm by remember { mutableStateOf(false) }
         val count = selectedIds.count { it.value }
         AdAwareDialog(
             onDismissRequest = { showBulkMerchantEdit = false },
@@ -1621,6 +1694,44 @@ fun TransactionsScreen(
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { editDescription = !editDescription }
+                        ) {
+                            Checkbox(
+                                checked = editDescription,
+                                onCheckedChange = { editDescription = it },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.primary,
+                                    uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                                )
+                            )
+                            Text(
+                                S.transactions.editDescriptionAlso,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                        OutlinedTextField(
+                            value = newDescription,
+                            onValueChange = { newDescription = it },
+                            label = { Text(S.transactions.newDescription) },
+                            singleLine = true,
+                            enabled = editDescription,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                                disabledTextColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.38f),
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                disabledBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f),
+                                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                disabledLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.38f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     DialogFooter {
                         FlowRow(
@@ -1635,13 +1746,23 @@ fun TransactionsScreen(
                             DialogPrimaryButton(
                                 onClick = {
                                     if (newMerchant.isNotBlank()) {
-                                        val idsToChange = selectedIds.filter { it.value }.keys
-                                        transactions.filter { it.id in idsToChange }.forEach { txn ->
-                                            onUpdateTransaction(txn.copy(source = newMerchant.trim()))
+                                        if (editDescription && newDescription.isBlank()) {
+                                            showClearDescriptionConfirm = true
+                                        } else {
+                                            val idsToChange = selectedIds.filter { it.value }.keys
+                                            val allTxns = transactions + archivedTransactions
+                                            allTxns.filter { it.id in idsToChange }.forEach { txn ->
+                                                val updated = txn.copy(
+                                                    source = newMerchant.trim(),
+                                                    description = if (editDescription) newDescription.trim() else txn.description
+                                                )
+                                                val isArch = archiveCutoffDate != null && txn.date.isBefore(archiveCutoffDate)
+                                                if (isArch) onUpdateArchivedTransaction(updated) else onUpdateTransaction(updated)
+                                            }
+                                            selectedIds.clear()
+                                            selectionMode = false
+                                            showBulkMerchantEdit = false
                                         }
-                                        selectedIds.clear()
-                                        selectionMode = false
-                                        showBulkMerchantEdit = false
                                     }
                                 },
                                 enabled = newMerchant.isNotBlank()
@@ -1652,6 +1773,35 @@ fun TransactionsScreen(
                     }
                 }
             }
+        }
+
+        // Confirm clear description
+        if (showClearDescriptionConfirm) {
+            AdAwareAlertDialog(
+                onDismissRequest = { showClearDescriptionConfirm = false },
+                title = { Text(S.common.ok) },
+                text = { Text(S.transactions.clearDescriptionConfirm(count)) },
+                confirmButton = {
+                    DialogPrimaryButton(onClick = {
+                        val idsToChange = selectedIds.filter { it.value }.keys
+                        val allTxns = transactions + archivedTransactions
+                        allTxns.filter { it.id in idsToChange }.forEach { txn ->
+                            val updated = txn.copy(source = newMerchant.trim(), description = "")
+                            val isArch = archiveCutoffDate != null && txn.date.isBefore(archiveCutoffDate)
+                            if (isArch) onUpdateArchivedTransaction(updated) else onUpdateTransaction(updated)
+                        }
+                        selectedIds.clear()
+                        selectionMode = false
+                        showClearDescriptionConfirm = false
+                        showBulkMerchantEdit = false
+                    }) { Text(S.common.ok) }
+                },
+                dismissButton = {
+                    DialogSecondaryButton(onClick = { showClearDescriptionConfirm = false }) {
+                        Text(S.common.cancel)
+                    }
+                }
+            )
         }
     }
 
