@@ -1870,6 +1870,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // Refresh RTDB presence on resume — ensures we show online after Doze/network loss
+        if (isSyncConfigured && syncGroupId != null) {
+            try {
+                val gid = syncGroupId!!
+                val deviceName = GroupManager.getDeviceName(context)
+                val receiptPrefs = context.getSharedPreferences("receipt_sync_prefs", Context.MODE_PRIVATE)
+                com.syncbudget.app.data.sync.RealtimePresenceService.setupPresence(
+                    gid, localDeviceId, deviceName,
+                    photoCapable = isPaidUser || isSubscriber,
+                    uploadSpeedBps = receiptPrefs.getLong("lastUploadSpeedBps", 0L),
+                    uploadSpeedMeasuredAt = receiptPrefs.getLong("lastSpeedMeasuredAt", 0L)
+                )
+            } catch (e: Exception) {
+                android.util.Log.w("OnResume", "Presence refresh failed: ${e.message}")
+            }
+        }
+
         // Periodic maintenance (time-gated) — keeps long-lived ViewModels healthy
         val now = System.currentTimeMillis()
         if (now - prefs.getLong("lastMaintenanceCheck", 0L) > 24 * 60 * 60 * 1000L) {
