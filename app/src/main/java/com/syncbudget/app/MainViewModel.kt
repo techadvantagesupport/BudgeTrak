@@ -1183,6 +1183,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Reset all sync-related state to "off" (used by leave, dissolve, evict). */
+    fun resetSyncState() {
+        syncPrefs.edit().remove("catIdRemap").remove("lastSuccessfulSync").apply()
+        isSyncConfigured = false
+        syncGroupId = null
+        isSyncAdmin = false
+        syncStatus = "off"
+        lastSyncActivity = 0L
+        syncDevices = emptyList()
+        pendingAdminClaim = null
+        syncErrorMessage = null
+        syncProgressMessage = null
+    }
+
     /** Merge RTDB presence records into the current syncDevices roster. */
     private fun mergePresenceIntoRoster(presenceRecords: List<com.syncbudget.app.data.sync.PresenceRecord>) {
         val currentDevices = syncDevices
@@ -2094,32 +2108,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // ── Sync time display ──
-        // Immediately update when lastSyncActivity changes (mirrors old LaunchedEffect(lastSyncActivity))
-        viewModelScope.launch {
-            snapshotFlow { lastSyncActivity }.collect { syncTime ->
-                val elapsed = if (syncTime > 0) (System.currentTimeMillis() - syncTime) / 1000 else -1L
-                lastSyncTimeDisplay = when {
-                    elapsed < 0 -> null
-                    elapsed < 10 -> "just now"
-                    elapsed < 60 -> "${elapsed}s ago"
-                    elapsed < 3600 -> "${elapsed / 60}m ago"
-                    else -> "${elapsed / 3600}h ago"
-                }
+        fun formatElapsed(syncTime: Long): String? {
+            val elapsed = if (syncTime > 0) (System.currentTimeMillis() - syncTime) / 1000 else -1L
+            return when {
+                elapsed < 0 -> null
+                elapsed < 10 -> "just now"
+                elapsed < 60 -> "${elapsed}s ago"
+                elapsed < 3600 -> "${elapsed / 60}m ago"
+                else -> "${elapsed / 3600}h ago"
             }
         }
-        // Also refresh every 10s so elapsed time ticks forward ("5s ago" → "15s ago" → etc.)
         viewModelScope.launch {
-            while (true) {
-                delay(10_000)
-                val elapsed = if (lastSyncActivity > 0) (System.currentTimeMillis() - lastSyncActivity) / 1000 else -1L
-                lastSyncTimeDisplay = when {
-                    elapsed < 0 -> null
-                    elapsed < 10 -> "just now"
-                    elapsed < 60 -> "${elapsed}s ago"
-                    elapsed < 3600 -> "${elapsed / 60}m ago"
-                    else -> "${elapsed / 3600}h ago"
-                }
-            }
+            snapshotFlow { lastSyncActivity }.collect { lastSyncTimeDisplay = formatElapsed(it) }
+        }
+        viewModelScope.launch {
+            while (true) { delay(10_000); lastSyncTimeDisplay = formatElapsed(lastSyncActivity) }
         }
 
         // ── Sync group configuration (waits for data) ──
@@ -2196,34 +2199,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     syncPrefs.edit().putBoolean("migration_fix_stale_budgetstart_ledger_ui", true).apply()
                 }
             } catch (e: Exception) { android.util.Log.e("Migration", "fix_stale_budgetstart_ledger_ui failed", e) }
-
-            try {
-                if (!syncPrefs.getBoolean("migration_backfill_linked_amounts", false)) {
-                    var anyChanged = false
-                    val reMap = recurringExpenses.associateBy { it.id }
-                    val isMap = incomeSources.associateBy { it.id }
-                    transactions.forEachIndexed { i, txn ->
-                        var updated = txn
-                        if (txn.linkedRecurringExpenseId != null && txn.linkedRecurringExpenseAmount == 0.0) {
-                            val re = reMap[txn.linkedRecurringExpenseId]
-                            if (re != null) {
-                                updated = updated.copy(linkedRecurringExpenseAmount = re.amount)
-                                anyChanged = true
-                            }
-                        }
-                        if (txn.linkedIncomeSourceId != null && txn.linkedIncomeSourceAmount == 0.0) {
-                            val src = isMap[txn.linkedIncomeSourceId]
-                            if (src != null) {
-                                updated = updated.copy(linkedIncomeSourceAmount = src.amount)
-                                anyChanged = true
-                            }
-                        }
-                        if (updated !== txn) transactions[i] = updated
-                    }
-                    if (anyChanged) saveTransactions()
-                    syncPrefs.edit().putBoolean("migration_backfill_linked_amounts", true).apply()
-                }
-            } catch (e: Exception) { android.util.Log.e("Migration", "backfill_linked_amounts failed", e) }
 
             try {
                 if (!syncPrefs.getBoolean("migration_backfill_linked_amounts_v2", false)) {

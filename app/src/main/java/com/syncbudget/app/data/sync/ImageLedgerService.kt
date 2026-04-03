@@ -19,6 +19,9 @@ object ImageLedgerService {
     private val firestore: FirebaseFirestore get() = FirebaseFirestore.getInstance()
     private val storage: FirebaseStorage get() = FirebaseStorage.getInstance()
 
+    private val UUID_REGEX = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+    private fun isValidReceiptId(id: String) = UUID_REGEX.matches(id)
+
     // ── Cloud Storage ───────────────────────────────────────────
 
     /**
@@ -30,6 +33,7 @@ object ImageLedgerService {
         private set
 
     suspend fun uploadToCloud(groupId: String, receiptId: String, encryptedData: ByteArray): Boolean {
+        if (!isValidReceiptId(receiptId)) { Log.w(TAG, "Invalid receiptId: $receiptId"); return false }
         lastUploadError = null
         return try {
             withTimeout(60_000L) {
@@ -49,6 +53,7 @@ object ImageLedgerService {
      * Returns null if not found or on failure.
      */
     suspend fun downloadFromCloud(groupId: String, receiptId: String): ByteArray? {
+        if (!isValidReceiptId(receiptId)) { Log.w(TAG, "Invalid receiptId: $receiptId"); return null }
         return try {
             withTimeout(60_000L) {
                 val ref = storage.reference.child("groups/$groupId/receipts/$receiptId.enc")

@@ -68,7 +68,8 @@ class ReceiptSyncManager(
         txns = processPendingUploads(txns)
 
         // Step 2: Check flag clock and handle ledger-driven operations
-        txns = processLedgerOperations(txns, photoCapableDeviceIds, allDevices)
+        val ledgerCache = processLedgerOperations(txns, photoCapableDeviceIds, allDevices)
+        txns = ledgerCache.first
 
         // Step 3: Handle recovery for missing local files (with snapshot support)
         txns = processRecovery(txns, photoCapableDeviceIds, allDevices)
@@ -76,8 +77,8 @@ class ReceiptSyncManager(
         // Step 3b: Process snapshot lifecycle (build/download if requested)
         processSnapshotLifecycle(txns, photoCapableDeviceIds, allDevices)
 
-        // Step 4: Check for stale pruning duty (14-day cleanup)
-        processStalePruning(photoCapableDeviceIds, allDevices)
+        // Step 4: Check for stale pruning duty (14-day cleanup, reuses ledger if cached)
+        processStalePruning(photoCapableDeviceIds, allDevices, ledgerCache.second)
 
         return txns
     }
@@ -135,15 +136,16 @@ class ReceiptSyncManager(
 
     // ── Step 2: Ledger-Driven Operations ────────────────────────
 
+    /** Returns (updated transactions, ledger if read — null if flag clock unchanged). */
     private suspend fun processLedgerOperations(
         transactions: MutableList<Transaction>,
         photoCapableDeviceIds: Set<String>,
         allDevices: List<DeviceInfo>
-    ): MutableList<Transaction> {
+    ): Pair<MutableList<Transaction>, List<ImageLedgerEntry>?> {
         val remoteFlagClock = ImageLedgerService.getFlagClock(groupId)
         val localFlagClock = prefs.getLong(KEY_LAST_SEEN_FLAG_CLOCK, 0L)
 
-        if (remoteFlagClock <= localFlagClock) return transactions
+        if (remoteFlagClock <= localFlagClock) return transactions to null
 
         syncLog("Receipt sync: flag clock changed ($localFlagClock -> $remoteFlagClock), pulling ledger")
         val ledger = ImageLedgerService.getFullLedger(groupId)
@@ -178,7 +180,7 @@ class ReceiptSyncManager(
         }
 
         prefs.edit().putLong(KEY_LAST_SEEN_FLAG_CLOCK, remoteFlagClock).apply()
-        return transactions
+        return transactions to ledger
     }
 
     private suspend fun handleReuploadRequest(
@@ -606,7 +608,8 @@ class ReceiptSyncManager(
 
     private suspend fun processStalePruning(
         photoCapableDeviceIds: Set<String>,
-        allDevices: List<DeviceInfo>
+        allDevices: List<DeviceInfo>,
+        cachedLedger: List<ImageLedgerEntry>? = null
     ) {
         val now = System.currentTimeMillis()
 
@@ -625,7 +628,7 @@ class ReceiptSyncManager(
 
         // Perform cleanup (idempotent — safe if two devices race)
         syncLog("Receipt sync: performing 14-day stale cleanup")
-        val ledger = ImageLedgerService.getFullLedger(groupId)
+        val ledger = cachedLedger ?: ImageLedgerService.getFullLedger(groupId)
         var pruned = 0
 
         for (entry in ledger) {

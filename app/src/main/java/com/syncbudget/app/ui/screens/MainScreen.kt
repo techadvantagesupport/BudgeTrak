@@ -1081,7 +1081,7 @@ private fun SavingsSuperchargeDialog(
                             )
                         }
                     } else {
-                        items(eligibleGoals) { goal ->
+                        items(eligibleGoals, key = { it.id }) { goal ->
                             val remaining = goal.targetAmount - goal.totalSavedSoFar
                             val progress = if (goal.targetAmount > 0) {
                                 (goal.totalSavedSoFar / goal.targetAmount).toFloat().coerceIn(0f, 1f)

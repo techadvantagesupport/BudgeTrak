@@ -117,7 +117,9 @@ class WidgetTransactionActivity : ComponentActivity() {
                     if (t != null) sb.appendLine("Caused by:")
                 }
                 val dir = com.syncbudget.app.data.BackupManager.getSupportDir()
-                java.io.File(dir, "crash_log.txt").appendText(sb.toString())
+                val crashFile = java.io.File(dir, "crash_log.txt")
+                if (crashFile.exists() && crashFile.length() > 100_000) crashFile.writeText("")
+                crashFile.appendText(sb.toString())
             } catch (_: Exception) {}
             defaultHandler?.uncaughtException(thread, throwable)
         }

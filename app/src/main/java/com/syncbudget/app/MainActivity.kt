@@ -2203,18 +2203,7 @@ class MainActivity : ComponentActivity() {
                     // Dispose listeners BEFORE leaveGroup to prevent onDisconnect re-writing RTDB
                     vm.disposeSyncListeners()
                     GroupManager.leaveGroup(context)
-                    vm.syncPrefs.edit()
-                        .remove("catIdRemap")
-                        .remove("lastSuccessfulSync")
-                        .apply()
-                    vm.isSyncConfigured = false
-                    vm.syncGroupId = null
-                    vm.isSyncAdmin = false
-                    vm.syncStatus = "off"
-                    vm.lastSyncActivity = 0L
-                    vm.syncDevices = emptyList()
-                    vm.pendingAdminClaim = null
-                    vm.syncErrorMessage = null
+                    vm.resetSyncState()
                 }
             },
             onDissolveGroup = {
@@ -2229,38 +2218,14 @@ class MainActivity : ComponentActivity() {
                                 vm.syncProgressMessage = msg
                             }
                             android.util.Log.d("Sync", "Group dissolved successfully")
-                            vm.syncPrefs.edit()
-                                .remove("catIdRemap")
-                                .remove("lastSuccessfulSync")
-                                .apply()
-                            vm.isSyncConfigured = false
-                            vm.syncGroupId = null
-                            vm.isSyncAdmin = false
-                            vm.syncStatus = "off"
-                            vm.lastSyncActivity = 0L
-                            vm.syncDevices = emptyList()
-                            vm.pendingAdminClaim = null
-                            vm.syncErrorMessage = null
-                            vm.syncProgressMessage = null
+                            vm.resetSyncState()
                             vm.syncEvictionMessage = null // admin initiated — no popup needed
                         } catch (e: Exception) {
                             android.util.Log.e("Sync", "Dissolve failed, falling back to local leave", e)
                             try {
                                 GroupManager.leaveGroup(context, localOnly = true)
                             } catch (_: Exception) {}
-                            vm.syncPrefs.edit()
-                                .remove("catIdRemap")
-                                .remove("lastSuccessfulSync")
-                                .apply()
-                            vm.isSyncConfigured = false
-                            vm.syncGroupId = null
-                            vm.isSyncAdmin = false
-                            vm.syncStatus = "off"
-                            vm.lastSyncActivity = 0L
-                            vm.syncDevices = emptyList()
-                            vm.pendingAdminClaim = null
-                            vm.syncErrorMessage = null
-                            vm.syncProgressMessage = null
+                            vm.resetSyncState()
                             toastState.show("Group left locally (server unreachable)")
                         }
                     }
