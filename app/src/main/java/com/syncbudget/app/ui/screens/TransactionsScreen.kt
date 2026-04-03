@@ -1110,9 +1110,12 @@ fun TransactionsScreen(
                     val txnContext = LocalContext.current
                     val photoScope = rememberCoroutineScope()
                     if (isPaidUser) {
-                        val thumbnails = remember(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5, photoThumbRefreshKey) {
-                            listOf(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5)
-                                .map { id -> id?.let { ReceiptManager.loadThumbnail(txnContext, it) } }
+                        val receiptIds = listOf(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5)
+                        var thumbnails by remember { mutableStateOf(receiptIds.map<String?, android.graphics.Bitmap?> { null }) }
+                        LaunchedEffect(transaction.receiptId1, transaction.receiptId2, transaction.receiptId3, transaction.receiptId4, transaction.receiptId5, photoThumbRefreshKey) {
+                            thumbnails = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                receiptIds.map { id -> id?.let { ReceiptManager.loadThumbnail(txnContext, it) } }
+                            }
                         }
                         SwipeablePhotoRow(
                             transactionId = transaction.id,
