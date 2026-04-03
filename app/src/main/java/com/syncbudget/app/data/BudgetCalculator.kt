@@ -233,6 +233,22 @@ object BudgetCalculator {
         }
     }
 
+    /** Count elapsed budget periods between two dates, aligned to budget boundaries for weekly mode. */
+    fun countElapsedPeriods(from: LocalDate, to: LocalDate, budgetPeriod: BudgetPeriod, resetDayOfWeek: Int = 1): Int {
+        if (!to.isAfter(from)) return 0
+        return when (budgetPeriod) {
+            BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(from, to).toInt()
+            BudgetPeriod.WEEKLY -> {
+                // Align both dates to their week boundary to avoid mid-week miscount
+                val targetDay = java.time.DayOfWeek.of(resetDayOfWeek)
+                val alignedFrom = from.with(java.time.temporal.TemporalAdjusters.previousOrSame(targetDay))
+                val alignedTo = to.with(java.time.temporal.TemporalAdjusters.previousOrSame(targetDay))
+                ChronoUnit.WEEKS.between(alignedFrom, alignedTo).toInt()
+            }
+            BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(from, to).toInt()
+        }.coerceAtLeast(0)
+    }
+
     fun currentPeriodStart(
         budgetPeriod: BudgetPeriod,
         resetDayOfWeek: Int,
@@ -268,17 +284,14 @@ object BudgetCalculator {
     fun activeAmortizationDeductions(
         entries: List<AmortizationEntry>,
         budgetPeriod: BudgetPeriod,
-        today: LocalDate = LocalDate.now()
+        today: LocalDate = LocalDate.now(),
+        resetDayOfWeek: Int = 1
     ): Double {
         var total = 0.0
         for (entry in entries) {
             if (entry.isPaused) continue
             if (entry.totalPeriods <= 0) continue
-            val elapsed = when (budgetPeriod) {
-                BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(entry.startDate, today).toInt()
-                BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(entry.startDate, today).toInt()
-                BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(entry.startDate, today).toInt()
-            }.coerceAtLeast(0)
+            val elapsed = countElapsedPeriods(entry.startDate, today, budgetPeriod, resetDayOfWeek)
             // Active when elapsed periods < totalPeriods (elapsed == totalPeriods means fully amortized)
             if (elapsed < entry.totalPeriods) {
                 // Use cumulative approach to avoid rounding drift:
@@ -295,7 +308,8 @@ object BudgetCalculator {
     fun activeSavingsGoalDeductions(
         goals: List<SavingsGoal>,
         budgetPeriod: BudgetPeriod,
-        today: LocalDate = LocalDate.now()
+        today: LocalDate = LocalDate.now(),
+        resetDayOfWeek: Int = 1
     ): Double {
         var total = 0.0
         for (goal in goals) {
@@ -306,11 +320,7 @@ object BudgetCalculator {
             if (goal.targetDate != null) {
                 // Target-date type: auto-calculate deduction from remaining time
                 if (!today.isBefore(goal.targetDate)) continue
-                val periods = when (budgetPeriod) {
-                    BudgetPeriod.DAILY -> ChronoUnit.DAYS.between(today, goal.targetDate)
-                    BudgetPeriod.WEEKLY -> ChronoUnit.WEEKS.between(today, goal.targetDate)
-                    BudgetPeriod.MONTHLY -> ChronoUnit.MONTHS.between(today, goal.targetDate)
-                }
+                val periods = countElapsedPeriods(today, goal.targetDate, budgetPeriod, resetDayOfWeek).toLong()
                 if (periods <= 0) continue
                 total += roundCents(remaining / periods.toDouble())
             } else {
@@ -378,12 +388,13 @@ object BudgetCalculator {
         budgetPeriod: BudgetPeriod,
         isManualBudgetEnabled: Boolean,
         manualBudgetAmount: Double,
-        today: LocalDate = LocalDate.now()
+        today: LocalDate = LocalDate.now(),
+        resetDayOfWeek: Int = 1
     ): Double {
         val base = if (isManualBudgetEnabled) manualBudgetAmount
                    else calculateSafeBudgetAmount(incomeSources, recurringExpenses, budgetPeriod, today)
-        val amortDed = activeAmortizationDeductions(amortizationEntries, budgetPeriod, today)
-        val savingsDed = activeSavingsGoalDeductions(savingsGoals, budgetPeriod, today)
+        val amortDed = activeAmortizationDeductions(amortizationEntries, budgetPeriod, today, resetDayOfWeek)
+        val savingsDed = activeSavingsGoalDeductions(savingsGoals, budgetPeriod, today, resetDayOfWeek)
         val accelDed = acceleratedREExtraDeductions(recurringExpenses, budgetPeriod, today)
         return roundCents(maxOf(0.0, base - amortDed - savingsDed - accelDed))
     }

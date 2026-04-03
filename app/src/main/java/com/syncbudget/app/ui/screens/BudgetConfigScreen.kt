@@ -1128,7 +1128,7 @@ private fun BudgetResetDialog(
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     if (budgetPeriod == BudgetPeriod.WEEKLY) {
-                        val weeklyDays = listOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY)
+                        val weeklyDays = DayOfWeek.entries
                         ExposedDropdownMenuBox(
                             expanded = dayOfWeekExpanded,
                             onExpandedChange = { dayOfWeekExpanded = it }

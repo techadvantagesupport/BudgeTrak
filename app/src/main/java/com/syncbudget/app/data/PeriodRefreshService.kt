@@ -82,26 +82,28 @@ object PeriodRefreshService {
         val amortizationEntries = AmortizationRepository.load(context)
         val transactions = TransactionRepository.load(context)
 
-        // ── Compute budgetAmount (same formula as MainActivity derivedStateOf) ──
-        val activeIS = incomeSources.active
-        val activeRE = recurringExpenses.active
-        val activeAE = amortizationEntries.active
-        val activeSG = savingsGoals.active
-        val budgetAmount = BudgetCalculator.computeFullBudgetAmount(
-            activeIS, activeRE, activeAE, activeSG,
-            config.budgetPeriod, config.isManualBudgetEnabled,
-            config.manualBudgetAmount, today
-        )
-
-        // ── Create one ledger entry per missed period ──
+        // ── Per-period catch-up: ledger + SG + RE in one loop ──
+        // budgetAmount recomputed each period so SG/RE changes are reflected
         val addedLedgerEntries = mutableListOf<PeriodLedgerEntry>()
+        val activeIS = incomeSources.active
+        val activeAE = amortizationEntries.active
+        val sgOriginals = savingsGoals.map { it }
+        val reOriginals = recurringExpenses.map { it }
+        var reChanged = false
         for (period in 0 until missedPeriods) {
             val periodsBack = (missedPeriods - 1 - period).toLong()
             val periodDate = subtractPeriods(currentPeriod, config.budgetPeriod, periodsBack)
+
+            // Ledger entry with budgetAmount from current (updated) SG/RE state
             val alreadyRecorded = periodLedger.any {
                 it.periodStartDate.toLocalDate() == periodDate
             }
             if (!alreadyRecorded) {
+                val budgetAmount = BudgetCalculator.computeFullBudgetAmount(
+                    activeIS, recurringExpenses.active, activeAE, savingsGoals.active,
+                    config.budgetPeriod, config.isManualBudgetEnabled,
+                    config.manualBudgetAmount, periodDate
+                )
                 val entry = PeriodLedgerEntry(
                     periodStartDate = periodDate.atStartOfDay(),
                     appliedAmount = budgetAmount,
@@ -110,19 +112,8 @@ object PeriodRefreshService {
                 periodLedger.add(entry)
                 addedLedgerEntries.add(entry)
             }
-        }
-        PeriodLedgerRepository.save(context, periodLedger)
 
-        // ── Update savings goals totalSavedSoFar for non-paused, non-complete items ──
-        // Use the correct date for each catch-up period so periodsLeft
-        // decreases properly (instead of using today for all iterations).
-        // NO lamportClock.tick() -- savings goal accrual is deterministic.
-        // Both devices compute the same value from the same data, so
-        // clock advancement would create unnecessary divergence.
-        val sgOriginals = savingsGoals.map { it }
-        for (period in 0 until missedPeriods) {
-            val periodsBack = (missedPeriods - 1 - period).toLong()
-            val periodDate = subtractPeriods(currentPeriod, config.budgetPeriod, periodsBack)
+            // Update savings goals
             savingsGoals.forEachIndexed { idx, goal ->
                 if (!goal.isPaused && !goal.deleted) {
                     val remaining = goal.targetAmount - goal.totalSavedSoFar
@@ -156,22 +147,8 @@ object PeriodRefreshService {
                     }
                 }
             }
-        }
-        SavingsGoalRepository.save(context, savingsGoals)
 
-        // Collect only savings goals that actually changed
-        val changedSG = savingsGoals.filterIndexed { idx, goal ->
-            goal != sgOriginals[idx]
-        }
-
-        // ── Update RE set-aside tracking for each catch-up period ──
-        // NO lamportClock.tick() -- set-aside accrual is deterministic.
-        // Both devices compute the same value from the same RE data.
-        val reOriginals = recurringExpenses.map { it }
-        var reChanged = false
-        for (period in 0 until missedPeriods) {
-            val periodsBack = (missedPeriods - 1 - period).toLong()
-            val periodDate = subtractPeriods(currentPeriod, config.budgetPeriod, periodsBack)
+            // Update RE set-aside tracking
             val periodEnd = addOnePeriod(periodDate, config.budgetPeriod)
             recurringExpenses.forEachIndexed { idx, re ->
                 if (re.deleted) return@forEachIndexed
@@ -180,7 +157,6 @@ object PeriodRefreshService {
                     re.monthDay1, re.monthDay2, periodDate, periodEnd.minusDays(1)
                 )
                 if (occurrences.isNotEmpty()) {
-                    // Due date reached: reset set-aside, deactivate accelerated
                     recurringExpenses[idx] = re.copy(
                         setAsideSoFar = 0.0,
                         isAccelerated = if (re.isAccelerated) false else re.isAccelerated
@@ -208,7 +184,14 @@ object PeriodRefreshService {
                 }
             }
         }
+        PeriodLedgerRepository.save(context, periodLedger)
+        SavingsGoalRepository.save(context, savingsGoals)
         if (reChanged) RecurringExpenseRepository.save(context, recurringExpenses)
+
+        // Collect changed records
+        val changedSG = savingsGoals.filterIndexed { idx, goal ->
+            goal != sgOriginals[idx]
+        }
 
         // Collect only recurring expenses that actually changed
         val changedRE = recurringExpenses.filterIndexed { idx, re ->

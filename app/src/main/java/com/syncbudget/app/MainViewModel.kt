@@ -337,7 +337,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Budget "today" respects resetHour in DAILY mode: before resetHour
     // we're still in yesterday's period. WEEKLY/MONTHLY reset at midnight.
     val budgetToday by derivedStateOf {
-        val now = java.time.LocalDateTime.now()
+        val tz = if (isSyncConfigured && sharedSettings.familyTimezone.isNotEmpty())
+            java.time.ZoneId.of(sharedSettings.familyTimezone) else java.time.ZoneId.systemDefault()
+        val now = java.time.Instant.now().atZone(tz)
         if (budgetPeriod == BudgetPeriod.DAILY && resetHour > 0 && now.hour < resetHour)
             now.toLocalDate().minusDays(1)
         else
@@ -358,10 +360,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val budgetAmount by derivedStateOf {
         val base = if (isManualBudgetEnabled) manualBudgetAmount else safeBudgetAmount
         val amortDeductions = BudgetCalculator.activeAmortizationDeductions(
-            activeAmortizationEntries, budgetPeriod, budgetToday
+            activeAmortizationEntries, budgetPeriod, budgetToday, resetDayOfWeek
         )
         val savingsDeductions = BudgetCalculator.activeSavingsGoalDeductions(
-            activeSavingsGoals, budgetPeriod, budgetToday
+            activeSavingsGoals, budgetPeriod, budgetToday, resetDayOfWeek
         )
         val acceleratedDeductions = BudgetCalculator.acceleratedREExtraDeductions(
             activeRecurringExpenses, budgetPeriod, budgetToday
@@ -2370,7 +2372,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val nextBoundary = when (budgetPeriod) {
                     BudgetPeriod.DAILY -> currentStart.plusDays(1).atTime(resetHour, 0)
                     BudgetPeriod.WEEKLY -> currentStart.plusWeeks(1).atStartOfDay()
-                    BudgetPeriod.MONTHLY -> currentStart.plusMonths(1).atStartOfDay()
+                    BudgetPeriod.MONTHLY -> {
+                        val nextMonth = currentStart.plusMonths(1)
+                        val clampedDay = resetDayOfMonth.coerceAtMost(nextMonth.lengthOfMonth())
+                        nextMonth.withDayOfMonth(clampedDay).atStartOfDay()
+                    }
                 }
                 val nowMs = System.currentTimeMillis()
                 val boundaryMs = nextBoundary.atZone(tz).toInstant().toEpochMilli()

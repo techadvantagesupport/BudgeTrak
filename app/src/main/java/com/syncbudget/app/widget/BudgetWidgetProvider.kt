@@ -73,7 +73,7 @@ class BudgetWidgetProvider : AppWidgetProvider() {
             val budgetPeriod = try {
                 BudgetPeriod.valueOf(prefs.getString("budgetPeriod", "DAILY") ?: "DAILY")
             } catch (_: Exception) { BudgetPeriod.DAILY }
-            val resetHour = prefs.getInt("resetHour", 0)
+            val resetHour = if (budgetPeriod == BudgetPeriod.DAILY) prefs.getInt("resetHour", 0) else 0
             val resetDayOfWeek = prefs.getInt("resetDayOfWeek", 7)
             val resetDayOfMonth = prefs.getInt("resetDayOfMonth", 1)
 
