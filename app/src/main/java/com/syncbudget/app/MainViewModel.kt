@@ -1060,6 +1060,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!isSyncConfigured) return // already evicted or never synced
         val gid = syncGroupId
         android.util.Log.w("SyncEviction", "Evicted: $reason (group=$gid)")
+        BudgeTrakApplication.tokenLog("EVICTED: $reason (group=$gid) caller=${Thread.currentThread().stackTrace.getOrNull(3)?.let { "${it.className.substringAfterLast('.')}.${it.methodName}" } ?: "unknown"}")
 
         // Clean up RTDB presence
         if (gid != null) {

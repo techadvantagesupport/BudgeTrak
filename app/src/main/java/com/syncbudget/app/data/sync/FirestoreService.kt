@@ -116,8 +116,18 @@ object FirestoreService {
 
     suspend fun getGroupHealthStatus(groupId: String): GroupHealthStatus = withTimeout(OP_TIMEOUT_MS) {
         val doc = db.collection("groups").document(groupId).get().await()
+        val exists = doc.exists()
+        val status = doc.getString("status")
+        val fromCache = doc.metadata.isFromCache
+        // Only trust "not exists" from server — cache miss is not dissolution
+        val isDissolved = if (!exists) !fromCache else status == "dissolved"
+        if (isDissolved) {
+            com.syncbudget.app.BudgeTrakApplication.tokenLog(
+                "getGroupHealthStatus: isDissolved=$isDissolved exists=$exists status=$status fromCache=$fromCache groupId=$groupId"
+            )
+        }
         GroupHealthStatus(
-            isDissolved = !doc.exists() || doc.getString("status") == "dissolved",
+            isDissolved = isDissolved,
             subscriptionExpiry = doc.getLong("subscriptionExpiry") ?: 0L
         )
     }
