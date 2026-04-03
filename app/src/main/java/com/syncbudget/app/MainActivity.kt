@@ -61,7 +61,6 @@ import com.syncbudget.app.data.sync.ImageLedgerService
 import com.syncbudget.app.data.sync.EncryptedDocSerializer
 import com.syncbudget.app.data.sync.FirestoreDocService
 import kotlinx.coroutines.CoroutineScope
-import com.syncbudget.app.data.sync.SubscriptionReminderReceiver
 import kotlinx.coroutines.launch
 import com.syncbudget.app.data.BackupManager
 import com.syncbudget.app.data.DiagDumpBuilder

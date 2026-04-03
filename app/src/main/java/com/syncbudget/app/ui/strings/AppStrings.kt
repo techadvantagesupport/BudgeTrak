@@ -580,6 +580,7 @@ data class SyncStrings(
     val dissolveGroup: String,
     val evictionRemoved: String,
     val evictionDissolved: String,
+    val subscriptionGraceWarning: (daysLeft: Int) -> String,
     val claimVotePrompt: (claimantName: String) -> String,
     val claimAccept: String,
     val claimReject: String,

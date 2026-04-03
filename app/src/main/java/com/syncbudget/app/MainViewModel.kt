@@ -70,7 +70,6 @@ import com.syncbudget.app.ui.strings.AppStrings
 import com.syncbudget.app.ui.strings.EnglishStrings
 import com.syncbudget.app.ui.strings.SpanishStrings
 import com.syncbudget.app.data.sync.AdminClaim
-import com.syncbudget.app.data.sync.SubscriptionReminderReceiver
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -1741,20 +1740,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val gracePeriodMs = 7L * 24 * 60 * 60 * 1000
                     val elapsed = System.currentTimeMillis() - expiry
                     if (elapsed > gracePeriodMs) {
-                        if (!groupHealth.isDissolved) {
+                        // Grace period over — admin dissolves, non-admin evicts locally
+                        if (isSyncAdmin && !groupHealth.isDissolved) {
+                            try { disposeSyncListeners() } catch (_: Exception) {}
                             GroupManager.dissolveGroup(context, groupId)
                         }
-                        isSyncConfigured = false
-                        syncGroupId = null
-                        isSyncAdmin = false
-                        syncStatus = "off"
-                        syncDevices = emptyList(); syncPrefs.edit().remove("cachedDeviceRoster").apply()
+                        evictFromSync(strings.sync.evictionDissolved)
                         return@launch
                     } else if (elapsed > 0) {
-                        syncErrorMessage = strings.sync.subscriptionExpiredNotice
-                        SubscriptionReminderReceiver.scheduleNextReminder(context)
-                    } else {
-                        SubscriptionReminderReceiver.cancelReminder(context)
+                        // During grace period — dashboard popup once per day
+                        val lastWarning = prefs.getLong("lastSubscriptionWarning", 0L)
+                        if (System.currentTimeMillis() - lastWarning > 24 * 60 * 60 * 1000L) {
+                            prefs.edit().putLong("lastSubscriptionWarning", System.currentTimeMillis()).apply()
+                            val daysLeft = ((gracePeriodMs - elapsed) / (24 * 60 * 60 * 1000L)).toInt().coerceAtLeast(1)
+                            syncEvictionMessage = strings.sync.subscriptionGraceWarning(daysLeft)
+                        }
                     }
                 }
 
