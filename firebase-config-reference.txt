@@ -1,6 +1,6 @@
 ================================================================================
   BudgeTrak — Firebase Configuration Reference
-  Updated: March 31, 2026
+  Updated: April 3, 2026
   Project ID: sync-23ce9
   Project Name: SecureSync (Prod)
   Plan: Blaze (pay-as-you-go)
@@ -13,18 +13,18 @@ developer. Always verify against the live console after major Firebase changes.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AUDIT SUMMARY (verified March 31, 2026)
+  AUDIT SUMMARY (verified April 3, 2026)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   [✓] Blaze plan active
   [✓] Firebase Anonymous Auth enabled
-  [✓] Firebase Storage enabled with auth-required rules
+  [✓] Firebase Storage enabled with membership-based rules
   [✓] TTL policies active: groups/lastActivity (90d), pairing_codes/expiresAt
   [✓] Realtime Database enabled (presence system)
-  [✓] RTDB security rules deployed
+  [✓] RTDB security rules deployed (auth-required reads, validated writes)
   [✓] Automatic Firestore indexes enabled
-  [✓] Firestore security rules published (all ops require request.auth != null)
-  [✓] Cloud Function cleanupGroupData deployed (cascade cleanup on TTL delete)
+  [✓] Firestore security rules: membership-based access (members/{auth.uid})
+  [✓] Cloud Function cleanupGroupData deployed (incl. members subcollection)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -46,91 +46,70 @@ developer. Always verify against the live console after major Firebase changes.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Console path: Firestore Database → Rules tab
-  Verified: March 31, 2026 (from screenshot)
+  Verified: April 3, 2026
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isMember(groupId) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+
     match /groups/{groupId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow update, delete: if isMember(groupId);
 
-      match /deltas/{deltaId} {
-        allow read: if request.auth != null;
-        allow create: if request.auth != null
-                      && request.resource.data.encryptedPayload is string
-                      && request.resource.data.encryptedPayload.size() < 1048576;
-        allow delete: if request.auth != null;
+      match /members/{uid} {
+        allow create: if request.auth != null && request.auth.uid == uid;
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow delete: if request.auth != null &&
+          (request.auth.uid == uid || isMember(groupId));
       }
 
-      match /devices/{deviceId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
-        allow delete: if request.auth != null;
-      }
-
-      match /snapshots/{snapshotId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
-        allow delete: if request.auth != null;
-      }
-
-      match /adminClaim/{claimId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
-        allow delete: if request.auth != null;
-      }
-
-      match /imageLedger/{entryId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
-        allow delete: if request.auth != null;
-      }
-
-      // Firestore-native sync collections (encrypted doc per record)
       match /transactions/{docId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
+        allow read, write: if isMember(groupId);
       }
       match /recurringExpenses/{docId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
+        allow read, write: if isMember(groupId);
       }
       match /incomeSources/{docId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
+        allow read, write: if isMember(groupId);
       }
       match /savingsGoals/{docId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
+        allow read, write: if isMember(groupId);
       }
       match /amortizationEntries/{docId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
+        allow read, write: if isMember(groupId);
       }
       match /categories/{docId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
+        allow read, write: if isMember(groupId);
       }
       match /periodLedger/{docId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
+        allow read, write: if isMember(groupId);
       }
       match /sharedSettings/{docId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
+        allow read, write: if isMember(groupId);
+      }
+      match /devices/{docId} {
+        allow read, write: if isMember(groupId);
+      }
+      match /imageLedger/{docId} {
+        allow read, write: if isMember(groupId);
+      }
+      match /adminClaim/{docId} {
+        allow read, write: if isMember(groupId);
       }
     }
 
     match /pairing_codes/{code} {
-      allow read: if request.auth != null;
       allow create: if request.auth != null
-                    && request.resource.data.keys().hasAll(['groupId', 'encryptedKey', 'expiresAt']);
-      allow delete: if request.auth != null;
+        && request.resource.data.keys().hasAll(['groupId', 'encryptedKey', 'expiresAt'])
+        && request.resource.data.expiresAt is timestamp;
+      allow read, delete: if request.auth != null;
     }
 
     match /{document=**} {
@@ -141,16 +120,18 @@ service cloud.firestore {
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   SECURITY NOTES:
-  - All operations require Firebase Anonymous Auth (request.auth != null)
+  - Membership-based access: isMember() checks exists(members/{auth.uid})
+  - members/{uid} self-registration allowed (create own doc with auth.uid)
+  - All data subcollections require membership for read/write
+  - Group doc: anyone can create, only members can update/delete
   - All data is end-to-end encrypted (ChaCha20-Poly1305). Even with
     Firestore access, an attacker cannot read financial data.
   - Pairing codes are one-time use, deleted on redemption, expire in 10 min.
   - Group IDs are random 12-char hex — effectively unguessable secrets.
-  - Delta payload capped at 1 MB.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  2b. FIREBASE STORAGE RULES (verified March 31, 2026)
+  2b. FIREBASE STORAGE RULES (verified April 3, 2026)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Console path: Storage → Rules tab
@@ -160,14 +141,19 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     match /groups/{groupId}/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  Scoped to groups/{groupId}/ — requires auth. All receipt photos and
-  snapshot archives live under this path.
+  Membership-based: cross-service rule checks Firestore members subcollection.
+  Only group members can upload/download receipt photos and snapshots.
+  Default deny for all other paths.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -193,16 +179,17 @@ service firebase.storage {
           uploadSpeedBps       : number
           uploadSpeedMeasuredAt: number
 
-  ── SECURITY RULES (deployed March 31, 2026) ────────────────────────────────
+  ── SECURITY RULES (deployed April 3, 2026) ─────────────────────────────────
 
   {
     "rules": {
       "groups": {
         "$groupId": {
           "presence": {
-            ".read": true,
+            ".read": "auth != null",
             "$deviceId": {
-              ".write": true
+              ".write": "auth != null",
+              ".validate": "newData.hasChildren(['online', 'lastSeen', 'deviceName']) && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber()"
             }
           }
         }
@@ -213,8 +200,8 @@ service firebase.storage {
   }
 
   NOTES:
-  - Read at presence level (not per-device) allows listing all devices
-  - Write restricted to per-device path
+  - Read requires auth (was public before — fixed April 3)
+  - Write requires auth + validates data shape (prevents garbage writes)
   - Top-level .read/.write false prevents enumeration of all groups
   - Group ID is the access secret (same model as Firestore)
 
@@ -289,7 +276,7 @@ service firebase.storage {
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  6. FIRESTORE DATA STRUCTURE REFERENCE (v2.4)
+  6. FIRESTORE DATA STRUCTURE REFERENCE (v2.5)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   groups/
@@ -321,6 +308,11 @@ service firebase.storage {
           enc_*          : string
           updatedAt      : Timestamp
           lastEditBy     : string
+
+      members/                              # Security rules membership
+        {auth.uid}/
+          deviceId       : string           # Correlated device ID
+          joinedAt       : number           # Epoch millis
 
       devices/
         {deviceId}/
