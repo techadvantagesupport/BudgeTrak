@@ -1717,7 +1717,8 @@ class MainActivity : ComponentActivity() {
             archiveThreshold = vm.archiveThreshold,
             onArchiveThresholdChange = { threshold ->
                 vm.archiveThreshold = threshold
-                vm.prefs.edit().putInt("archiveThreshold", threshold).apply()
+                vm.sharedSettings = vm.sharedSettings.copy(archiveThreshold = threshold)
+                vm.saveSharedSettings()
             },
             lastArchiveDate = vm.lastArchiveDateDisplay,
             lastArchiveCount = vm.lastArchiveCountDisplay,
@@ -1748,7 +1749,7 @@ class MainActivity : ComponentActivity() {
             matchDollar = vm.matchDollar,
             matchChars = vm.matchChars,
             chartPalette = vm.chartPalette,
-            showAttribution = vm.sharedSettings.showAttribution && vm.isSyncConfigured,
+            showAttribution = vm.showAttribution && vm.isSyncConfigured,
             deviceNameMap = run {
                 val roster = try {
                     val obj = org.json.JSONObject(vm.sharedSettings.deviceRoster)
@@ -1972,10 +1973,10 @@ class MainActivity : ComponentActivity() {
                 vm.sharedSettings = vm.sharedSettings.copy(familyTimezone = tz, lastChangedBy = vm.localDeviceId)
                 vm.saveSharedSettings()
             },
-            showAttribution = vm.sharedSettings.showAttribution,
+            showAttribution = vm.showAttribution,
             onShowAttributionChange = { enabled ->
-                vm.sharedSettings = vm.sharedSettings.copy(showAttribution = enabled, lastChangedBy = vm.localDeviceId)
-                vm.saveSharedSettings()
+                vm.showAttribution = enabled
+                vm.prefs.edit().putBoolean("showAttribution", enabled).apply()
             },
             orphanedDeviceIds = remember(vm.transactions.toList(), vm.syncDevices, vm.localDeviceId, vm.sharedSettings.deviceRoster) {
                 val roster = try {

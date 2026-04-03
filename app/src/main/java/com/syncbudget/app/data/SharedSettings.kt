@@ -23,5 +23,6 @@ data class SharedSettings(
     val lastChangedBy: String = "",
     val archiveCutoffDate: String? = null,    // ISO date for transaction archiving
     val carryForwardBalance: Double = 0.0,    // cumulative cash effect of archived transactions
-    val lastArchiveInfo: String? = null        // JSON: {"date","count","totalArchived"}
+    val lastArchiveInfo: String? = null,       // JSON: {"date","count","totalArchived"}
+    val archiveThreshold: Int = 10_000        // 0 = off, synced across devices
 )

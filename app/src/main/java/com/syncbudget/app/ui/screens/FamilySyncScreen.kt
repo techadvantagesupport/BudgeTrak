@@ -416,18 +416,18 @@ fun FamilySyncScreen(
                     }
                 }
 
-                // Attribution toggle (admin-only)
-                if (isAdmin) {
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = S.sync.showAttributionLabel,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f)
-                            )
+                // Attribution toggle (per-device preference)
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = S.sync.showAttributionLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isAdmin) {
                             IconButton(
                                 onClick = {
                                     onPurgeStaleRoster()
@@ -443,11 +443,11 @@ fun FamilySyncScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
-                            Switch(
-                                checked = showAttribution,
-                                onCheckedChange = onShowAttributionChange
-                            )
                         }
+                        Switch(
+                            checked = showAttribution,
+                            onCheckedChange = onShowAttributionChange
+                        )
                     }
                 }
 
@@ -498,7 +498,12 @@ fun FamilySyncScreen(
                                             showRemoveDialog = true
                                         }
                                     }
-                                ) else Modifier
+                                ) else if (device.deviceId == localDeviceId) Modifier.clickable {
+                                    // Non-admin can rename their own device
+                                    renameTargetDevice = device
+                                    renameInput = device.deviceName
+                                    showRenameDialog = true
+                                } else Modifier
                             )
                     ) {
                         Row(

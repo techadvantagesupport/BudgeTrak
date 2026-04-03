@@ -303,6 +303,7 @@ fun SettingsScreen(
                             value = currencySymbol,
                             onValueChange = {},
                             readOnly = true,
+                            enabled = !isLocked,
                             label = { Text(S.settings.currency) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = currencyExpanded) },
                             colors = textFieldColors,
@@ -395,7 +396,7 @@ fun SettingsScreen(
 
                     // Week start dropdown
                     val isWeeklyBudget = budgetPeriod == "WEEKLY"
-                    val isDisabled = isLocked || isWeeklyBudget
+                    val isDisabled = isWeeklyBudget && isLocked
                     var weekStartExpanded by remember { mutableStateOf(false) }
                     Column(modifier = Modifier.weight(1f)) {
                         ExposedDropdownMenuBox(
@@ -409,7 +410,7 @@ fun SettingsScreen(
                                 value = if (weekStartSunday) S.settings.sunday else S.settings.monday,
                                 onValueChange = {},
                                 readOnly = true,
-                                enabled = !isWeeklyBudget,
+                                enabled = !isDisabled,
                                 label = { Text(S.settings.weekStartsOn) },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = weekStartExpanded) },
                                 colors = textFieldColors,
@@ -774,7 +775,10 @@ fun SettingsScreen(
                         Box(
                             modifier = Modifier
                                 .matchParentSize()
-                                .clickable(enabled = !isLocked) { pruneExpanded = true }
+                                .clickable {
+                                    if (isLocked) toastState.show(S.settings.administratorOnly)
+                                    else pruneExpanded = true
+                                }
                         )
                         DropdownMenu(
                             expanded = pruneExpanded,
@@ -1040,13 +1044,17 @@ fun SettingsScreen(
                     0 to S.settings.archiveOff
                 )
                 ExposedDropdownMenuBox(
-                    expanded = thresholdExpanded,
-                    onExpandedChange = { thresholdExpanded = it }
+                    expanded = if (isLocked) false else thresholdExpanded,
+                    onExpandedChange = {
+                        if (isLocked) toastState.show(S.settings.administratorOnly)
+                        else thresholdExpanded = it
+                    }
                 ) {
                     OutlinedTextField(
                         value = thresholdOptions.find { it.first == archiveThreshold }?.second ?: "10,000",
                         onValueChange = {},
                         readOnly = true,
+                        enabled = !isLocked,
                         label = { Text(S.settings.archiveThresholdLabel) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = thresholdExpanded) },
                         modifier = Modifier.menuAnchor().fillMaxWidth()

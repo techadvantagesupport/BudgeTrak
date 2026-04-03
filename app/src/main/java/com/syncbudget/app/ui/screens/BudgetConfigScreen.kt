@@ -219,6 +219,7 @@ fun BudgetConfigScreen(
                             },
                             onValueChange = {},
                             readOnly = true,
+                            enabled = !isLocked,
                             label = { Text(S.budgetConfig.budgetPeriod) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = periodExpanded) },
                             colors = textFieldColors,
@@ -248,18 +249,18 @@ fun BudgetConfigScreen(
                         }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    OutlinedButton(
-                        onClick = {
-                            if (isLocked) toastState.show(S.settings.administratorOnly)
-                            else showResetDialog = true
-                        },
-                        enabled = !isLocked
-                    ) {
-                        Text(when (budgetPeriod) {
-                            BudgetPeriod.WEEKLY -> S.budgetConfig.resetDay
-                            BudgetPeriod.MONTHLY -> S.budgetConfig.resetDate
-                            else -> S.budgetConfig.refreshTime
-                        })
+                    Box {
+                        OutlinedButton(
+                            onClick = { showResetDialog = true },
+                            enabled = !isLocked
+                        ) {
+                            Text(when (budgetPeriod) {
+                                BudgetPeriod.WEEKLY -> S.budgetConfig.resetDay
+                                BudgetPeriod.MONTHLY -> S.budgetConfig.resetDate
+                                else -> S.budgetConfig.refreshTime
+                            })
+                        }
+                        if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -285,15 +286,15 @@ fun BudgetConfigScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = {
-                        if (isLocked) toastState.show(S.settings.administratorOnly)
-                        else showResetBudgetConfirm = true
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isLocked
-                ) {
-                    Text(S.budgetConfig.startResetBudget)
+                Box {
+                    OutlinedButton(
+                        onClick = { showResetBudgetConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isLocked
+                    ) {
+                        Text(S.budgetConfig.startResetBudget)
+                    }
+                    if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
                 }
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -301,11 +302,14 @@ fun BudgetConfigScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Checkbox(
-                        checked = isManualBudgetEnabled,
-                        onCheckedChange = if (isLocked) { { toastState.show(S.settings.administratorOnly) } } else onManualBudgetToggle,
-                        enabled = !isLocked
-                    )
+                    Box {
+                        Checkbox(
+                            checked = isManualBudgetEnabled,
+                            onCheckedChange = onManualBudgetToggle,
+                            enabled = !isLocked
+                        )
+                        if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
+                    }
                     Text(
                         text = S.budgetConfig.manualBudgetOverride,
                         style = MaterialTheme.typography.bodyLarge,
@@ -381,25 +385,21 @@ fun BudgetConfigScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Income mode toggle (cycles on tap)
+                    Box(modifier = Modifier.weight(1f)) {
                     Surface(
                         onClick = {
-                            if (isLocked) {
-                                toastState.show(S.settings.administratorOnly)
-                            } else {
-                                val idx = modes.indexOf(incomeMode)
-                                var nextIdx = (idx + 1) % modes.size
-                                // Skip ACTUAL_ADJUST if manual override is on
-                                if (modes[nextIdx] == "ACTUAL_ADJUST" && isManualBudgetEnabled) {
-                                    nextIdx = (nextIdx + 1) % modes.size
-                                }
-                                onIncomeModeChange(modes[nextIdx])
+                            val idx = modes.indexOf(incomeMode)
+                            var nextIdx = (idx + 1) % modes.size
+                            if (modes[nextIdx] == "ACTUAL_ADJUST" && isManualBudgetEnabled) {
+                                nextIdx = (nextIdx + 1) % modes.size
                             }
+                            onIncomeModeChange(modes[nextIdx])
                         },
                         enabled = !isLocked,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = currentLabel,
@@ -410,10 +410,12 @@ fun BudgetConfigScreen(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp)
                         )
                     }
-                    // Add income source button
+                    if (isLocked) Box(Modifier.matchParentSize().clickable { toastState.show(S.settings.administratorOnly) })
+                    }
+                    // Add income source button (available to all members)
                     Surface(
-                        onClick = { if (!isLocked) showAddDialog = true },
-                        enabled = !isLocked,
+                        onClick = { showAddDialog = true },
+                        enabled = true,
                         color = Color.Transparent,
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)),
@@ -428,14 +430,12 @@ fun BudgetConfigScreen(
                                 imageVector = Icons.Filled.Add,
                                 contentDescription = null,
                                 modifier = Modifier.padding(end = 4.dp),
-                                tint = if (isLocked) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
-                                       else MaterialTheme.colorScheme.onBackground
+                                tint = MaterialTheme.colorScheme.onBackground
                             )
                             Text(
                                 text = S.budgetConfig.addIncomeSource,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (isLocked) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
-                                       else MaterialTheme.colorScheme.onBackground
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                         }
                     }
@@ -447,7 +447,7 @@ fun BudgetConfigScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (!isLocked) Modifier.clickable { editingSource = source } else Modifier)
+                        .clickable { editingSource = source }
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -472,14 +472,12 @@ fun BudgetConfigScreen(
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
                     }
-                    if (!isLocked) {
-                        IconButton(onClick = { deletingSource = source }) {
-                            Icon(
-                                imageVector = Icons.Filled.Delete,
-                                contentDescription = S.common.delete,
-                                tint = Color(0xFFF44336)
-                            )
-                        }
+                    IconButton(onClick = { deletingSource = source }) {
+                        Icon(
+                            imageVector = Icons.Filled.Delete,
+                            contentDescription = S.common.delete,
+                            tint = Color(0xFFF44336)
+                        )
                     }
                 }
             }

@@ -808,6 +808,7 @@ object EncryptedDocSerializer {
         )
         encryptNullableString(ss.budgetStartDate, key)?.let { map["enc_budgetStartDate"] = it }
         encryptNullableInt(ss.receiptPruneAgeDays, key)?.let { map["enc_receiptPruneAgeDays"] = it }
+        map["enc_archiveThreshold"] = encryptField(ss.archiveThreshold.toString(), key)
         return map
     }
 
@@ -840,6 +841,7 @@ object EncryptedDocSerializer {
                 "receiptPruneAgeDays" -> map["enc_receiptPruneAgeDays"] =
                     encryptNullableInt(ss.receiptPruneAgeDays, key) ?: FieldValue.delete()
                 "lastChangedBy" -> map["enc_lastChangedBy"] = encryptField(ss.lastChangedBy, key)
+                "archiveThreshold" -> map["enc_archiveThreshold"] = encryptField(ss.archiveThreshold.toString(), key)
             }
         }
         return map
@@ -891,7 +893,8 @@ object EncryptedDocSerializer {
             incomeMode = doc.decryptString("enc_incomeMode", key, "FIXED"),
             deviceRoster = doc.decryptString("enc_deviceRoster", key, "{}"),
             receiptPruneAgeDays = doc.decryptNullableInt("enc_receiptPruneAgeDays", key),
-            lastChangedBy = doc.decryptString("enc_lastChangedBy", key)
+            lastChangedBy = doc.decryptString("enc_lastChangedBy", key),
+            archiveThreshold = doc.decryptInt("enc_archiveThreshold", key, 10_000)
         )
     }
 
@@ -917,6 +920,7 @@ object EncryptedDocSerializer {
         if (old.deviceRoster != new.deviceRoster) changed.add("deviceRoster")
         if (old.receiptPruneAgeDays != new.receiptPruneAgeDays) changed.add("receiptPruneAgeDays")
         if (old.lastChangedBy != new.lastChangedBy) changed.add("lastChangedBy")
+        if (old.archiveThreshold != new.archiveThreshold) changed.add("archiveThreshold")
         return changed
     }
 

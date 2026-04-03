@@ -34,6 +34,7 @@ object SharedSettingsRepository {
         json.put("archiveCutoffDate", settings.archiveCutoffDate ?: JSONObject.NULL)
         json.put("carryForwardBalance", settings.carryForwardBalance)
         json.put("lastArchiveInfo", settings.lastArchiveInfo ?: JSONObject.NULL)
+        json.put("archiveThreshold", settings.archiveThreshold)
 
         SafeIO.atomicWriteJson(context, FILE_NAME, json)
     }
@@ -64,7 +65,8 @@ object SharedSettingsRepository {
                 lastChangedBy = json.optString("lastChangedBy", ""),
                 archiveCutoffDate = if (json.isNull("archiveCutoffDate")) null else json.optString("archiveCutoffDate", null),
                 carryForwardBalance = SafeIO.safeDouble(json.optDouble("carryForwardBalance", 0.0)),
-                lastArchiveInfo = if (json.has("lastArchiveInfo") && !json.isNull("lastArchiveInfo")) json.getString("lastArchiveInfo") else null
+                lastArchiveInfo = if (json.has("lastArchiveInfo") && !json.isNull("lastArchiveInfo")) json.getString("lastArchiveInfo") else null,
+                archiveThreshold = json.optInt("archiveThreshold", 10_000)
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse shared settings: ${e.message}")
@@ -97,6 +99,7 @@ object SharedSettingsRepository {
         json.put("archiveCutoffDate", settings.archiveCutoffDate ?: JSONObject.NULL)
         json.put("carryForwardBalance", settings.carryForwardBalance)
         json.put("lastArchiveInfo", settings.lastArchiveInfo ?: JSONObject.NULL)
+        json.put("archiveThreshold", settings.archiveThreshold)
         return json
     }
 
@@ -124,7 +127,8 @@ object SharedSettingsRepository {
             lastChangedBy = json.optString("lastChangedBy", ""),
             archiveCutoffDate = if (json.isNull("archiveCutoffDate")) null else json.optString("archiveCutoffDate", null),
             carryForwardBalance = SafeIO.safeDouble(json.optDouble("carryForwardBalance", 0.0)),
-            lastArchiveInfo = if (json.has("lastArchiveInfo") && !json.isNull("lastArchiveInfo")) json.getString("lastArchiveInfo") else null
+            lastArchiveInfo = if (json.has("lastArchiveInfo") && !json.isNull("lastArchiveInfo")) json.getString("lastArchiveInfo") else null,
+            archiveThreshold = json.optInt("archiveThreshold", 10_000)
         )
     }
 }

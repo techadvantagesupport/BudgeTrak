@@ -127,6 +127,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var currencySymbol by mutableStateOf(prefs.getString("currencySymbol", "$") ?: "$")
     var digitCount by mutableIntStateOf(prefs.getInt("digitCount", 3))
     var showDecimals by mutableStateOf(prefs.getBoolean("showDecimals", false))
+    var showAttribution by mutableStateOf(prefs.getBoolean("showAttribution", false))
     var dateFormatPattern by mutableStateOf(prefs.getString("dateFormatPattern", "yyyy-MM-dd") ?: "yyyy-MM-dd")
     var isPaidUser by mutableStateOf(prefs.getBoolean("isPaidUser", false))
     var isSubscriber by mutableStateOf(prefs.getBoolean("isSubscriber", false))
@@ -210,7 +211,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     // ── Archive State ──
-    var archiveThreshold by mutableIntStateOf(prefs.getInt("archiveThreshold", 10_000))
+    var archiveThreshold by mutableIntStateOf(
+        SharedSettingsRepository.load(context).archiveThreshold
+    )
     var archiveToastMessage by mutableStateOf<String?>(null)
     var loadedArchivedTransactions by mutableStateOf<List<Transaction>>(emptyList())
         private set
@@ -1288,6 +1291,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 matchPercent = merged.matchPercent
                 matchDollar = merged.matchDollar
                 matchChars = merged.matchChars
+                archiveThreshold = merged.archiveThreshold
                 val syncedStartDate = merged.budgetStartDate?.let {
                     try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
                 }
@@ -2311,8 +2315,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // ── Period refresh (sleeps until next boundary, rechecks on wake) ──
         viewModelScope.launch {
             snapshotFlow { dataLoaded }.first { it }
-            // Wait for initial sync if needed
-            while (!initialSyncReceived) { delay(200) }
+            // Wait for initial sync (max 60s to prevent indefinite block)
+            val syncWaitStart = System.currentTimeMillis()
+            while (!initialSyncReceived && System.currentTimeMillis() - syncWaitStart < 60_000) { delay(200) }
+            android.util.Log.i("PeriodRefresh", "Starting loop: initialSyncReceived=$initialSyncReceived bsd=$budgetStartDate lrd=$lastRefreshDate")
             while (true) {
                 val bsd = budgetStartDate
                 val lrd = lastRefreshDate
@@ -2368,7 +2374,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 val nowMs = System.currentTimeMillis()
                 val boundaryMs = nextBoundary.atZone(tz).toInstant().toEpochMilli()
-                val sleepMs = (boundaryMs - nowMs + 60_000).coerceAtLeast(60_000)
+                val sleepMs = (boundaryMs - nowMs + 60_000).coerceIn(60_000, 15 * 60_000L)
                 android.util.Log.i("PeriodRefresh", "Next boundary: $nextBoundary, sleeping ${sleepMs / 1000}s")
                 delay(sleepMs)
             }

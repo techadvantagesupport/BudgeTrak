@@ -225,7 +225,8 @@ class FirestoreDocSync(
     private fun attachCollectionListener(collection: String) {
         val cursor = loadCursor(collection)
         val errorHandler = { e: Exception ->
-            syncLog("Listener error: $collection — ${e.message}")
+            val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            syncLog("Listener error: $collection — ${e.message} (authUid=$authUid)")
             hasListenerError = true
             val attempts = reconnectAttempts.merge(collection, 1) { old, _ -> old + 1 } ?: 1
             if (attempts <= 10) {
@@ -269,7 +270,8 @@ class FirestoreDocSync(
             EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID,
             onChange = { doc -> handleSharedSettingsChange(doc) },
             onError = { e ->
-                syncLog("Listener error: sharedSettings — ${e.message}")
+                val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                syncLog("Listener error: sharedSettings — ${e.message} (authUid=$authUid)")
                 hasListenerError = true
                 val attempts = reconnectAttempts.merge("sharedSettings", 1) { old, _ -> old + 1 } ?: 1
                 if (attempts <= 10) {
