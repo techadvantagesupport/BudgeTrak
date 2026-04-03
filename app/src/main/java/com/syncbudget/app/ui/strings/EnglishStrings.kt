@@ -1671,6 +1671,7 @@ object EnglishStrings : AppStrings {
         noEvents = "No recurring items on this day",
         totalIncome = { amount -> "Total income: $amount" },
         totalExpenses = { amount -> "Total expenses: $amount" },
+        budgetResetDay = "Budget Reset Day",
         sun = "Sun", mon = "Mon", tue = "Tue", wed = "Wed", thu = "Thu", fri = "Fri", sat = "Sat"
     )
 

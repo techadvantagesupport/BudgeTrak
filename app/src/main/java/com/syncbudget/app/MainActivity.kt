@@ -770,6 +770,9 @@ class MainActivity : ComponentActivity() {
                         incomeSources = vm.activeIncomeSources,
                         currencySymbol = vm.currencySymbol,
                         weekStartSunday = vm.weekStartSunday,
+                        budgetPeriod = vm.budgetPeriod,
+                        resetDayOfWeek = vm.resetDayOfWeek,
+                        resetDayOfMonth = vm.resetDayOfMonth,
                         onBack = { vm.currentScreen = "main" },
                         onHelpClick = { vm.currentScreen = "budget_calendar_help" }
                     )

@@ -1403,6 +1403,7 @@ data class BudgetCalendarStrings(
     val noEvents: String,
     val totalIncome: (String) -> String,
     val totalExpenses: (String) -> String,
+    val budgetResetDay: String,
     val sun: String,
     val mon: String,
     val tue: String,

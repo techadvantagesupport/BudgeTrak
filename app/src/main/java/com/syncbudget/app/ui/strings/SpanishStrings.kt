@@ -1666,6 +1666,7 @@ object SpanishStrings : AppStrings {
         noEvents = "No hay elementos recurrentes en este d\u00eda",
         totalIncome = { amount -> "Total ingresos: $amount" },
         totalExpenses = { amount -> "Total gastos: $amount" },
+        budgetResetDay = "D\u00eda de reinicio del presupuesto",
         sun = "Dom", mon = "Lun", tue = "Mar", wed = "Mié", thu = "Jue", fri = "Vie", sat = "Sáb"
     )
 

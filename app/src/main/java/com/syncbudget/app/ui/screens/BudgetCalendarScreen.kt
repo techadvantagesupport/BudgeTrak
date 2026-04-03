@@ -70,6 +70,9 @@ fun BudgetCalendarScreen(
     incomeSources: List<IncomeSource>,
     currencySymbol: String,
     weekStartSunday: Boolean = true,
+    budgetPeriod: com.syncbudget.app.data.BudgetPeriod = com.syncbudget.app.data.BudgetPeriod.DAILY,
+    resetDayOfWeek: Int = 1,
+    resetDayOfMonth: Int = 1,
     onBack: () -> Unit,
     onHelpClick: () -> Unit = {}
 ) {
@@ -123,6 +126,23 @@ fun BudgetCalendarScreen(
     val startOffset = if (weekStartSunday) firstDow % 7 else (firstDow - 1)
     val daysInMonth = displayedMonth.lengthOfMonth()
     val today = LocalDate.now()
+
+    // Compute which days in this month are budget reset days (weekly/monthly only)
+    val resetDays = remember(displayedMonth, budgetPeriod, resetDayOfWeek, resetDayOfMonth) {
+        val days = mutableSetOf<Int>()
+        if (budgetPeriod == com.syncbudget.app.data.BudgetPeriod.WEEKLY) {
+            val targetDow = java.time.DayOfWeek.of(resetDayOfWeek)
+            var d = displayedMonth.atDay(1).with(java.time.temporal.TemporalAdjusters.nextOrSame(targetDow))
+            while (d.monthValue == displayedMonth.monthValue) {
+                days.add(d.dayOfMonth)
+                d = d.plusWeeks(1)
+            }
+        } else if (budgetPeriod == com.syncbudget.app.data.BudgetPeriod.MONTHLY) {
+            val clampedDay = resetDayOfMonth.coerceAtMost(daysInMonth)
+            days.add(clampedDay)
+        }
+        days
+    }
 
     Scaffold(
         topBar = {
@@ -264,6 +284,7 @@ fun BudgetCalendarScreen(
                         val incomeTotal = events.filter { it.isIncome }.sumOf { it.amount }
                         val expenseTotal = events.filter { !it.isIncome }.sumOf { it.amount }
                         val isToday = date == today
+                        val isResetDay = date != null && date.dayOfMonth in resetDays
 
                         Box(
                             modifier = Modifier
@@ -274,7 +295,11 @@ fun BudgetCalendarScreen(
                                     color = if (isToday) todayBorder else gridLineColor
                                 )
                                 .then(
-                                    if (date != null && events.isNotEmpty())
+                                    if (isResetDay) Modifier.background(Color(0x1A2196F3)) // subtle blue tint
+                                    else Modifier
+                                )
+                                .then(
+                                    if (date != null && (events.isNotEmpty() || isResetDay))
                                         Modifier.clickable { selectedDate = date }
                                     else Modifier
                                 )
@@ -419,7 +444,17 @@ fun BudgetCalendarScreen(
                             )
                         }
                     }
-                    if (incomes.isEmpty() && expenses.isEmpty()) {
+                    if (selectedDate != null && selectedDate!!.dayOfMonth in resetDays) {
+                        if (incomes.isNotEmpty() || expenses.isNotEmpty()) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                        }
+                        Text(
+                            S.budgetCalendar.budgetResetDay,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF2196F3)
+                        )
+                    }
+                    if (incomes.isEmpty() && expenses.isEmpty() && (selectedDate == null || selectedDate!!.dayOfMonth !in resetDays)) {
                         Text(S.budgetCalendar.noEvents)
                     }
                 }
