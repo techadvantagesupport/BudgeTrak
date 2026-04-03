@@ -27,17 +27,17 @@ object SecurePrefs {
     fun get(context: Context): SharedPreferences {
         cached?.let { return it }
         val prefs = try {
-            val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
-            EncryptedSharedPreferences.create(
-                ENCRYPTED_PREFS_NAME,
-                masterKeyAlias,
-                context,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
+            createEncryptedPrefs(context)
         } catch (e: Exception) {
-            Log.w(TAG, "EncryptedSharedPreferences unavailable, using plain prefs: ${e.message}")
-            context.getSharedPreferences(PLAIN_PREFS_NAME, Context.MODE_PRIVATE)
+            // KeyStore corruption: delete the encrypted prefs file and retry once
+            Log.w(TAG, "EncryptedSharedPreferences failed, retrying after cleanup: ${e.message}")
+            try {
+                context.deleteSharedPreferences(ENCRYPTED_PREFS_NAME)
+                createEncryptedPrefs(context)
+            } catch (e2: Exception) {
+                Log.e(TAG, "EncryptedSharedPreferences unavailable after retry: ${e2.message}")
+                throw IllegalStateException("Secure storage unavailable — re-pairing required", e2)
+            }
         }
 
         // One-time migration: move encryptionKey from plain to encrypted prefs
@@ -45,6 +45,17 @@ object SecurePrefs {
 
         cached = prefs
         return prefs
+    }
+
+    private fun createEncryptedPrefs(context: Context): SharedPreferences {
+        val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+        return EncryptedSharedPreferences.create(
+            ENCRYPTED_PREFS_NAME,
+            masterKeyAlias,
+            context,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
     }
 
     private fun migrateFromPlain(context: Context, securePrefs: SharedPreferences) {
