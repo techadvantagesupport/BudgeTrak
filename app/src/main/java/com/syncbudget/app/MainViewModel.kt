@@ -1479,8 +1479,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         android.util.Log.w("SyncEviction", "Device doc listener error: ${err.message}")
                         return@addSnapshotListener
                     }
-                    if (snapshot == null || !snapshot.exists()) {
-                        evictFromSync(strings.sync.evictionDissolved)
+                    if (snapshot == null) {
+                        return@addSnapshotListener
+                    } else if (!snapshot.exists()) {
+                        // Only trust "not exists" from server — cache miss is not dissolution
+                        if (!snapshot.metadata.isFromCache) {
+                            BudgeTrakApplication.tokenLog("Device doc deleted (server-confirmed) → evicting")
+                            evictFromSync(strings.sync.evictionDissolved)
+                        } else {
+                            BudgeTrakApplication.tokenLog("Device doc not in cache (fromCache=true) — ignoring, not evicting")
+                        }
                     } else if (snapshot.getBoolean("removed") == true) {
                         evictFromSync(strings.sync.evictionRemoved)
                     } else {
