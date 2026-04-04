@@ -1824,6 +1824,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // Force App Check token refresh on resume — prevents PERMISSION_DENIED from stale token
+        try {
+            com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                .getAppCheckToken(false) // false = use cached if valid, force refresh if expired
+                .addOnSuccessListener { /* token refreshed, listeners will reconnect */ }
+        } catch (_: Exception) {}
+
         // Refresh RTDB presence on resume — ensures we show online after Doze/network loss
         if (isSyncConfigured && syncGroupId != null) {
             try {
