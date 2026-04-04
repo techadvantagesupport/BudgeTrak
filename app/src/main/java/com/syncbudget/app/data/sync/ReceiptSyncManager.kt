@@ -91,38 +91,47 @@ class ReceiptSyncManager(
 
         syncLog("Receipt sync: ${pending.size} pending uploads")
 
-        val completed = mutableSetOf<String>()
-        for (receiptId in pending.toList()) {
-            val encrypted = ReceiptManager.encryptForUpload(context, receiptId, encryptionKey)
-            if (encrypted == null) {
-                syncLog("Receipt $receiptId: no local file, removing from queue")
-                completed.add(receiptId)
-                continue
-            }
+        val completed = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+        for (chunk in pending.toList().chunked(5)) {
+            coroutineScope {
+                chunk.map { receiptId ->
+                    async(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val encrypted = ReceiptManager.encryptForUpload(context, receiptId, encryptionKey)
+                            if (encrypted == null) {
+                                syncLog("Receipt $receiptId: no local file, removing from queue")
+                                completed.add(receiptId)
+                                return@async
+                            }
 
-            val startNanos = System.nanoTime()
-            val uploaded = ImageLedgerService.uploadToCloud(groupId, receiptId, encrypted)
-            if (uploaded) {
-                // Measure upload speed piggybacked on this upload
-                val elapsedMs = (System.nanoTime() - startNanos) / 1_000_000
-                if (elapsedMs > 0) {
-                    val bps = (encrypted.size.toLong() * 1000) / elapsedMs
-                    prefs.edit()
-                        .putLong(KEY_LAST_UPLOAD_SPEED_BPS, bps)
-                        .putLong(KEY_LAST_SPEED_MEASURED_AT, System.currentTimeMillis())
-                        .apply()
-                }
+                            val startNanos = System.nanoTime()
+                            val uploaded = ImageLedgerService.uploadToCloud(groupId, receiptId, encrypted)
+                            if (uploaded) {
+                                val elapsedMs = (System.nanoTime() - startNanos) / 1_000_000
+                                if (elapsedMs > 0) {
+                                    val bps = (encrypted.size.toLong() * 1000) / elapsedMs
+                                    prefs.edit()
+                                        .putLong(KEY_LAST_UPLOAD_SPEED_BPS, bps)
+                                        .putLong(KEY_LAST_SPEED_MEASURED_AT, System.currentTimeMillis())
+                                        .apply()
+                                }
 
-                val ledgerCreated = ImageLedgerService.createLedgerEntry(groupId, receiptId, deviceId)
-                if (ledgerCreated) {
-                    syncLog("Receipt $receiptId: uploaded + ledger created")
-                    completed.add(receiptId)
-                    prefs.edit().putLong(KEY_LAST_UPLOAD_TIME, System.currentTimeMillis()).apply()
-                } else {
-                    syncLog("Receipt $receiptId: uploaded but ledger creation failed, will retry")
-                }
-            } else {
-                syncLog("Receipt $receiptId: upload failed (${ImageLedgerService.lastUploadError}), will retry next sync")
+                                val ledgerCreated = ImageLedgerService.createLedgerEntry(groupId, receiptId, deviceId)
+                                if (ledgerCreated) {
+                                    syncLog("Receipt $receiptId: uploaded + ledger created")
+                                    completed.add(receiptId)
+                                    prefs.edit().putLong(KEY_LAST_UPLOAD_TIME, System.currentTimeMillis()).apply()
+                                } else {
+                                    syncLog("Receipt $receiptId: uploaded but ledger creation failed, will retry")
+                                }
+                            } else {
+                                syncLog("Receipt $receiptId: upload failed (${ImageLedgerService.lastUploadError}), will retry next sync")
+                            }
+                        } catch (e: Exception) {
+                            syncLog("Receipt $receiptId: upload exception: ${e.message}")
+                        }
+                    }
+                }.forEach { it.await() }
             }
         }
 
