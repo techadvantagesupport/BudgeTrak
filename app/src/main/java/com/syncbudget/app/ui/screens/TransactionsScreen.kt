@@ -624,18 +624,23 @@ fun TransactionsScreen(
             }
         }
 
-        // Linking chain: recurring → amortization → budget income
-        val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-        if (recurringMatch != null) {
-            currentImportRecurring = recurringMatch
-        } else {
-            val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
-            if (amortizationMatch != null) {
-                currentImportAmortization = amortizationMatch
+        // Linking chain: income → budget income only; expense → RE → amortization only
+        if (txn.type == TransactionType.INCOME) {
+            val budgetIncomeMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
+            if (budgetIncomeMatch != null) {
+                currentImportBudgetIncome = budgetIncomeMatch
             } else {
-                val budgetIncomeMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
-                if (budgetIncomeMatch != null) {
-                    currentImportBudgetIncome = budgetIncomeMatch
+                importApproved.add(txn)
+                importIndex++
+            }
+        } else {
+            val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
+            if (recurringMatch != null) {
+                currentImportRecurring = recurringMatch
+            } else {
+                val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                if (amortizationMatch != null) {
+                    currentImportAmortization = amortizationMatch
                 } else {
                     importApproved.add(txn)
                     importIndex++
@@ -1261,30 +1266,15 @@ fun TransactionsScreen(
                 } else if (alreadyLinked) {
                     addAndScroll(txn)
                 } else {
-                    val recurringMatch = findRecurringExpenseMatch(txn, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
-                    if (recurringMatch != null) {
-                        pendingRecurringTxn = txn
-                        pendingRecurringMatch = recurringMatch
-                        pendingRecurringIsEdit = false
-                        showRecurringDialog = true
+                    // Income: check budget income match only
+                    val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
+                    if (budgetMatch != null) {
+                        pendingBudgetIncomeTxn = txn
+                        pendingBudgetIncomeMatch = budgetMatch
+                        pendingBudgetIncomeIsEdit = false
+                        showBudgetIncomeDialog = true
                     } else {
-                        val amortizationMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
-                        if (amortizationMatch != null) {
-                            pendingAmortizationTxn = txn
-                            pendingAmortizationMatch = amortizationMatch
-                            pendingAmortizationIsEdit = false
-                            showAmortizationDialog = true
-                        } else {
-                            val budgetMatch = findBudgetIncomeMatch(txn, incomeSources, matchChars, matchDays)
-                            if (budgetMatch != null) {
-                                pendingBudgetIncomeTxn = txn
-                                pendingBudgetIncomeMatch = budgetMatch
-                                pendingBudgetIncomeIsEdit = false
-                                showBudgetIncomeDialog = true
-                            } else {
-                                addAndScroll(txn)
-                            }
-                        }
+                        addAndScroll(txn)
                     }
                 }
                 showAddIncome = false
@@ -1391,7 +1381,19 @@ fun TransactionsScreen(
                         showManualDuplicateDialog = true
                     } else if (alreadyLinked) {
                         onUpdateTransaction(updated)
+                    } else if (updated.type == TransactionType.INCOME) {
+                        // Income edit: check budget income match only
+                        val budgetMatch = findBudgetIncomeMatch(updated, incomeSources, matchChars, matchDays)
+                        if (budgetMatch != null) {
+                            pendingBudgetIncomeTxn = updated
+                            pendingBudgetIncomeMatch = budgetMatch
+                            pendingBudgetIncomeIsEdit = true
+                            showBudgetIncomeDialog = true
+                        } else {
+                            onUpdateTransaction(updated)
+                        }
                     } else {
+                        // Expense edit: check RE → amortization
                         val recurringMatch = findRecurringExpenseMatch(updated, recurringExpenses, percentTolerance, matchDollar, matchChars, matchDays)
                         if (recurringMatch != null) {
                             pendingRecurringTxn = updated
@@ -1406,15 +1408,7 @@ fun TransactionsScreen(
                                 pendingAmortizationIsEdit = true
                                 showAmortizationDialog = true
                             } else {
-                                val budgetMatch = findBudgetIncomeMatch(updated, incomeSources, matchChars, matchDays)
-                                if (budgetMatch != null) {
-                                    pendingBudgetIncomeTxn = updated
-                                    pendingBudgetIncomeMatch = budgetMatch
-                                    pendingBudgetIncomeIsEdit = true
-                                    showBudgetIncomeDialog = true
-                                } else {
-                                    onUpdateTransaction(updated)
-                                }
+                                onUpdateTransaction(updated)
                             }
                         }
                     }
@@ -2081,11 +2075,21 @@ fun TransactionsScreen(
             },
             onNotRecurring = {
                 val txn = pendingRecurringTxn!!
-                if (pendingRecurringIsEdit) onUpdateTransaction(txn)
-                else addAndScroll(txn)
+                val isEdit = pendingRecurringIsEdit
                 pendingRecurringTxn = null
                 pendingRecurringMatch = null
                 showRecurringDialog = false
+                // Continue expense chain: check amortization
+                val amortMatch = findAmortizationMatch(txn, amortizationEntries, percentTolerance, matchDollar, matchChars)
+                if (amortMatch != null) {
+                    pendingAmortizationTxn = txn
+                    pendingAmortizationMatch = amortMatch
+                    pendingAmortizationIsEdit = isEdit
+                    showAmortizationDialog = true
+                } else {
+                    if (isEdit) onUpdateTransaction(txn)
+                    else addAndScroll(txn)
+                }
             }
         )
     }

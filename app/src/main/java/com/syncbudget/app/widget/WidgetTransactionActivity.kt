@@ -192,29 +192,34 @@ class WidgetTransactionActivity : ComponentActivity() {
                         txn.linkedAmortizationEntryId != null ||
                         txn.linkedIncomeSourceId != null
                     if (!alreadyLinked) {
-                        val activeRecurring = RecurringExpenseRepository.load(context).active
-                        val reMatch = findRecurringExpenseMatch(txn, activeRecurring, percentTolerance, matchDollar, matchChars, matchDays)
-                        if (reMatch != null) {
-                            pendingTxn = txn
-                            pendingCatAmounts = catAmounts
-                            recurringMatch = reMatch
-                            return
-                        }
-                        val activeAmort = AmortizationRepository.load(context).active
-                        val amMatch = findAmortizationMatch(txn, activeAmort, percentTolerance, matchDollar, matchChars)
-                        if (amMatch != null) {
-                            pendingTxn = txn
-                            pendingCatAmounts = catAmounts
-                            amortizationMatch = amMatch
-                            return
-                        }
-                        val activeIncome = IncomeSourceRepository.load(context).active
-                        val incMatch = findBudgetIncomeMatch(txn, activeIncome, matchChars, matchDays)
-                        if (incMatch != null) {
-                            pendingTxn = txn
-                            pendingCatAmounts = catAmounts
-                            budgetIncomeMatch = incMatch
-                            return
+                        if (txn.type == TransactionType.INCOME) {
+                            // Income: check budget income match only
+                            val activeIncome = IncomeSourceRepository.load(context).active
+                            val incMatch = findBudgetIncomeMatch(txn, activeIncome, matchChars, matchDays)
+                            if (incMatch != null) {
+                                pendingTxn = txn
+                                pendingCatAmounts = catAmounts
+                                budgetIncomeMatch = incMatch
+                                return
+                            }
+                        } else {
+                            // Expense: check RE → amortization
+                            val activeRecurring = RecurringExpenseRepository.load(context).active
+                            val reMatch = findRecurringExpenseMatch(txn, activeRecurring, percentTolerance, matchDollar, matchChars, matchDays)
+                            if (reMatch != null) {
+                                pendingTxn = txn
+                                pendingCatAmounts = catAmounts
+                                recurringMatch = reMatch
+                                return
+                            }
+                            val activeAmort = AmortizationRepository.load(context).active
+                            val amMatch = findAmortizationMatch(txn, activeAmort, percentTolerance, matchDollar, matchChars)
+                            if (amMatch != null) {
+                                pendingTxn = txn
+                                pendingCatAmounts = catAmounts
+                                amortizationMatch = amMatch
+                                return
+                            }
                         }
                     }
                     // No matches — save directly

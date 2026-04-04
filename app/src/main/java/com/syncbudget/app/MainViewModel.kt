@@ -820,30 +820,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Runs search on background thread to avoid blocking UI.
     fun runLinkingChain(txn: Transaction) {
         val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
-        if (!alreadyLinked) {
-            val re = activeRecurringExpenses.toList()
-            val ae = activeAmortizationEntries.toList()
+        if (alreadyLinked) {
+            addTransactionWithBudgetEffect(txn)
+            return
+        }
+        val pTol = percentTolerance; val dTol = matchDollar; val mChars = matchChars; val dWin = matchDays
+        if (txn.type == TransactionType.INCOME) {
+            // Income: check budget income match only
             val is_ = activeIncomeSources.toList()
-            val pTol = percentTolerance; val dTol = matchDollar; val mChars = matchChars; val dWin = matchDays
             viewModelScope.launch(Dispatchers.Default) {
-                val recurringMatch = findRecurringExpenseMatch(txn, re, pTol, dTol, mChars, dWin)
-                if (recurringMatch != null) {
-                    withContext(Dispatchers.Main) {
-                        dashPendingRecurringTxn = txn
-                        dashPendingRecurringMatch = recurringMatch
-                        dashShowRecurringDialog = true
-                    }
-                    return@launch
-                }
-                val amortizationMatch = findAmortizationMatch(txn, ae, pTol, dTol, mChars)
-                if (amortizationMatch != null) {
-                    withContext(Dispatchers.Main) {
-                        dashPendingAmortizationTxn = txn
-                        dashPendingAmortizationMatch = amortizationMatch
-                        dashShowAmortizationDialog = true
-                    }
-                    return@launch
-                }
                 val budgetMatch = findBudgetIncomeMatch(txn, is_, mChars, dWin)
                 withContext(Dispatchers.Main) {
                     if (budgetMatch != null) {
@@ -856,7 +841,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         } else {
-            addTransactionWithBudgetEffect(txn)
+            // Expense: check RE match → amortization match
+            val re = activeRecurringExpenses.toList()
+            val ae = activeAmortizationEntries.toList()
+            viewModelScope.launch(Dispatchers.Default) {
+                val recurringMatch = findRecurringExpenseMatch(txn, re, pTol, dTol, mChars, dWin)
+                if (recurringMatch != null) {
+                    withContext(Dispatchers.Main) {
+                        dashPendingRecurringTxn = txn
+                        dashPendingRecurringMatch = recurringMatch
+                        dashShowRecurringDialog = true
+                    }
+                    return@launch
+                }
+                val amortizationMatch = findAmortizationMatch(txn, ae, pTol, dTol, mChars)
+                withContext(Dispatchers.Main) {
+                    if (amortizationMatch != null) {
+                        dashPendingAmortizationTxn = txn
+                        dashPendingAmortizationMatch = amortizationMatch
+                        dashShowAmortizationDialog = true
+                    } else {
+                        addTransactionWithBudgetEffect(txn)
+                    }
+                }
+            }
         }
     }
 

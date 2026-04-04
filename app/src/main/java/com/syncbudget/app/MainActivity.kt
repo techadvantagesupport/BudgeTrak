@@ -962,21 +962,14 @@ class MainActivity : ComponentActivity() {
                     vm.dashPendingRecurringTxn = null
                     vm.dashPendingRecurringMatch = null
                     vm.dashShowRecurringDialog = false
-                    // Continue linking chain: check amortization, then budget income
+                    // Continue expense chain: check amortization only
                     val amortizationMatch = findAmortizationMatch(txn, vm.activeAmortizationEntries, vm.percentTolerance, vm.matchDollar, vm.matchChars)
                     if (amortizationMatch != null) {
                         vm.dashPendingAmortizationTxn = txn
                         vm.dashPendingAmortizationMatch = amortizationMatch
                         vm.dashShowAmortizationDialog = true
                     } else {
-                        val budgetMatch = findBudgetIncomeMatch(txn, vm.activeIncomeSources, vm.matchChars, vm.matchDays)
-                        if (budgetMatch != null) {
-                            vm.dashPendingBudgetIncomeTxn = txn
-                            vm.dashPendingBudgetIncomeMatch = budgetMatch
-                            vm.dashShowBudgetIncomeDialog = true
-                        } else {
-                            vm.addTransactionWithBudgetEffect(txn)
-                        }
+                        vm.addTransactionWithBudgetEffect(txn)
                     }
                 }
             )
