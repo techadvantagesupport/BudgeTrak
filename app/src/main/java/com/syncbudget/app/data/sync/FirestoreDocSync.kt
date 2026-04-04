@@ -361,6 +361,26 @@ class FirestoreDocSync(
      * Uses diff-based field updates when the last known state is available,
      * falling back to full set() for new records or NOT_FOUND errors.
      */
+    /** Batch push multiple records of the same type. Uses set() for all (no diff). */
+    suspend fun pushRecordsBatch(records: List<Any>) {
+        if (records.isEmpty()) return
+        val collection = EncryptedDocSerializer.collectionName(records.first())
+        val docs = records.map { record ->
+            val docId = when (record) {
+                is SharedSettings -> EncryptedDocSerializer.SHARED_SETTINGS_DOC_ID
+                else -> EncryptedDocSerializer.docId(record)
+            }
+            val stateKey = "$collection:$docId"
+            recentPushes[stateKey] = System.currentTimeMillis()
+            localPendingEdits[stateKey] = System.currentTimeMillis()
+            lastKnownState[stateKey] = record
+            docId to EncryptedDocSerializer.toFieldMap(record, encryptionKey, deviceId)
+        }
+        FirestoreDocService.writeBatch(groupId, collection, docs)
+        persistPendingEdits()
+        syncLog("Batch pushed ${docs.size} records to $collection")
+    }
+
     suspend fun pushRecord(record: Any) {
         val collection = EncryptedDocSerializer.collectionName(record)
         val docId = when (record) {

@@ -422,13 +422,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = incomeSources.toList()
         IncomeSourceRepository.save(context, current)
         if (SyncWriteHelper.isInitialized()) {
-            if (hint != null) {
-                hint.forEach { SyncWriteHelper.pushIncomeSource(it) }
-            } else {
-                for (src in current) {
-                    if (lastSavedIs[src.id] != src) SyncWriteHelper.pushIncomeSource(src)
-                }
-            }
+            val toPush = hint ?: current.filter { lastSavedIs[it.id] != it }
+            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
             current.associateByTo(lastSavedIs) { it.id }
             if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
         }
@@ -438,13 +433,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = recurringExpenses.toList()
         RecurringExpenseRepository.save(context, current)
         if (SyncWriteHelper.isInitialized()) {
-            if (hint != null) {
-                hint.forEach { SyncWriteHelper.pushRecurringExpense(it) }
-            } else {
-                for (re in current) {
-                    if (lastSavedRe[re.id] != re) SyncWriteHelper.pushRecurringExpense(re)
-                }
-            }
+            val toPush = hint ?: current.filter { lastSavedRe[it.id] != it }
+            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
             current.associateByTo(lastSavedRe) { it.id }
             if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
         }
@@ -454,13 +444,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = amortizationEntries.toList()
         AmortizationRepository.save(context, current)
         if (SyncWriteHelper.isInitialized()) {
-            if (hint != null) {
-                hint.forEach { SyncWriteHelper.pushAmortizationEntry(it) }
-            } else {
-                for (ae in current) {
-                    if (lastSavedAe[ae.id] != ae) SyncWriteHelper.pushAmortizationEntry(ae)
-                }
-            }
+            val toPush = hint ?: current.filter { lastSavedAe[it.id] != it }
+            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
             current.associateByTo(lastSavedAe) { it.id }
             if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
         }
@@ -470,13 +455,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = savingsGoals.toList()
         SavingsGoalRepository.save(context, current)
         if (SyncWriteHelper.isInitialized()) {
-            if (hint != null) {
-                hint.forEach { SyncWriteHelper.pushSavingsGoal(it) }
-            } else {
-                for (sg in current) {
-                    if (lastSavedSg[sg.id] != sg) SyncWriteHelper.pushSavingsGoal(sg)
-                }
-            }
+            val toPush = hint ?: current.filter { lastSavedSg[it.id] != it }
+            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
             current.associateByTo(lastSavedSg) { it.id }
             if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
         }
@@ -494,13 +474,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = transactions.toList()
         TransactionRepository.save(context, current)
         if (SyncWriteHelper.isInitialized()) {
-            if (hint != null) {
-                hint.forEach { SyncWriteHelper.pushTransaction(it) }
-            } else {
-                for (txn in current) {
-                    if (lastSavedTxns[txn.id] != txn) SyncWriteHelper.pushTransaction(txn)
-                }
-            }
+            val toPush = hint ?: current.filter { lastSavedTxns[it.id] != it }
+            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
             current.associateByTo(lastSavedTxns) { it.id }
             if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
         }
@@ -510,13 +485,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = categories.toList()
         CategoryRepository.save(context, current)
         if (SyncWriteHelper.isInitialized()) {
-            if (hint != null) {
-                hint.forEach { SyncWriteHelper.pushCategory(it) }
-            } else {
-                for (cat in current) {
-                    if (lastSavedCat[cat.id] != cat) SyncWriteHelper.pushCategory(cat)
-                }
-            }
+            val toPush = hint ?: current.filter { lastSavedCat[it.id] != it }
+            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
             current.associateByTo(lastSavedCat) { it.id }
             if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
         }
@@ -526,13 +496,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = periodLedger.toList()
         PeriodLedgerRepository.save(context, current)
         if (SyncWriteHelper.isInitialized()) {
-            if (hint != null) {
-                hint.forEach { SyncWriteHelper.pushPeriodLedgerEntry(it) }
-            } else {
-                for (ple in current) {
-                    if (lastSavedPle[ple.id] != ple) SyncWriteHelper.pushPeriodLedgerEntry(ple)
-                }
-            }
+            val toPush = hint ?: current.filter { lastSavedPle[it.id] != it }
+            if (toPush.isNotEmpty()) SyncWriteHelper.pushBatch(toPush)
             current.associateByTo(lastSavedPle) { it.id }
             if (hint == null || hint.isNotEmpty()) lastSyncActivity = System.currentTimeMillis()
         }

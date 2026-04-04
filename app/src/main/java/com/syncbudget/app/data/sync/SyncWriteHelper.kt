@@ -45,10 +45,33 @@ object SyncWriteHelper {
     fun pushPeriodLedgerEntry(ple: PeriodLedgerEntry) = push(ple)
     fun pushSharedSettings(ss: SharedSettings) = push(ss)
 
-    // ── push lists (for bulk operations) ────────────────────────────────
+    // ── push lists (batched with chunking, fallback to individual) ─────
 
-    fun pushTransactions(txns: List<Transaction>) = txns.forEach { push(it) }
-    fun pushCategories(cats: List<Category>) = cats.forEach { push(it) }
+    fun pushTransactions(txns: List<Transaction>) = pushBatch(txns)
+    fun pushCategories(cats: List<Category>) = pushBatch(cats)
+
+    /** Batch push records. Retries once, then falls back to individual pushes. */
+    fun pushBatch(records: List<Any>) {
+        if (records.isEmpty()) return
+        val sync = docSync ?: return
+        scope.launch {
+            try {
+                sync.pushRecordsBatch(records)
+            } catch (e: Exception) {
+                Log.w(TAG, "Batch push failed (${records.size} records), retrying once: ${e.message}")
+                try {
+                    sync.pushRecordsBatch(records)
+                } catch (e2: Exception) {
+                    Log.w(TAG, "Batch retry failed, falling back to individual pushes: ${e2.message}")
+                    for (record in records) {
+                        try { sync.pushRecord(record) } catch (e3: Exception) {
+                            Log.e(TAG, "Individual push failed: ${e3.message}")
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // ── internal ────────────────────────────────────────────────────────
 
