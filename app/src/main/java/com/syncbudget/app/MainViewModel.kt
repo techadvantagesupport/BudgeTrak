@@ -1943,6 +1943,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: android.net.Network) {
                     isNetworkAvailable = true
+                    // Refresh App Check token on network recovery (may have expired during outage)
+                    try { com.google.firebase.appcheck.FirebaseAppCheck.getInstance().getAppCheckToken(false) } catch (_: Exception) {}
                     if (isSyncConfigured && syncStatus == "offline") {
                         syncStatus = if (docSync?.isListening == true) "synced" else "error"
                     }
