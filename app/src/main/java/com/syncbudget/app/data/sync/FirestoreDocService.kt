@@ -122,6 +122,23 @@ object FirestoreDocService {
      * Read every document in a collection. Used for migration verification
      * and initial bootstrap when listeners haven't populated local state yet.
      */
+    /**
+     * Count active (non-deleted) docs in a collection via server aggregation.
+     * Costs 1 read per 1000 docs counted. Returns -1 on failure.
+     */
+    suspend fun countActiveDocs(groupId: String, collection: String): Long {
+        return try {
+            withTimeout(OP_TIMEOUT_MS) {
+                collectionRef(groupId, collection)
+                    .whereEqualTo("deleted", false)
+                    .count()
+                    .get(com.google.firebase.firestore.AggregateSource.SERVER)
+                    .await()
+                    .count
+            }
+        } catch (_: Exception) { -1L }
+    }
+
     suspend fun readAllDocs(
         groupId: String,
         collection: String

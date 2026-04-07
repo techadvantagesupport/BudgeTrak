@@ -33,8 +33,11 @@ class FirestoreDocSync(
 ) {
     companion object {
         private const val TAG = "FirestoreDocSync"
-        /** How long to suppress echo callbacks after a local write (ms). */
+        /** How long to suppress echo callbacks after a foreground write (ms). */
         private const val ECHO_SUPPRESS_MS = 5_000L
+        /** How long to suppress echoes from background worker pushes (ms).
+         *  Longer because background workers run every 15 min. */
+        private const val BG_ECHO_SUPPRESS_MS = 20 * 60 * 1000L
         private const val LOG_FILE = "native_sync_log.txt"
         private const val MAX_LOG_SIZE = 512_000L // 512KB
         /** Minimum gap between full PERMISSION_DENIED restarts (ms). */
@@ -167,6 +170,27 @@ class FirestoreDocSync(
                 for (key in obj.keys()) {
                     localPendingEdits[key] = obj.getLong(key)
                 }
+            }
+        } catch (_: Exception) {}
+        // Load persisted background push keys (from BackgroundSyncWorker.pushRefreshResults)
+        // so we can filter echoes of our own period refresh writes.
+        try {
+            val syncPrefs = context.getSharedPreferences("sync_engine", android.content.Context.MODE_PRIVATE)
+            val bgJson = syncPrefs.getString("bgPushKeys", null)
+            if (bgJson != null) {
+                val obj = org.json.JSONObject(bgJson)
+                val cutoff = System.currentTimeMillis() - 20 * 60 * 1000L
+                var loaded = 0
+                for (key in obj.keys()) {
+                    val ts = obj.getLong(key)
+                    if (ts > cutoff) {
+                        recentPushes[key] = ts
+                        loaded++
+                    }
+                }
+                if (loaded > 0) syncLog("Loaded $loaded background push keys for echo suppression")
+                // Clear persisted keys — they're now in recentPushes
+                syncPrefs.edit().remove("bgPushKeys").apply()
             }
         } catch (_: Exception) {}
     }
@@ -631,9 +655,16 @@ class FirestoreDocSync(
         markCollectionDelivered(collection)
         pruneExpiredEchoKeys()
 
-        // Filter out echoes from our own recent writes (lightweight, main thread OK)
+        // Filter out echoes from our own recent writes (lightweight, main thread OK).
+        // For background push keys (persisted from BackgroundSyncWorker), also verify
+        // lastEditBy matches our deviceId — if another device edited the same doc
+        // since our push, we should process their update, not filter it as our echo.
         val toProcess = changes.filter { change ->
-            !recentPushes.containsKey("$collection:${change.document.id}")
+            val key = "$collection:${change.document.id}"
+            if (!recentPushes.containsKey(key)) return@filter true
+            // Check lastEditBy: if someone else edited since our push, keep the change
+            val lastEditBy = change.document.getString("lastEditBy")
+            lastEditBy != null && lastEditBy != deviceId
         }
         if (toProcess.isEmpty()) {
             // Pure echo batch — still advance the cursor so a fresh listener
@@ -775,6 +806,7 @@ class FirestoreDocSync(
                 // Update enc cache and last known state after successful decryption
                 if (encComposite != null) lastSeenEnc[stateKey] = encComposite
                 lastKnownState[stateKey] = settings
+                persistEncCache()
                 syncLog("Received 1 changes in sharedSettings")
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
                     onBatchChanged?.invoke(listOf(
@@ -860,7 +892,8 @@ class FirestoreDocSync(
     // ── internal: echo key maintenance ──────────────────────────────────
 
     private fun pruneExpiredEchoKeys() {
-        val cutoff = System.currentTimeMillis() - ECHO_SUPPRESS_MS
+        // Use the longer background window so persisted push keys survive
+        val cutoff = System.currentTimeMillis() - BG_ECHO_SUPPRESS_MS
         recentPushes.entries.removeAll { it.value < cutoff }
     }
 }

@@ -593,10 +593,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             android.util.Log.w("Maintenance", "Backup failed: ${e.message}")
         }
 
-        // ── Integrity check (sync users only) ──
+        // ── Integrity check + consistency check (sync users only) ──
         if (isSyncConfigured && syncGroupId != null) {
             runIntegrityCheck()
             recomputeCash()
+            runConsistencyCheck()
         }
 
         // ── Receipt orphan cleanup + pruning (snapshot to avoid index corruption) ──
@@ -760,6 +761,164 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             android.util.Log.w("Integrity", "Cache integrity check failed: ${e.message}")
         }
+    }
+
+    // ── CONSISTENCY CHECK (Layer 1: counts vs Firestore, Layer 2: cashHash majority vote) ──
+
+    private suspend fun runConsistencyCheck() {
+        val groupId = syncGroupId ?: return
+        if (!isSyncConfigured) return
+
+        try {
+            val cursorPrefs = context.getSharedPreferences("sync_cursor", android.content.Context.MODE_PRIVATE)
+
+            // ── Layer 1: Count-based check against Firestore server ──
+            val localCounts = mapOf(
+                EncryptedDocSerializer.COLLECTION_TRANSACTIONS to transactions.count { !it.deleted },
+                EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES to recurringExpenses.count { !it.deleted },
+                EncryptedDocSerializer.COLLECTION_INCOME_SOURCES to incomeSources.count { !it.deleted },
+                EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS to savingsGoals.count { !it.deleted },
+                EncryptedDocSerializer.COLLECTION_AMORTIZATION_ENTRIES to amortizationEntries.count { !it.deleted },
+                EncryptedDocSerializer.COLLECTION_CATEGORIES to categories.count { !it.deleted },
+                EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER to periodLedger.size
+            )
+
+            var countMismatches = 0
+            for ((collection, localCount) in localCounts) {
+                val serverCount = FirestoreDocService.countActiveDocs(groupId, collection)
+                if (serverCount < 0) continue // query failed, skip
+                if (serverCount.toInt() != localCount) {
+                    countMismatches++
+                    android.util.Log.w("Consistency",
+                        "Count mismatch: $collection local=$localCount server=$serverCount — clearing cursor")
+                    BudgeTrakApplication.recordNonFatal(
+                        "CONSISTENCY_COUNT_MISMATCH",
+                        "$collection local=$localCount server=$serverCount group=$groupId",
+                        Exception("Count mismatch")
+                    )
+                    // Clear cursor so next sync does full re-read for this collection
+                    cursorPrefs.edit()
+                        .remove("cursor_${collection}_seconds")
+                        .remove("cursor_${collection}_nanos")
+                        .apply()
+                }
+            }
+            if (countMismatches > 0) {
+                android.util.Log.w("Consistency", "$countMismatches collections have count mismatches — cursors cleared")
+            } else {
+                android.util.Log.i("Consistency", "Layer 1 pass: all counts match Firestore")
+            }
+
+            // ── Layer 2: cashHash checkpoint + majority vote ──
+            val cashHash = availableCash.toString()
+            val now = System.currentTimeMillis()
+
+            // Write our checkpoint to group doc
+            val checkpointData = mapOf(
+                "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                "counts" to localCounts.mapValues { it.value },
+                "cashHash" to cashHash
+            )
+            try {
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                db.collection("groups").document(groupId)
+                    .update("deviceChecksums.$localDeviceId", checkpointData)
+            } catch (_: Exception) {
+                // Field might not exist yet — use set with merge
+                try {
+                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    db.collection("groups").document(groupId)
+                        .set(mapOf("deviceChecksums" to mapOf(localDeviceId to checkpointData)),
+                            com.google.firebase.firestore.SetOptions.merge())
+                } catch (_: Exception) {}
+            }
+
+            // Read all device checkpoints
+            try {
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val groupDoc = db.collection("groups").document(groupId).get().await()
+                @Suppress("UNCHECKED_CAST")
+                val checksums = groupDoc.get("deviceChecksums") as? Map<String, Map<String, Any>> ?: return
+
+                // Filter to devices with recent RTDB lastSeen AND recent checkpoint
+                val convergenceWindowMs = 30 * 60 * 1000L
+                val recentDevices = mutableMapOf<String, String>() // deviceId -> cashHash
+                for ((devId, data) in checksums) {
+                    if (devId == localDeviceId) {
+                        recentDevices[devId] = cashHash
+                        continue
+                    }
+                    val ts = (data["timestamp"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: continue
+                    if (now - ts > convergenceWindowMs) continue
+                    // Check RTDB lastSeen
+                    val rtdbDevice = syncDevices.find { it.deviceId == devId }
+                    if (rtdbDevice == null || now - rtdbDevice.lastSeen > convergenceWindowMs) continue
+                    val otherHash = data["cashHash"] as? String ?: continue
+                    recentDevices[devId] = otherHash
+                }
+
+                if (recentDevices.size < 2) {
+                    android.util.Log.i("Consistency", "Layer 2: <2 comparable devices, skipping cashHash check")
+                    return
+                }
+
+                // Majority vote
+                val hashGroups = recentDevices.entries.groupBy { it.value }
+                val majorityHash = hashGroups.maxByOrNull { it.value.size }?.key
+                val myHash = cashHash
+
+                if (myHash == majorityHash) {
+                    android.util.Log.i("Consistency",
+                        "Layer 2 pass: cashHash=$myHash matches majority (${recentDevices.size} devices)")
+                    // Clear any pending mismatch flag
+                    prefs.edit().remove("checksumMismatchAt").apply()
+                } else {
+                    val majorityCount = hashGroups[majorityHash]?.size ?: 0
+                    android.util.Log.w("Consistency",
+                        "Layer 2 mismatch: my=$myHash majority=$majorityHash ($majorityCount/${recentDevices.size} devices)")
+
+                    val previousMismatch = prefs.getLong("checksumMismatchAt", 0L)
+                    if (previousMismatch == 0L) {
+                        // First detection — set flag for recheck in 1 hour
+                        prefs.edit().putLong("checksumMismatchAt", now).apply()
+                        android.util.Log.w("Consistency", "Mismatch flagged for 1-hour recheck")
+                    } else if (now - previousMismatch > 60 * 60 * 1000L) {
+                        // Confirmed after 1+ hour — recovery
+                        android.util.Log.w("Consistency", "Confirmed mismatch — triggering full re-read recovery")
+                        BudgeTrakApplication.recordNonFatal(
+                            "CONSISTENCY_CASH_MISMATCH",
+                            "my=$myHash majority=$majorityHash devices=${recentDevices.size} group=$groupId",
+                            Exception("Cash mismatch confirmed")
+                        )
+                        // Clear all cursors — next sync does full re-read
+                        cursorPrefs.edit().clear().apply()
+                        prefs.edit().remove("checksumMismatchAt").apply()
+                    }
+                    // else: within 1-hour confirmation window, wait
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("Consistency", "Layer 2 check failed: ${e.message}")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("Consistency", "Consistency check failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Lightweight recheck for confirmed cashHash mismatches.
+     * Called from onResume and BackgroundSyncWorker when checksumMismatchAt is set.
+     */
+    suspend fun recheckConsistency() {
+        val mismatchAt = prefs.getLong("checksumMismatchAt", 0L)
+        if (mismatchAt == 0L) return
+        if (System.currentTimeMillis() - mismatchAt < 60 * 60 * 1000L) return // wait 1 hour
+        if (!isSyncConfigured || syncGroupId == null) {
+            prefs.edit().remove("checksumMismatchAt").apply()
+            return
+        }
+        android.util.Log.i("Consistency", "Running mismatch recheck")
+        recomputeCash()
+        runConsistencyCheck()
     }
 
     fun recomputeCash() {
@@ -1905,6 +2064,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (now - prefs.getLong("lastMaintenanceCheck", 0L) > 24 * 60 * 60 * 1000L) {
             prefs.edit().putLong("lastMaintenanceCheck", now).apply()
             viewModelScope.launch { runPeriodicMaintenance() }
+        } else if (prefs.getLong("checksumMismatchAt", 0L) > 0L) {
+            // Mismatch pending — recheck on every resume until resolved
+            viewModelScope.launch { recheckConsistency() }
         }
     }
 

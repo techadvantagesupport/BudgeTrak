@@ -140,6 +140,9 @@ class BackgroundSyncWorker(
                 // Push period refresh results
                 if (refreshResult != null) {
                     pushRefreshResults(refreshResult, groupId, encryptionKey, deviceId)
+                    // Persist pushed doc keys so the next worker's FirestoreDocSync
+                    // can filter echoes of our own writes via recentPushes + lastEditBy.
+                    persistBackgroundPushKeys(refreshResult)
                 }
 
                 // Push sync side effects (conflicted transactions, category deletes)
@@ -147,6 +150,18 @@ class BackgroundSyncWorker(
                     pushSyncSideEffects(mergeResult, groupId, encryptionKey, deviceId)
                 }
 
+            }
+
+            // ── Step 4b: Recheck consistency mismatch if flagged ──
+            if (groupId != null) {
+                val mismatchAt = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                    .getLong("checksumMismatchAt", 0L)
+                if (mismatchAt > 0 && System.currentTimeMillis() - mismatchAt > 60 * 60 * 1000L) {
+                    val vm = com.syncbudget.app.MainViewModel.instance?.get()
+                    if (vm != null) {
+                        vm.recheckConsistency()
+                    }
+                }
             }
 
             // ── Step 5: RTDB lastSeen ping (device roster freshness) ──
@@ -498,6 +513,36 @@ class BackgroundSyncWorker(
                 }
             }
         }
+    }
+
+    // ── Persist background push keys for echo suppression ───────────────
+
+    private fun persistBackgroundPushKeys(result: PeriodRefreshService.RefreshResult) {
+        val now = System.currentTimeMillis()
+        val keys = mutableMapOf<String, Long>()
+        for (re in result.updatedRecurringExpenses) {
+            keys["${EncryptedDocSerializer.COLLECTION_RECURRING_EXPENSES}:${re.id}"] = now
+        }
+        for (sg in result.updatedSavingsGoals) {
+            keys["${EncryptedDocSerializer.COLLECTION_SAVINGS_GOALS}:${sg.id}"] = now
+        }
+        for (ple in result.newLedgerEntries) {
+            keys["${EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER}:${ple.id}"] = now
+        }
+        if (keys.isEmpty()) return
+
+        // Merge with existing (prune entries older than 20 min)
+        val prefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
+        val cutoff = now - 20 * 60 * 1000L
+        val existing = try {
+            val json = JSONObject(prefs.getString("bgPushKeys", "{}") ?: "{}")
+            json.keys().asSequence().associate { it to json.getLong(it) }.filterValues { it > cutoff }
+        } catch (_: Exception) { emptyMap() }
+
+        val merged = existing.toMutableMap()
+        merged.putAll(keys)
+        prefs.edit().putString("bgPushKeys", JSONObject(merged.mapKeys { it.key }).toString()).apply()
+        Log.i(TAG, "Persisted ${keys.size} background push keys for echo suppression")
     }
 
     // ── RTDB lastSeen ping ────────────────────────────────────────────
