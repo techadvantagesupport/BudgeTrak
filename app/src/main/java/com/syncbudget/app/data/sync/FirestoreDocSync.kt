@@ -259,6 +259,7 @@ class FirestoreDocSync(
         }
         isListening = true
         syncLog("Starting listeners for group $groupId (encCache=${lastSeenEnc.size} entries, stateCache=${lastKnownState.size} entries)")
+        com.syncbudget.app.BudgeTrakApplication.syncEvent("Listeners started: encCache=${lastSeenEnc.size}")
 
         // Collection listeners for the 7 standard types
         for (collection in EncryptedDocSerializer.ALL_COLLECTIONS) {
@@ -419,11 +420,19 @@ class FirestoreDocSync(
             // Stop all existing listeners (stale connections with expired auth)
             kotlinx.coroutines.withContext(Dispatchers.Main) { stopListeners() }
 
-            // Force-refresh App Check token and AWAIT it
+            // Force-refresh App Check token with timeout (can hang in Doze/network loss)
             try {
-                val result = com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                    .getAppCheckToken(true)
-                    .await()
+                val result = kotlinx.coroutines.withTimeoutOrNull(15_000) {
+                    com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                        .getAppCheckToken(true)
+                        .await()
+                }
+                if (result == null) {
+                    syncLog("AppCheck token refresh timed out during full restart (15s)")
+                    com.syncbudget.app.BudgeTrakApplication.recordNonFatal(
+                        "TOKEN_REFRESH_TIMEOUT", "Full restart token refresh hung for 15s")
+                    return@launch
+                }
                 val expiresIn = (result.expireTimeMillis - System.currentTimeMillis()) / 1000
                 com.syncbudget.app.BudgeTrakApplication.tokenLog(
                     "AppCheck token force-refreshed for full restart: expires in ${expiresIn}s (${expiresIn/60}m)"
@@ -441,6 +450,7 @@ class FirestoreDocSync(
             reconnectAttempts.clear()
             kotlinx.coroutines.withContext(Dispatchers.Main) { startListeners() }
             syncLog("Full listener restart complete")
+            com.syncbudget.app.BudgeTrakApplication.syncEvent("Full listener restart complete")
             onListenerRecovered?.invoke()
         }
     }

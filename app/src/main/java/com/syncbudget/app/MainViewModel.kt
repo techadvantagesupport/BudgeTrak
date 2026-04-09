@@ -579,6 +579,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun runPeriodicMaintenance() {
         android.util.Log.i("Maintenance", "Running periodic maintenance")
 
+        // ── Daily health beacon (Crashlytics) ──
+        // Records a non-fatal snapshot once per day so production devices
+        // are visible in the Crashlytics dashboard even when nothing is wrong.
+        if (isSyncConfigured) {
+            val maintenanceCashDigest = availableCash.toString().hashCode().toString(16)
+            BudgeTrakApplication.updateDiagKeys(mapOf(
+                "cashDigest" to maintenanceCashDigest,
+                "listenerStatus" to if (docSync?.isListening == true) "healthy" else "dead",
+                "lastRefreshDate" to (lastRefreshDate?.toString() ?: "null"),
+                "activeDevices" to syncDevices.size.toString(),
+                "txnCount" to transactions.count { !it.deleted }.toString(),
+                "reCount" to recurringExpenses.count { !it.deleted }.toString(),
+                "plCount" to periodLedger.size.toString()
+            ))
+            BudgeTrakApplication.syncEvent("Daily health: listeners=${if (docSync?.isListening == true) "up" else "down"} txn=${transactions.count { !it.deleted }} devices=${syncDevices.size}")
+            BudgeTrakApplication.recordNonFatal("HEALTH_BEACON",
+                "pl=${periodLedger.size} txn=${transactions.count { !it.deleted }} re=${recurringExpenses.count { !it.deleted }}")
+        }
+
         // ── Backup check ──
         try {
             if (BackupManager.isBackupDue(context)) {
@@ -810,7 +829,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // ── Layer 2: cashHash checkpoint + majority vote ──
-            val cashHash = availableCash.toString()
+            // Use hash digest, not raw cash value, to protect user financial privacy
+            val cashHash = availableCash.toString().hashCode().toString(16)
             val now = System.currentTimeMillis()
 
             // Write our checkpoint to group doc
@@ -887,8 +907,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         android.util.Log.w("Consistency", "Confirmed mismatch — triggering full re-read recovery")
                         BudgeTrakApplication.recordNonFatal(
                             "CONSISTENCY_CASH_MISMATCH",
-                            "my=$myHash majority=$majorityHash devices=${recentDevices.size} group=$groupId",
-                            Exception("Cash mismatch confirmed")
+                            "devices=${recentDevices.size} majorityAgree=$majorityCount",
+                            Exception("Cash mismatch confirmed — triggering full re-read")
                         )
                         // Clear all cursors — next sync does full re-read
                         cursorPrefs.edit().clear().apply()
@@ -2068,6 +2088,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Mismatch pending — recheck on every resume until resolved
             viewModelScope.launch { recheckConsistency() }
         }
+
+        // Update Crashlytics diagnostic keys (attached to every future crash/non-fatal).
+        // Use cash hash (not actual value) to protect user financial privacy.
+        val cashDigest = availableCash.toString().hashCode().toString(16)
+        BudgeTrakApplication.updateDiagKeys(mapOf(
+            "cashDigest" to cashDigest,
+            "listenerStatus" to if (docSync?.isListening == true) "healthy" else if (isSyncConfigured) "dead" else "off",
+            "lastRefreshDate" to (lastRefreshDate?.toString() ?: "null"),
+            "activeDevices" to syncDevices.size.toString(),
+            "txnCount" to transactions.count { !it.deleted }.toString(),
+            "reCount" to recurringExpenses.count { !it.deleted }.toString(),
+            "plCount" to periodLedger.size.toString()
+        ))
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -2557,6 +2590,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // ── App Check token keep-alive (prevents PERMISSION_DENIED on long-lived listeners) ──
+        if (isSyncConfigured) {
+            viewModelScope.launch(Dispatchers.IO) {
+                while (true) {
+                    delay(45 * 60 * 1000L) // check every 45 min
+                    try {
+                        val token = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                            com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                                .getAppCheckToken(false).await()
+                        }
+                        if (token != null) {
+                            val remainingMs = token.expireTimeMillis - System.currentTimeMillis()
+                            if (remainingMs < 35 * 60 * 1000L) {
+                                val newToken = kotlinx.coroutines.withTimeoutOrNull(15_000) {
+                                    com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                                        .getAppCheckToken(true).await()
+                                }
+                                if (newToken != null) {
+                                    val newRemaining = (newToken.expireTimeMillis - System.currentTimeMillis()) / 1000
+                                    BudgeTrakApplication.tokenLog("Proactive token refresh (ViewModel): was ${remainingMs/1000}s from expiry, new expires in ${newRemaining}s")
+                                } else {
+                                    BudgeTrakApplication.recordNonFatal(
+                                        "TOKEN_REFRESH_TIMEOUT",
+                                        "ViewModel proactive refresh hung for 15s, remaining was ${remainingMs/1000}s")
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════

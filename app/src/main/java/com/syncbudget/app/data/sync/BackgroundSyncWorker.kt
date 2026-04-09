@@ -63,21 +63,29 @@ class BackgroundSyncWorker(
             // If foreground ViewModel is alive (stopped but in memory), only check listener health
             val vm = com.syncbudget.app.MainViewModel.instance?.get()
             if (vm != null) {
+                com.syncbudget.app.BudgeTrakApplication.syncEvent("Worker Tier 2: ViewModel alive, sync=${vm.isSyncConfigured}")
                 if (vm.isSyncConfigured) {
                     // Proactively refresh App Check token before it expires.
                     // getAppCheckToken(false) returns cached token even if about to expire.
                     // Check expiry and force-refresh if within 5 min of expiration.
                     try {
-                        val token = com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                            .getAppCheckToken(false).await()
-                        val remainingMs = token.expireTimeMillis - System.currentTimeMillis()
-                        if (remainingMs < 35 * 60 * 1000L) {
-                            // Token within 35 min of expiry — force-refresh now.
-                            // Threshold > max worker interval (30 min in Doze) so at least
-                            // one worker run catches it before the 60-min token expires.
+                        val token = kotlinx.coroutines.withTimeoutOrNull(10_000) {
                             com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-                                .getAppCheckToken(true).await()
-                            Log.i(TAG, "Proactive App Check token refresh (was ${remainingMs/1000}s from expiry)")
+                                .getAppCheckToken(false).await()
+                        }
+                        if (token != null) {
+                            val remainingMs = token.expireTimeMillis - System.currentTimeMillis()
+                            if (remainingMs < 35 * 60 * 1000L) {
+                                val refreshed = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                                    com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+                                        .getAppCheckToken(true).await()
+                                }
+                                if (refreshed != null) {
+                                    com.syncbudget.app.BudgeTrakApplication.tokenLog(
+                                        "Proactive token refresh (Worker Tier 2): was ${remainingMs/1000}s from expiry"
+                                    )
+                                }
+                            }
                         }
                     } catch (_: Exception) {}
 
@@ -87,6 +95,7 @@ class BackgroundSyncWorker(
                             ds.startListeners()
                         }
                         Log.i(TAG, "Restarted dead foreground listeners")
+                        com.syncbudget.app.BudgeTrakApplication.syncEvent("Worker Tier 2: restarted dead foreground listeners")
                     }
 
                     // Ping RTDB lastSeen so device roster stays fresh
@@ -97,6 +106,7 @@ class BackgroundSyncWorker(
             }
 
             // ViewModel is dead (process restarted) — run full background sync
+            com.syncbudget.app.BudgeTrakApplication.syncEvent("Worker Tier 3: ViewModel dead, full sync")
 
             val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
             val groupId = syncPrefs.getString("groupId", null)

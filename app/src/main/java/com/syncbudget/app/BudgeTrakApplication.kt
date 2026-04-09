@@ -30,6 +30,19 @@ class BudgeTrakApplication : Application() {
             tokenLog("$tag: $message")
             crashlytics?.recordException(exception ?: RuntimeException("$tag: $message"))
         }
+
+        /** Log a sync event to Crashlytics custom log (production) + logcat.
+         *  Use for key sync lifecycle events (listener start/stop, recovery, period refresh). */
+        fun syncEvent(msg: String) {
+            Log.i("SyncEvent", msg)
+            crashlytics?.log(msg)
+        }
+
+        /** Update Crashlytics diagnostic keys (attached to every future crash/non-fatal). */
+        fun updateDiagKeys(keys: Map<String, String>) {
+            val c = crashlytics ?: return
+            for ((k, v) in keys) c.setCustomKey(k, v)
+        }
     }
 
     override fun onCreate() {
