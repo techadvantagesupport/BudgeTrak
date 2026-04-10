@@ -1981,7 +1981,7 @@ class MainActivity : ComponentActivity() {
             devices = vm.syncDevices,
             syncStatus = vm.syncStatus,
             lastSyncTime = vm.lastSyncTimeDisplay,
-            familyTimezone = vm.sharedSettings.familyTimezone,
+            groupTimezone = vm.sharedSettings.familyTimezone,
             onTimezoneChange = { tz ->
                 vm.sharedSettings = vm.sharedSettings.copy(familyTimezone = tz, lastChangedBy = vm.localDeviceId)
                 vm.saveSharedSettings()

@@ -600,7 +600,7 @@ object TranslationContext {
         "encryptionKey" to "Label for the end-to-end encryption key used to secure sync data. Technical term.",
         "deviceName" to "Form field label for naming/identifying a device in the sync group.",
         "adminOnly" to "Label indicating a feature or action is restricted to the group administrator.",
-        "familyTimezone" to "Settings label for the shared timezone used by the family sync group.",
+        "groupTimezone" to "Settings label for the shared timezone used by the SYNC group.",
         "selectTimezone" to "Button/placeholder label to open the timezone picker.",
         "showAttributionLabel" to "Checkbox label to show which device created each transaction in the transaction list. 'Attribution' means crediting the source.",
         "you" to "Pronoun label identifying transactions created by the current user/device. Second person pronoun.",

@@ -396,10 +396,10 @@ object EnglishStrings : AppStrings {
         fullRestoreWarning = "Warning: A full restore will delete any transactions or changes made since this save was created. Transactions entered after that point will need to be re-entered or reloaded from a bank CSV.",
         fullBackupRestored = "Full backup restored successfully",
         fullBackupSaved = "Full backup saved successfully",
-        fullBackupSyncWarning = "Restoring a full backup will dissolve the current SYNC group. You will need to create a new group and share a new pairing code with the other devices.",
+        fullBackupSyncWarning = "Restoring a full backup will dissolve the current SYNC group. You will need to create a new group and share a new pairing code with the other linked devices.",
         fullBackupNonAdminBlock = "Only the group admin can restore a full backup. A full restore would corrupt sync state for all devices.",
-        fullBackupGroupRecreated = "Backup restored. New family group created \u2014 share the pairing code with family members.",
-        fullBackupGroupDissolved = "Backup restored. Family group dissolved.",
+        fullBackupGroupRecreated = "Backup restored. New SYNC group created \u2014 share the pairing code with the other linked devices.",
+        fullBackupGroupDissolved = "Backup restored. SYNC group dissolved.",
         linkToRecurring = "Link to",
         linkToAmortization = "Link to",
         createNewAmortization = "Create New Amortization",
@@ -546,10 +546,10 @@ object EnglishStrings : AppStrings {
         title = "SYNC",
         syncButton = "SYNC",
         syncDescription = "Share your budget with up to 5 devices in your household.",
-        createGroup = "Create Family Group",
-        createGroupDescription = "Start a new sync group and invite family members with a pairing code.",
-        joinGroup = "Join Family Group",
-        joinGroupDescription = "Enter a pairing code from a family member to join their sync group.",
+        createGroup = "Create SYNC Group",
+        createGroupDescription = "Start a new SYNC group and invite other devices with a pairing code.",
+        joinGroup = "Join SYNC Group",
+        joinGroupDescription = "Enter a pairing code from another device to join its SYNC group.",
         leaveGroup = "Leave Group",
         dissolveGroup = "Dissolve Group",
         evictionRemoved = "The administrator of your Sync group has removed your device. You can rejoin on the Sync page in Settings.",
@@ -584,21 +584,21 @@ object EnglishStrings : AppStrings {
         syncStatusStale = "Stale",
         syncStatusError = "Error",
         syncStatusOff = "Off",
-        groupCreated = "Family group created",
-        joinedGroup = "Joined family group",
-        leftGroup = "Left family group",
+        groupCreated = "SYNC group created",
+        joinedGroup = "Joined SYNC group",
+        leftGroup = "Left SYNC group",
         groupDissolved = "Group dissolved",
         pairingCodeCopied = "Pairing code copied",
         invalidPairingCode = "Invalid or expired pairing code",
         encryptionKey = "Encryption Key",
         deviceName = "Device Name",
         adminOnly = "Admin only",
-        familyTimezone = "Family Timezone",
+        groupTimezone = "Group Timezone",
         selectTimezone = "Select Timezone",
         showAttributionLabel = "Show Attribution",
         you = "You",
         repairAttributions = "Repair Attributions",
-        repairAttributionsBody = "These device codes appear in your transactions but are not in the current family group. Enter a nickname for each to display instead of the code.",
+        repairAttributionsBody = "These device codes appear in your transactions but are not in the current SYNC group. Enter a nickname for each to display instead of the code.",
         nicknameHint = "Nickname",
         noOrphanedCodes = "No unrecognized device codes found.",
         staleWarning60 = "Sync soon to keep your data current",
@@ -616,7 +616,7 @@ object EnglishStrings : AppStrings {
         errorGroupDeleted = "This group has been dissolved",
         errorEncryption = "Encryption error \u2014 check your pairing",
         joinWarningTitle = "Replace Local Data?",
-        joinWarningBody = "Joining a family group will replace your local budget data with the group's shared data. Your current transactions, goals, and settings will be overwritten. This cannot be undone.",
+        joinWarningBody = "Joining a SYNC group will replace your local budget data with the group's shared data. Your current transactions, goals, and settings will be overwritten. This cannot be undone.",
         dissolveError = "Failed to reach server \u2014 try again later",
         enterNickname = "Your name",
         createGroupTitle = "Create Group",
@@ -625,7 +625,7 @@ object EnglishStrings : AppStrings {
         removeDeviceMessage = { name -> "Remove \"$name\" from this group? The device will be disconnected from SYNC." },
         removeDeviceConfirm = "Remove",
         subscriptionExpiredNotice = "Admin subscription expired. Group will be dissolved soon. Subscribe and claim admin to keep the group active.",
-        updateRequiredNotice = "A family member updated BudgeTrak. Please update from the Play Store to continue syncing.",
+        updateRequiredNotice = "Another device in your SYNC group updated BudgeTrak. Please update from the Play Store to continue syncing.",
         copy = "Copy"
     )
 
@@ -1626,6 +1626,42 @@ object EnglishStrings : AppStrings {
             "group. Non-admin members can view settings but cannot change them \u2014 " +
             "tapping a locked setting shows \"Administrator only\". " +
             "Free users can join an existing group without a subscription.",
+        adminFeaturesTitle = "Admin Decisions: What You Control & Why",
+        adminFeaturesIntro = "As the admin you make a handful of choices that affect everyone in the SYNC group. " +
+            "Here is a quick guide to each one and when you might want to use it.",
+        adminFeatureBudgetTitle = "Budget Period & Reset",
+        adminFeatureBudgetBody = "The budget period (Daily / Weekly / Monthly) and the reset schedule are " +
+            "shared across all linked devices, so everyone sees the same available cash. " +
+            "Pick the period that matches how you actually plan spending: daily for tight budgets " +
+            "or strong daily awareness, weekly to align with paychecks, monthly for stable income " +
+            "and longer planning. Only the admin can change this or tap Start/Reset Budget so " +
+            "stray taps from another device cannot wipe everyone's progress.",
+        adminFeatureCurrencyTitle = "Currency, Date Format & Display",
+        adminFeatureCurrencyBody = "Currency symbol, date format, and other shared display preferences are set " +
+            "by the admin and applied to every device. Use this to keep the household consistent. " +
+            "Each device can still pick its own theme (light / dark / system) independently.",
+        adminFeatureTimezoneTitle = "Group Timezone",
+        adminFeatureTimezoneBody = "If your group spans multiple timezones (a traveling spouse, college kid, " +
+            "or family across regions), set the Group Timezone to a single zone everyone agrees on. " +
+            "Period boundaries (when each new day, week, or month starts) are calculated in that " +
+            "timezone so all devices roll over together. Leave it on the default \"Device timezone\" " +
+            "if everyone is in the same place.",
+        adminFeatureAttributionTitle = "Transaction Attribution",
+        adminFeatureAttributionBody = "Attribution adds a small label to each transaction in the list showing " +
+            "which device recorded it. Turn this on if you want visibility into who entered what \u2014 " +
+            "useful for shared expenses or teaching kids about budgeting. Leave it off for more " +
+            "privacy. The label shows \"You\" for your own entries and the device nickname for others.",
+        adminFeatureRetentionTitle = "Receipt Photo Retention",
+        adminFeatureRetentionBody = "If you use receipt photos, you can set a retention period (e.g., 90 days) " +
+            "after which older photos are automatically removed from cloud storage. This keeps cloud " +
+            "usage low and limits how long sensitive purchase images are kept. Set it longer if you " +
+            "need photos for tax records, shorter if you only use them as in-the-moment proof.",
+        adminFeatureManageTitle = "Managing Devices & Dissolving",
+        adminFeatureManageBody = "Long-press a device in the roster to rename or remove it. Use this when " +
+            "someone gets a new phone, leaves the household, or you want to retire an old device. " +
+            "Dissolving the group permanently disconnects all members and erases the cloud-stored " +
+            "data \u2014 each device keeps its own local copy. Use Dissolve only when you're sure the " +
+            "group should end.",
         gettingStartedTitle = "Getting Started",
         gettingStartedBody = "To set up SYNC: Open Settings, tap SYNC, and tap " +
             "\"Create Group\" (requires subscription). A SYNC group is created with you as admin. " +

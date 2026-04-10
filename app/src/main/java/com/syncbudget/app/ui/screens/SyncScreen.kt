@@ -128,7 +128,7 @@ fun SyncScreen(
     devices: List<DeviceInfo>,
     syncStatus: String,
     lastSyncTime: String?,
-    familyTimezone: String = "",
+    groupTimezone: String = "",
     onTimezoneChange: (String) -> Unit = {},
     showAttribution: Boolean = false,
     onShowAttributionChange: (Boolean) -> Unit = {},
@@ -392,15 +392,15 @@ fun SyncScreen(
                     }
                 }
 
-                // Family Timezone
+                // Group Timezone
                 item {
-                    val displayTz = familyTimezone.ifEmpty { java.util.TimeZone.getDefault().id }
+                    val displayTz = groupTimezone.ifEmpty { java.util.TimeZone.getDefault().id }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${S.sync.familyTimezone}: ",
+                            text = "${S.sync.groupTimezone}: ",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -1000,7 +1000,7 @@ fun SyncScreen(
                 text = {
                     LazyColumn(modifier = Modifier.height(300.dp)) {
                         items(COMMON_TIMEZONES) { tz ->
-                            val isCurrent = tz == familyTimezone || (familyTimezone.isEmpty() && tz == java.util.TimeZone.getDefault().id)
+                            val isCurrent = tz == groupTimezone || (groupTimezone.isEmpty() && tz == java.util.TimeZone.getDefault().id)
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)

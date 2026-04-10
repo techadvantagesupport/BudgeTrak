@@ -68,6 +68,21 @@ fun SyncHelpScreen(onBack: () -> Unit) {
             HelpSectionTitle(S.syncHelp.adminRoleTitle)
             HelpBodyText(S.syncHelp.adminRoleBody)
 
+            HelpSectionTitle(S.syncHelp.adminFeaturesTitle)
+            HelpBodyText(S.syncHelp.adminFeaturesIntro)
+            HelpSubSectionTitle(S.syncHelp.adminFeatureBudgetTitle)
+            HelpBodyText(S.syncHelp.adminFeatureBudgetBody)
+            HelpSubSectionTitle(S.syncHelp.adminFeatureCurrencyTitle)
+            HelpBodyText(S.syncHelp.adminFeatureCurrencyBody)
+            HelpSubSectionTitle(S.syncHelp.adminFeatureTimezoneTitle)
+            HelpBodyText(S.syncHelp.adminFeatureTimezoneBody)
+            HelpSubSectionTitle(S.syncHelp.adminFeatureAttributionTitle)
+            HelpBodyText(S.syncHelp.adminFeatureAttributionBody)
+            HelpSubSectionTitle(S.syncHelp.adminFeatureRetentionTitle)
+            HelpBodyText(S.syncHelp.adminFeatureRetentionBody)
+            HelpSubSectionTitle(S.syncHelp.adminFeatureManageTitle)
+            HelpBodyText(S.syncHelp.adminFeatureManageBody)
+
             HelpSectionTitle(S.syncHelp.gettingStartedTitle)
             HelpBodyText(S.syncHelp.gettingStartedBody)
 

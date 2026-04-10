@@ -398,8 +398,8 @@ object SpanishStrings : AppStrings {
         fullBackupSaved = "Respaldo completo guardado exitosamente",
         fullBackupSyncWarning = "Restaurar un respaldo completo disolver\u00e1 el grupo SYNC actual. Deber\u00e1s crear un nuevo grupo y compartir un nuevo c\u00f3digo de emparejamiento con los otros dispositivos.",
         fullBackupNonAdminBlock = "Solo el administrador del grupo puede restaurar un respaldo completo. Una restauraci\u00f3n completa corromper\u00eda el estado de sincronizaci\u00f3n de todos los dispositivos.",
-        fullBackupGroupRecreated = "Respaldo restaurado. Nuevo grupo familiar creado \u2014 comparte el c\u00f3digo de emparejamiento con los miembros de la familia.",
-        fullBackupGroupDissolved = "Respaldo restaurado. Grupo familiar disuelto.",
+        fullBackupGroupRecreated = "Respaldo restaurado. Nuevo grupo SYNC creado \u2014 comparte el c\u00f3digo de emparejamiento con los otros dispositivos vinculados.",
+        fullBackupGroupDissolved = "Respaldo restaurado. Grupo SYNC disuelto.",
         linkToRecurring = "Vincular a",
         linkToAmortization = "Vincular a",
         createNewAmortization = "Crear nueva amortizaci\u00f3n",
@@ -546,10 +546,10 @@ object SpanishStrings : AppStrings {
         title = "SYNC",
         syncButton = "SYNC",
         syncDescription = "Comparte tu presupuesto con hasta 5 dispositivos de tu hogar.",
-        createGroup = "Crear Grupo Familiar",
-        createGroupDescription = "Inicia un nuevo grupo de sincronizaci\u00f3n e invita a familiares con un c\u00f3digo de emparejamiento.",
-        joinGroup = "Unirse a Grupo Familiar",
-        joinGroupDescription = "Ingresa un c\u00f3digo de emparejamiento de un familiar para unirte a su grupo.",
+        createGroup = "Crear Grupo SYNC",
+        createGroupDescription = "Inicia un nuevo grupo SYNC e invita a otros dispositivos con un c\u00f3digo de emparejamiento.",
+        joinGroup = "Unirse a Grupo SYNC",
+        joinGroupDescription = "Ingresa un c\u00f3digo de emparejamiento de otro dispositivo para unirte a su grupo SYNC.",
         leaveGroup = "Salir del Grupo",
         dissolveGroup = "Disolver Grupo",
         evictionRemoved = "El administrador de tu grupo de sincronizaci\u00f3n ha eliminado tu dispositivo. Puedes volver a unirte en la p\u00e1gina de Sincronizaci\u00f3n en Configuraci\u00f3n.",
@@ -584,21 +584,21 @@ object SpanishStrings : AppStrings {
         syncStatusStale = "Desactualizado",
         syncStatusError = "Error",
         syncStatusOff = "Desactivado",
-        groupCreated = "Grupo familiar creado",
-        joinedGroup = "Te uniste al grupo familiar",
-        leftGroup = "Saliste del grupo familiar",
+        groupCreated = "Grupo SYNC creado",
+        joinedGroup = "Te uniste al grupo SYNC",
+        leftGroup = "Saliste del grupo SYNC",
         groupDissolved = "Grupo disuelto",
         pairingCodeCopied = "C\u00f3digo copiado",
         invalidPairingCode = "C\u00f3digo inv\u00e1lido o expirado",
         encryptionKey = "Clave de Cifrado",
         deviceName = "Nombre del Dispositivo",
         adminOnly = "Solo administrador",
-        familyTimezone = "Zona Horaria Familiar",
+        groupTimezone = "Zona Horaria del Grupo",
         selectTimezone = "Seleccionar Zona Horaria",
         showAttributionLabel = "Mostrar Atribuci\u00f3n",
         you = "T\u00fa",
         repairAttributions = "Reparar Atribuciones",
-        repairAttributionsBody = "Estos c\u00f3digos de dispositivo aparecen en tus transacciones pero no est\u00e1n en el grupo familiar actual. Ingresa un apodo para cada uno en lugar del c\u00f3digo.",
+        repairAttributionsBody = "Estos c\u00f3digos de dispositivo aparecen en tus transacciones pero no est\u00e1n en el grupo SYNC actual. Ingresa un apodo para cada uno en lugar del c\u00f3digo.",
         nicknameHint = "Apodo",
         noOrphanedCodes = "No se encontraron c\u00f3digos de dispositivo no reconocidos.",
         staleWarning60 = "Sincroniza pronto para mantener tus datos actualizados",
@@ -616,7 +616,7 @@ object SpanishStrings : AppStrings {
         errorGroupDeleted = "Este grupo ha sido disuelto",
         errorEncryption = "Error de cifrado \u2014 verifica tu emparejamiento",
         joinWarningTitle = "\u00bfReemplazar Datos Locales?",
-        joinWarningBody = "Unirte a un grupo familiar reemplazar\u00e1 tus datos locales con los datos compartidos del grupo. Tus transacciones, metas y configuraciones actuales ser\u00e1n sobrescritas. Esto no se puede deshacer.",
+        joinWarningBody = "Unirte a un grupo SYNC reemplazar\u00e1 tus datos locales con los datos compartidos del grupo. Tus transacciones, metas y configuraciones actuales ser\u00e1n sobrescritas. Esto no se puede deshacer.",
         dissolveError = "No se pudo conectar al servidor \u2014 int\u00e9ntalo m\u00e1s tarde",
         enterNickname = "Tu nombre",
         createGroupTitle = "Crear Grupo",
@@ -625,7 +625,7 @@ object SpanishStrings : AppStrings {
         removeDeviceMessage = { name -> "Eliminar \"$name\" de este grupo? El dispositivo se desconectar\u00e1 de SYNC." },
         removeDeviceConfirm = "Eliminar",
         subscriptionExpiredNotice = "La suscripci\u00f3n del admin expir\u00f3. El grupo se disolver\u00e1 pronto. Suscr\u00edbete y reclama admin para mantener el grupo activo.",
-        updateRequiredNotice = "Un miembro de la familia actualiz\u00f3 BudgeTrak. Actualiza desde Play Store para continuar sincronizando.",
+        updateRequiredNotice = "Otro dispositivo en tu grupo SYNC actualiz\u00f3 BudgeTrak. Actualiza desde Play Store para continuar sincronizando.",
         copy = "Copiar"
     )
 
@@ -1620,10 +1620,47 @@ object SpanishStrings : AppStrings {
             "cambiar la configuraci\u00f3n compartida del presupuesto (moneda, per\u00edodo, calendario de reinicio), " +
             "iniciar o restablecer el presupuesto, generar c\u00f3digos de emparejamiento para invitar nuevos dispositivos, " +
             "eliminar dispositivos (mantener pulsado en la lista de dispositivos), " +
-            "configurar la zona horaria familiar, habilitar la atribuci\u00f3n de transacciones y disolver el " +
+            "configurar la zona horaria del grupo, habilitar la atribuci\u00f3n de transacciones y disolver el " +
             "grupo. Los miembros no admin pueden ver la configuraci\u00f3n pero no cambiarla \u2014 " +
             "tocar una opci\u00f3n bloqueada muestra \"Solo administrador\". " +
             "Los usuarios gratuitos pueden unirse a un grupo sin suscripci\u00f3n.",
+        // TODO(Step 3): translate to Spanish
+        adminFeaturesTitle = "Admin Decisions: What You Control & Why",
+        adminFeaturesIntro = "As the admin you make a handful of choices that affect everyone in the SYNC group. " +
+            "Here is a quick guide to each one and when you might want to use it.",
+        adminFeatureBudgetTitle = "Budget Period & Reset",
+        adminFeatureBudgetBody = "The budget period (Daily / Weekly / Monthly) and the reset schedule are " +
+            "shared across all linked devices, so everyone sees the same available cash. " +
+            "Pick the period that matches how you actually plan spending: daily for tight budgets " +
+            "or strong daily awareness, weekly to align with paychecks, monthly for stable income " +
+            "and longer planning. Only the admin can change this or tap Start/Reset Budget so " +
+            "stray taps from another device cannot wipe everyone's progress.",
+        adminFeatureCurrencyTitle = "Currency, Date Format & Display",
+        adminFeatureCurrencyBody = "Currency symbol, date format, and other shared display preferences are set " +
+            "by the admin and applied to every device. Use this to keep the household consistent. " +
+            "Each device can still pick its own theme (light / dark / system) independently.",
+        adminFeatureTimezoneTitle = "Group Timezone",
+        adminFeatureTimezoneBody = "If your group spans multiple timezones (a traveling spouse, college kid, " +
+            "or family across regions), set the Group Timezone to a single zone everyone agrees on. " +
+            "Period boundaries (when each new day, week, or month starts) are calculated in that " +
+            "timezone so all devices roll over together. Leave it on the default \"Device timezone\" " +
+            "if everyone is in the same place.",
+        adminFeatureAttributionTitle = "Transaction Attribution",
+        adminFeatureAttributionBody = "Attribution adds a small label to each transaction in the list showing " +
+            "which device recorded it. Turn this on if you want visibility into who entered what \u2014 " +
+            "useful for shared expenses or teaching kids about budgeting. Leave it off for more " +
+            "privacy. The label shows \"You\" for your own entries and the device nickname for others.",
+        adminFeatureRetentionTitle = "Receipt Photo Retention",
+        adminFeatureRetentionBody = "If you use receipt photos, you can set a retention period (e.g., 90 days) " +
+            "after which older photos are automatically removed from cloud storage. This keeps cloud " +
+            "usage low and limits how long sensitive purchase images are kept. Set it longer if you " +
+            "need photos for tax records, shorter if you only use them as in-the-moment proof.",
+        adminFeatureManageTitle = "Managing Devices & Dissolving",
+        adminFeatureManageBody = "Long-press a device in the roster to rename or remove it. Use this when " +
+            "someone gets a new phone, leaves the household, or you want to retire an old device. " +
+            "Dissolving the group permanently disconnects all members and erases the cloud-stored " +
+            "data \u2014 each device keeps its own local copy. Use Dissolve only when you're sure the " +
+            "group should end.",
         gettingStartedTitle = "Primeros Pasos",
         gettingStartedBody = "Para configurar la sincronizaci\u00f3n: Abre Configuraci\u00f3n, toca Sincronizar y " +
             "toca \"Crear Grupo\" (requiere suscripci\u00f3n). Se crear\u00e1 un grupo contigo como admin. " +
