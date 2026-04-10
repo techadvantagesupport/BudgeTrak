@@ -723,7 +723,7 @@ object SpanishStrings : AppStrings {
         availableCashSectionTitle = "Efectivo disponible",
         availableCashSectionBody = "El Efectivo Disponible es el n\u00famero que se muestra en la pantalla Solari. Se calcula " +
             "autom\u00e1ticamente a partir de tus cr\u00e9ditos de per\u00edodo, gastos e ingresos extra. " +
-            "En Sincronizaci\u00f3n Familiar, se mantiene consistente en todos los dispositivos sin intervenci\u00f3n manual. " +
+            "Con SYNC activado, se mantiene consistente en todos los dispositivos sin intervenci\u00f3n manual. " +
             "El resultado: un solo n\u00famero que te dice exactamente cu\u00e1nto puedes gastar.",
         gettingStartedTitle = "Primeros pasos",
         gettingStartedBody = "Sigue estos pasos para configurar tu presupuesto por primera vez:",
@@ -779,17 +779,18 @@ object SpanishStrings : AppStrings {
         featureBullet9 = "Detecci\u00f3n de transacciones duplicadas",
         featureBullet10 = "Categor\u00edas totalmente personalizables con selecci\u00f3n de iconos",
         featureBullet11 = "Soporte para m\u00faltiples monedas y formatos de fecha con archivado de transacciones",
-        featureBullet12 = "Sincronizaci\u00f3n Familiar \u2014 comparte presupuestos entre dispositivos con cifrado de extremo a extremo",
-        syncIndicatorTitle = "Indicador de sincronizaci\u00f3n",
-        syncIndicatorBody = "Cuando la Sincronizaci\u00f3n Familiar est\u00e1 activada, un indicador aparece en la esquina inferior izquierda de la pantalla Solari:",
-        syncArrowsBullet = "\u00cdcono de sincronizaci\u00f3n \u2014 muestra el estado de conexi\u00f3n: verde = en l\u00ednea y sincronizando, amarillo = reconectando, rojo = sin internet o error",
-        syncDotsBullet = "Puntos de colores \u2014 uno por dispositivo familiar (hasta 4), mostrando presencia en tiempo real: verde = en l\u00ednea, azul oscuro = visto < 1 hr, amarillo = 1\u20132 hrs, rojo = > 2 hrs",
+        featureBullet12 = "SYNC \u2014 comparte tu presupuesto entre dispositivos del hogar con cifrado de extremo a extremo",
+        syncIndicatorTitle = "Indicador de SYNC",
+        syncIndicatorBody = "Cuando SYNC est\u00e1 activado, aparece un indicador en la esquina inferior izquierda de la pantalla Solari:",
+        syncArrowsBullet = "\u00cdcono de SYNC \u2014 muestra el estado de la conexi\u00f3n: verde = en l\u00ednea y sincronizando, amarillo = la conexi\u00f3n se est\u00e1 recuperando, rojo = sin internet o error",
+        syncDotsBullet = "Puntos de colores \u2014 uno por dispositivo vinculado (hasta 4), mostrando presencia en tiempo real: verde = en l\u00ednea, azul oscuro = visto < 1 hr, amarillo = 1\u20132 hrs, rojo = > 2 hrs",
         privacyTitle = "Privacidad y seguridad",
         privacyBody = "Tus datos financieros permanecen en tu dispositivo por defecto. BudgeTrak no " +
-            "recopila an\u00e1lisis y no comparte tus datos con nadie. Al exportar tus transacciones, puedes elegir formato cifrado " +
-            "(ChaCha20-Poly1305 con derivaci\u00f3n de clave PBKDF2) para m\u00e1xima seguridad. " +
-            "Si activas la Sincronizaci\u00f3n Familiar, los datos se comparten entre tus dispositivos con cifrado de extremo a extremo \u2014 " +
-            "el servidor no puede leer tus datos financieros. Tu dinero, tus datos, tu control.",
+            "recopila an\u00e1lisis y no comparte tus datos con nadie. Al exportar tus transacciones, puedes elegir un formato " +
+            "cifrado protegido por una contrase\u00f1a que t\u00fa eliges, con cifrado de extremo a extremo de est\u00e1ndar industrial. " +
+            "Cuando activas SYNC, los datos se comparten entre tus dispositivos vinculados con el mismo cifrado de extremo a extremo \u2014 " +
+            "el servidor en la nube solo almacena datos cifrados y no puede leer tus transacciones, montos ni nombres de comercios. " +
+            "Tu dinero, tus datos, tu control.",
         widgetTitle = "Widget de pantalla de inicio",
         widgetBody = "BudgeTrak incluye un widget de pantalla de inicio que muestra tu efectivo disponible " +
             "en estilo de pantalla Solari, para que puedas consultar tu presupuesto de un vistazo sin abrir la app. " +
@@ -801,14 +802,13 @@ object SpanishStrings : AppStrings {
             "con selecci\u00f3n de categor\u00eda.",
         widgetFreeDesc = "Los usuarios gratuitos pueden agregar 1 transacci\u00f3n de widget por d\u00eda. La pantalla Solari muestra " +
             "un mensaje de actualizaci\u00f3n. Los usuarios de pago tienen transacciones ilimitadas desde el widget y una pantalla limpia.",
-        // TODO(Step 3): translate to Spanish
-        subExpiryWarningTitle = "Subscription Expiry Notice",
-        subExpiryWarningBody = "If you're using SYNC and the admin's subscription expires, a notice " +
-            "appears on the dashboard once per session. You'll have a 7-day grace period to resubscribe " +
-            "before the SYNC group is dissolved. During the grace period, any subscriber in the group " +
-            "can claim the admin role from the SYNC page to keep the group alive. If no admin " +
-            "subscription is active by the end of the 7 days, the group is dissolved and each device " +
-            "keeps its own local copy of the data."
+        subExpiryWarningTitle = "Aviso de Vencimiento de Suscripci\u00f3n",
+        subExpiryWarningBody = "Si est\u00e1s usando SYNC y la suscripci\u00f3n del administrador vence, aparece un aviso " +
+            "en el panel una vez por sesi\u00f3n. Tendr\u00e1s un per\u00edodo de gracia de 7 d\u00edas para volver a suscribirte " +
+            "antes de que el grupo SYNC se disuelva. Durante el per\u00edodo de gracia, cualquier suscriptor del grupo " +
+            "puede reclamar el rol de administrador desde la p\u00e1gina SYNC para mantener el grupo activo. " +
+            "Si no hay una suscripci\u00f3n de administrador activa al final de los 7 d\u00edas, el grupo se disuelve " +
+            "y cada dispositivo conserva su propia copia local de los datos."
     )
 
     override val settingsHelp = SettingsHelpStrings(
@@ -824,8 +824,8 @@ object SpanishStrings : AppStrings {
         configureTitle = "Configurar tu presupuesto",
         configureBody = "En la parte superior de Ajustes, la Gu\u00eda de Inicio R\u00e1pido " +
             "gu\u00eda a nuevos usuarios paso a paso. Debajo, los botones Configurar Presupuesto " +
-            "y Sincronizar dan acceso a la configuraci\u00f3n del presupuesto (fuentes de ingreso, " +
-            "per\u00edodo, c\u00e1lculo del presupuesto seguro) y sincronizaci\u00f3n familiar. " +
+            "y SYNC dan acceso a la configuraci\u00f3n del presupuesto (fuentes de ingreso, " +
+            "per\u00edodo, c\u00e1lculo del presupuesto seguro) y a los ajustes de SYNC. " +
             "Consulta sus p\u00e1ginas de ayuda para m\u00e1s detalles.",
         currencyTitle = "Moneda",
         currencyBody = "Elige el s\u00edmbolo de moneda que se muestra en toda la app. El men\u00fa desplegable incluye " +
@@ -877,12 +877,12 @@ object SpanishStrings : AppStrings {
         matchCharsBullet = "Caracteres de coincidencia \u2014 longitud m\u00ednima de subcadena compartida para la coincidencia de nombres de comercio",
         matchingNote = "Los valores predeterminados funcionan bien para la mayor\u00eda. Aumenta las tolerancias si la " +
             "app no detecta coincidencias, o reduc\u00e9las si ves demasiados falsos positivos.",
-        // TODO(Step 3): translate to Spanish
-        autoCapitalizeTitle = "Auto Capitalize",
-        autoCapitalizeBody = "When enabled (default), merchant names and descriptions you type into transaction " +
-            "dialogs are automatically formatted in Title Case as you finish each word \u2014 \"chick fil a\" " +
-            "becomes \"Chick Fil A\", \"DOORDASH\" becomes \"Doordash\". This keeps your transaction list " +
-            "looking clean and consistent without extra effort. Turn it off if you prefer to type capitalization manually.",
+        autoCapitalizeTitle = "May\u00fasculas Autom\u00e1ticas",
+        autoCapitalizeBody = "Cuando est\u00e1 activado (predeterminado), los nombres de comercio y descripciones " +
+            "que escribes en los di\u00e1logos de transacci\u00f3n se formatean autom\u00e1ticamente con may\u00fasculas iniciales " +
+            "a medida que terminas cada palabra \u2014 \"chick fil a\" se convierte en \"Chick Fil A\", \"DOORDASH\" " +
+            "se convierte en \"Doordash\". Esto mantiene tu lista de transacciones limpia y consistente sin esfuerzo extra. " +
+            "Desact\u00edvalo si prefieres escribir las may\u00fasculas manualmente.",
         paidTitle = "Usuario de Pago y Suscriptor",
         paidBody = "BudgeTrak tiene dos niveles de mejora. Usuario de pago (compra \u00fanica) desbloquea:",
         paidSave = "Sin anuncios \u2014 el banner en la parte superior de todas las pantallas se oculta",
@@ -897,7 +897,7 @@ object SpanishStrings : AppStrings {
             "widget de la pantalla de inicio. Desact\u00edvalo para ocultar el logo y obtener una apariencia m\u00e1s minimalista.",
         receiptPhotosTitle = "Fotos de Recibos",
         receiptPhotosBody = "Los usuarios de pago pueden adjuntar hasta 5 fotos por transacci\u00f3n. Desliza a la izquierda en una transacci\u00f3n para ver el panel de fotos, o usa el icono de c\u00e1mara en el di\u00e1logo de edici\u00f3n.",
-        receiptPhotosBullet1 = "Las fotos se almacenan localmente y se sincronizan entre dispositivos familiares",
+        receiptPhotosBullet1 = "Las fotos se almacenan localmente y se sincronizan entre los dispositivos vinculados cuando SYNC est\u00e1 activado",
         receiptPhotosBullet2 = "Mant\u00e9n presionada una miniatura para eliminarla",
         receiptPhotosBullet3 = "Toca una miniatura para verla en pantalla completa",
         receiptPhotosRetentionTitle = "Retenci\u00f3n de Fotos",
@@ -905,7 +905,7 @@ object SpanishStrings : AppStrings {
         receiptPhotosRetentionNote = "Cuando las fotos se eliminan por antig\u00fcedad, la eliminaci\u00f3n se sincroniza autom\u00e1ticamente a todos los dispositivos del grupo.",
         receiptPhotosBullet4 = "Toca el icono de c\u00e1mara o elige desde la galer\u00eda para adjuntar fotos",
         receiptPhotosBullet5 = "Las fotos se comprimen autom\u00e1ticamente para almacenamiento eficiente (m\u00e1x 1000px, ~250KB)",
-        receiptPhotosBullet6 = "En un grupo de sincronizaci\u00f3n, las fotos se encriptan y comparten entre dispositivos familiares",
+        receiptPhotosBullet6 = "En un grupo SYNC, las fotos se cifran y se comparten entre todos los dispositivos vinculados",
         receiptPhotosBullet7 = "Un administrador puede establecer un per\u00edodo de retenci\u00f3n \u2014 las fotos m\u00e1s antiguas que los d\u00edas configurados se eliminan autom\u00e1ticamente del almacenamiento en la nube",
         categoriesTitle = "Categor\u00edas",
         categoriesBody = "Las categor\u00edas te permiten clasificar tus transacciones para un mejor an\u00e1lisis de gastos. " +
@@ -1069,14 +1069,14 @@ object SpanishStrings : AppStrings {
             "protegido con una contrase\u00f1a que t\u00fa eliges. Este es el formato recomendado para respaldos " +
             "y transferencia de datos entre dispositivos, ya que mantiene tu informaci\u00f3n financiera privada.",
         encryptionDetailsTitle = "Detalles del cifrado",
-        encryptionDetailsBody = "Tu archivo est\u00e1 protegido con cifrado autenticado ChaCha20-Poly1305 \u2014 " +
-            "la misma familia de cifrados utilizada por apps de mensajer\u00eda modernas y VPNs. " +
-            "Tu contrase\u00f1a nunca se almacena; en su lugar, se transforma en una clave de cifrado " +
-            "usando PBKDF2 con 100,000 iteraciones, lo que hace los ataques de fuerza bruta extremadamente lentos.",
+        encryptionDetailsBody = "Tu archivo est\u00e1 protegido con cifrado de extremo a extremo de est\u00e1ndar industrial \u2014 " +
+            "del mismo nivel que utilizan las apps de mensajer\u00eda segura modernas. Tu contrase\u00f1a nunca se almacena; " +
+            "en su lugar, BudgeTrak la fortalece criptogr\u00e1ficamente para convertirla en una clave de cifrado, " +
+            "haciendo que los ataques de fuerza bruta sean impracticables.",
         passwordImportanceTitle = "Por qu\u00e9 importa tu contrase\u00f1a",
         passwordImportanceBody = "El cifrado es tan fuerte como tu contrase\u00f1a. Una contrase\u00f1a corta o com\u00fan " +
-            "puede adivinarse r\u00e1pidamente, incluso con cifrado fuerte. Esto es lo que una tarjeta " +
-            "gr\u00e1fica moderna de alta gama (capaz de probar miles de millones de hashes simples por segundo) podr\u00eda lograr:",
+            "puede adivinarse r\u00e1pidamente incluso con cifrado fuerte. La siguiente tabla estima cu\u00e1nto " +
+            "tardar\u00eda un atacante decidido en descifrar contrase\u00f1as de distintas longitudes y complejidades:",
         passwordTableHeader = "Contrase\u00f1a",
         passwordTableExample = "Ejemplo",
         passwordTableTime = "Tiempo para descifrar",
@@ -1098,15 +1098,15 @@ object SpanishStrings : AppStrings {
         pw4Word = "Frase de 4 palabras",
         pw4WordEx = "maple cloud river fox",
         pw4WordTime = "billones de a\u00f1os",
-        pbkdfNote = "Debido a que tu contrase\u00f1a pasa por 100,000 rondas de PBKDF2 antes de usarse como " +
-            "clave de cifrado, cada intento se hace deliberadamente muy costoso. Una sola GPU de alta gama " +
-            "solo puede intentar aproximadamente 100,000\u2013500,000 contrase\u00f1as por segundo contra este archivo \u2014 " +
-            "millones de veces m\u00e1s lento que atacar un hash simple.",
+        pbkdfNote = "BudgeTrak hace que cada intento de adivinar tu contrase\u00f1a sea deliberadamente lento y costoso, " +
+            "de modo que incluso un atacante con hardware potente solo puede probar una fracci\u00f3n diminuta de las " +
+            "contrase\u00f1as que podr\u00eda atacar contra un archivo mal protegido. Combinado con una contrase\u00f1a fuerte, " +
+            "tu archivo cifrado es pr\u00e1cticamente irrompible.",
         recommendedTitle = "Estrategia de contrase\u00f1a recomendada",
         recommendedBody = "Usa 12 o m\u00e1s caracteres combinando may\u00fasculas, min\u00fasculas, " +
             "n\u00fameros y s\u00edmbolos. Una frase de 4\u20135 palabras aleatorias (ej. \"correct horse battery staple\") " +
             "tambi\u00e9n es excelente. Con una contrase\u00f1a fuerte de este tipo, " +
-            "incluso un adversario a nivel estatal con miles de GPUs " +
+            "incluso un atacante decidido con hardware avanzado " +
             "necesitar\u00eda billones de a\u00f1os para descifrar tu archivo.",
         passwordMinNote = "La longitud m\u00ednima requerida es de 8 caracteres, pero m\u00e1s largo siempre es mejor. " +
             "Debes ingresar tu contrase\u00f1a dos veces para confirmarla antes de guardar. " +
@@ -1145,35 +1145,34 @@ object SpanishStrings : AppStrings {
         tip3 = "El mismo archivo se puede cargar tantas veces como sea necesario \u2014 la detecci\u00f3n de duplicados evita entradas dobles accidentales.",
         tip4 = "Usa el filtro de categor\u00eda (toca cualquier icono de categor\u00eda) combinado con el modo de selecci\u00f3n para ediciones masivas eficientes.",
         tip5 = "Despu\u00e9s de una importaci\u00f3n bancaria, revisa las transacciones categorizadas autom\u00e1ticamente y usa Cambiar categor\u00eda en lote para corregir asignaciones incorrectas.",
-        // TODO(Step 3): translate to Spanish
-        sortTitle = "Sorting Transactions",
-        sortBody = "Tap the sort button in the action bar to choose how the transaction list is ordered. " +
-            "You can sort by:",
-        sortDateBullet = "Date \u2014 default; most recent at the top",
-        sortAmountBullet = "Amount \u2014 useful for spotting your largest expenses or smallest charges",
-        sortCategoryBullet = "Category \u2014 groups transactions by category for quick scanning",
-        sortDirectionNote = "Tap the sort button again to reverse the direction (ascending vs. descending). " +
-            "An arrow next to the sort button shows the current direction.",
-        filtersExpandedTitle = "Filtering Transactions",
-        filtersExpandedBody = "The filter button reveals toggles that narrow the list to specific kinds of transactions. " +
-            "You can combine filters with the date and merchant search:",
-        filterRecurringBullet = "Recurring \u2014 only transactions linked to a recurring expense or budget income",
-        filterExcludedBullet = "Excluded \u2014 only transactions marked as excluded from the budget (e.g., transfers between accounts)",
-        filterNotVerifiedBullet = "Not Verified \u2014 only auto-categorized transactions you haven't yet confirmed",
-        filterPhotosBullet = "Photos \u2014 only transactions that have a receipt photo attached",
-        rankedMatchTitle = "Multi-Candidate Match Dialogs",
-        rankedMatchBody = "When BudgeTrak detects that a transaction may match a recurring expense, " +
-            "savings goal contribution, amortization payment, or budgeted income source, it shows " +
-            "a confirmation dialog. If more than one of your entries could be a match, the dialog " +
-            "lists all candidates with radio buttons so you can pick the correct one.",
-        rankedMatchClosestNote = "Candidates are ranked by closeness: the entry whose date and amount " +
-            "most closely match your transaction is pre-selected at the top. " +
-            "Just tap Yes to accept the suggested match, or pick a different candidate first.",
-        pdfReportTitle = "PDF Expense Reports",
-        pdfReportBody = "Paid users can export a polished PDF report of their transactions for any date range. " +
-            "Tap the Save icon, choose \"PDF Report\", and pick the dates you want to include. " +
-            "The report groups transactions by category, totals each section, and includes a summary " +
-            "page \u2014 ideal for taxes, expense reimbursement, or sharing with an accountant."
+        sortTitle = "Ordenar Transacciones",
+        sortBody = "Toca el bot\u00f3n de ordenar en la barra de acciones para elegir c\u00f3mo se ordena la lista de transacciones. " +
+            "Puedes ordenar por:",
+        sortDateBullet = "Fecha \u2014 predeterminado; las m\u00e1s recientes arriba",
+        sortAmountBullet = "Monto \u2014 \u00fatil para identificar tus gastos m\u00e1s grandes o cargos m\u00e1s peque\u00f1os",
+        sortCategoryBullet = "Categor\u00eda \u2014 agrupa las transacciones por categor\u00eda para revisarlas r\u00e1pidamente",
+        sortDirectionNote = "Toca el bot\u00f3n de ordenar de nuevo para invertir la direcci\u00f3n (ascendente o descendente). " +
+            "Una flecha junto al bot\u00f3n muestra la direcci\u00f3n actual.",
+        filtersExpandedTitle = "Filtrar Transacciones",
+        filtersExpandedBody = "El bot\u00f3n de filtros muestra interruptores que limitan la lista a tipos espec\u00edficos de transacciones. " +
+            "Puedes combinar los filtros con la b\u00fasqueda por fecha y por comercio:",
+        filterRecurringBullet = "Recurrentes \u2014 solo transacciones vinculadas a un gasto recurrente o ingreso del presupuesto",
+        filterExcludedBullet = "Excluidas \u2014 solo transacciones marcadas como excluidas del presupuesto (por ejemplo, transferencias entre cuentas)",
+        filterNotVerifiedBullet = "Sin verificar \u2014 solo transacciones categorizadas autom\u00e1ticamente que a\u00fan no has confirmado",
+        filterPhotosBullet = "Fotos \u2014 solo transacciones que tienen al menos una foto de recibo adjunta",
+        rankedMatchTitle = "Di\u00e1logos de Coincidencia con Varios Candidatos",
+        rankedMatchBody = "Cuando BudgeTrak detecta que una transacci\u00f3n podr\u00eda corresponder a un gasto recurrente, " +
+            "una contribuci\u00f3n a una meta de ahorro, un pago amortizado o una fuente de ingreso del presupuesto, " +
+            "muestra un di\u00e1logo de confirmaci\u00f3n. Si hay m\u00e1s de una entrada que podr\u00eda corresponder, el di\u00e1logo " +
+            "lista todos los candidatos con botones de selecci\u00f3n para que elijas el correcto.",
+        rankedMatchClosestNote = "Los candidatos se ordenan por proximidad: la entrada cuya fecha y monto " +
+            "m\u00e1s se acercan a tu transacci\u00f3n queda preseleccionada arriba. " +
+            "Solo tienes que tocar S\u00ed para aceptar la coincidencia sugerida, o elegir otro candidato primero.",
+        pdfReportTitle = "Reportes de Gastos en PDF",
+        pdfReportBody = "Los usuarios de pago pueden exportar un informe PDF bien presentado de sus transacciones para " +
+            "cualquier rango de fechas. Toca el icono de guardar, elige \"Reporte PDF\" y selecciona las fechas " +
+            "que quieres incluir. El reporte agrupa las transacciones por categor\u00eda, suma cada secci\u00f3n e " +
+            "incluye una p\u00e1gina de resumen \u2014 ideal para impuestos, reembolsos de gastos o para compartir con un contador."
     )
 
     override val budgetConfigHelp = BudgetConfigHelpStrings(
@@ -1230,7 +1229,7 @@ object SpanishStrings : AppStrings {
             "gastos recurrentes o el per\u00edodo del presupuesto. No se necesita rec\u00e1lculo manual.",
         startResetTitle = "Iniciar/Restablecer presupuesto",
         startResetBody = "Toca \"Iniciar/Restablecer\" cuando configures por primera vez o necesites empezar de cero. " +
-            "En un grupo de Sincronizaci\u00f3n Familiar, solo el dispositivo administrador puede restablecer " +
+            "En un grupo SYNC, solo el dispositivo administrador puede restablecer " +
             "el presupuesto \u2014 este bot\u00f3n est\u00e1 desactivado en dispositivos no administradores. Esto:",
         resetBullet1 = "Recalcula el presupuesto seguro",
         resetBullet2 = "Restablece la fecha de inicio del presupuesto a hoy",
@@ -1417,20 +1416,17 @@ object SpanishStrings : AppStrings {
         manualOverrideBody = "Si el Presupuesto manual est\u00e1 activado en Configuraci\u00f3n del presupuesto, las deducciones " +
             "de Metas de Ahorro a\u00fan se restan de tu monto manual. Puedes pausar metas individuales " +
             "o todas las metas a la vez si quieres el monto manual completo.",
-        // TODO(Step 3): translate to Spanish
-        linkingTitle = "Linking Transactions to Goals",
-        linkingBody = "When you record a transaction that represents spending toward a goal " +
-            "(for example, you finally buy the car tires you've been saving for), you can link " +
-            "the transaction to the goal in the transaction edit dialog. The amount you've already " +
-            "saved toward that goal is credited to the purchase, so it doesn't double-count against " +
-            "your budget.",
-        linkingPartialNote = "If your purchase is larger than the amount you've saved, " +
-            "only the saved portion is credited \u2014 the remainder hits your budget normally. " +
-            "The transaction shows in green when fully covered, or in orange with the remaining " +
-            "amount when partially funded.",
-        linkingSuperchargeNote = "Supercharge contributions and any savings made with the bolt icon are " +
-            "automatically tracked separately so you can boost a goal at any time without affecting " +
-            "your linked-purchase calculations.",
+        linkingTitle = "Vincular Transacciones a Metas",
+        linkingBody = "Cuando registras una transacci\u00f3n que representa un gasto hacia una meta " +
+            "(por ejemplo, finalmente compras las llantas del auto para las que has estado ahorrando), puedes " +
+            "vincular la transacci\u00f3n a la meta en el di\u00e1logo de edici\u00f3n. El monto que ya has " +
+            "ahorrado para esa meta se acredita a la compra, para que no se descuente dos veces de tu presupuesto.",
+        linkingPartialNote = "Si tu compra es mayor que el monto ahorrado, solo se acredita la parte ahorrada \u2014 " +
+            "el resto se descuenta normalmente del presupuesto. La transacci\u00f3n se muestra en verde cuando " +
+            "est\u00e1 totalmente cubierta, o en naranja con el monto restante cuando est\u00e1 parcialmente financiada.",
+        linkingSuperchargeNote = "Las contribuciones de Supercharge y cualquier ahorro hecho con el icono del rayo " +
+            "se rastrean autom\u00e1ticamente por separado, para que puedas impulsar una meta en cualquier momento " +
+            "sin afectar los c\u00e1lculos de tus compras vinculadas.",
         tipsTitle = "Consejos",
         tip1 = "Crea metas con fecha objetivo lo antes posible \u2014 cuanto m\u00e1s tiempo tengas, menor ser\u00e1 la deducci\u00f3n de cada per\u00edodo.",
         tip2 = "Usa metas de contribuci\u00f3n fija para ahorros sin fecha l\u00edmite, como fondos de emergencia o ahorro general.",
@@ -1608,11 +1604,11 @@ object SpanishStrings : AppStrings {
     )
 
     override val syncHelp = SyncHelpStrings(
-        title = "Ayuda de Sincronizaci\u00f3n",
-        whatTitle = "\u00bfQu\u00e9 es la Sincronizaci\u00f3n?",
-        whatBody = "La Sincronizaci\u00f3n te permite compartir un presupuesto familiar en hasta 5 dispositivos. " +
+        title = "Ayuda de SYNC",
+        whatTitle = "\u00bfQu\u00e9 es SYNC?",
+        whatBody = "SYNC te permite compartir un \u00fanico presupuesto del hogar en hasta 5 dispositivos vinculados. " +
             "Todas las transacciones, fuentes de ingreso, gastos recurrentes, metas de ahorro y configuraciones " +
-            "se mantienen sincronizados autom\u00e1ticamente usando cifrado de extremo a extremo. " +
+            "se mantienen al d\u00eda autom\u00e1ticamente mediante un relevo en la nube cifrado de extremo a extremo. " +
             "Nadie \u2014 ni siquiera el servidor \u2014 puede leer tus datos financieros.",
         adminRoleTitle = "El Rol de Administrador",
         adminRoleBody = "La persona que crea el grupo se convierte en administrador. Crear un grupo " +
@@ -1624,48 +1620,49 @@ object SpanishStrings : AppStrings {
             "grupo. Los miembros no admin pueden ver la configuraci\u00f3n pero no cambiarla \u2014 " +
             "tocar una opci\u00f3n bloqueada muestra \"Solo administrador\". " +
             "Los usuarios gratuitos pueden unirse a un grupo sin suscripci\u00f3n.",
-        // TODO(Step 3): translate to Spanish
-        adminFeaturesTitle = "Admin Decisions: What You Control & Why",
-        adminFeaturesIntro = "As the admin you make a handful of choices that affect everyone in the SYNC group. " +
-            "Here is a quick guide to each one and when you might want to use it.",
-        adminFeatureBudgetTitle = "Budget Period & Reset",
-        adminFeatureBudgetBody = "The budget period (Daily / Weekly / Monthly) and the reset schedule are " +
-            "shared across all linked devices, so everyone sees the same available cash. " +
-            "Pick the period that matches how you actually plan spending: daily for tight budgets " +
-            "or strong daily awareness, weekly to align with paychecks, monthly for stable income " +
-            "and longer planning. Only the admin can change this or tap Start/Reset Budget so " +
-            "stray taps from another device cannot wipe everyone's progress.",
-        adminFeatureCurrencyTitle = "Currency, Date Format & Display",
-        adminFeatureCurrencyBody = "Currency symbol, date format, and other shared display preferences are set " +
-            "by the admin and applied to every device. Use this to keep the household consistent. " +
-            "Each device can still pick its own theme (light / dark / system) independently.",
-        adminFeatureTimezoneTitle = "Group Timezone",
-        adminFeatureTimezoneBody = "If your group spans multiple timezones (a traveling spouse, college kid, " +
-            "or family across regions), set the Group Timezone to a single zone everyone agrees on. " +
-            "Period boundaries (when each new day, week, or month starts) are calculated in that " +
-            "timezone so all devices roll over together. Leave it on the default \"Device timezone\" " +
-            "if everyone is in the same place.",
-        adminFeatureAttributionTitle = "Transaction Attribution",
-        adminFeatureAttributionBody = "Attribution adds a small label to each transaction in the list showing " +
-            "which device recorded it. Turn this on if you want visibility into who entered what \u2014 " +
-            "useful for shared expenses or teaching kids about budgeting. Leave it off for more " +
-            "privacy. The label shows \"You\" for your own entries and the device nickname for others.",
-        adminFeatureRetentionTitle = "Receipt Photo Retention",
-        adminFeatureRetentionBody = "If you use receipt photos, you can set a retention period (e.g., 90 days) " +
-            "after which older photos are automatically removed from cloud storage. This keeps cloud " +
-            "usage low and limits how long sensitive purchase images are kept. Set it longer if you " +
-            "need photos for tax records, shorter if you only use them as in-the-moment proof.",
-        adminFeatureManageTitle = "Managing Devices & Dissolving",
-        adminFeatureManageBody = "Long-press a device in the roster to rename or remove it. Use this when " +
-            "someone gets a new phone, leaves the household, or you want to retire an old device. " +
-            "Dissolving the group permanently disconnects all members and erases the cloud-stored " +
-            "data \u2014 each device keeps its own local copy. Use Dissolve only when you're sure the " +
-            "group should end.",
+        adminFeaturesTitle = "Decisiones del Administrador: Qu\u00e9 Controlas y Por Qu\u00e9",
+        adminFeaturesIntro = "Como administrador tomas algunas decisiones que afectan a todos en el grupo SYNC. " +
+            "Aqu\u00ed tienes una gu\u00eda r\u00e1pida de cada una y cu\u00e1ndo querr\u00edas usarla.",
+        adminFeatureBudgetTitle = "Per\u00edodo del Presupuesto y Reinicio",
+        adminFeatureBudgetBody = "El per\u00edodo del presupuesto (Diario / Semanal / Mensual) y el calendario de reinicio se " +
+            "comparten entre todos los dispositivos vinculados, para que todos vean el mismo efectivo disponible. " +
+            "Elige el per\u00edodo que coincida con c\u00f3mo planificas tus gastos: diario para presupuestos ajustados " +
+            "o m\u00e1xima conciencia diaria, semanal para alinear con tus pagos, mensual para ingresos estables " +
+            "y planificaci\u00f3n a largo plazo. Solo el administrador puede cambiar esto o tocar Iniciar/Reiniciar " +
+            "Presupuesto, para que toques accidentales desde otro dispositivo no borren el progreso de todos.",
+        adminFeatureCurrencyTitle = "Moneda, Formato de Fecha y Pantalla",
+        adminFeatureCurrencyBody = "El s\u00edmbolo de moneda, el formato de fecha y otras preferencias compartidas de pantalla " +
+            "las define el administrador y se aplican a todos los dispositivos. Usa esto para mantener " +
+            "consistencia en el hogar. Cada dispositivo todav\u00eda puede elegir su propio tema (claro / oscuro / sistema) " +
+            "de forma independiente.",
+        adminFeatureTimezoneTitle = "Zona Horaria del Grupo",
+        adminFeatureTimezoneBody = "Si tu grupo abarca varias zonas horarias (una pareja que viaja, un estudiante " +
+            "universitario o familiares en distintas regiones), establece la Zona Horaria del Grupo en una zona " +
+            "que todos acepten. Los l\u00edmites de per\u00edodo (cu\u00e1ndo comienza cada nuevo d\u00eda, semana o mes) se " +
+            "calculan en esa zona para que todos los dispositivos cambien al mismo tiempo. D\u00e9jala en \"Zona horaria " +
+            "del dispositivo\" si todos est\u00e1n en el mismo lugar.",
+        adminFeatureAttributionTitle = "Atribuci\u00f3n de Transacciones",
+        adminFeatureAttributionBody = "La atribuci\u00f3n agrega una peque\u00f1a etiqueta a cada transacci\u00f3n en la lista " +
+            "que indica qu\u00e9 dispositivo la registr\u00f3. Act\u00edvalo si quieres visibilidad sobre qui\u00e9n ingres\u00f3 qu\u00e9 \u2014 " +
+            "\u00fatil para gastos compartidos o para ense\u00f1ar a los hijos sobre presupuesto. D\u00e9jalo desactivado para " +
+            "m\u00e1s privacidad. La etiqueta muestra \"T\u00fa\" para tus propias entradas y el apodo del dispositivo para las dem\u00e1s.",
+        adminFeatureRetentionTitle = "Retenci\u00f3n de Fotos de Recibos",
+        adminFeatureRetentionBody = "Si usas fotos de recibos, puedes establecer un per\u00edodo de retenci\u00f3n (por ejemplo, 90 d\u00edas) " +
+            "tras el cual las fotos m\u00e1s antiguas se eliminan autom\u00e1ticamente del almacenamiento en la nube. Esto " +
+            "mantiene bajo el uso de la nube y limita cu\u00e1nto tiempo se conservan im\u00e1genes sensibles de compras. " +
+            "Conf\u00edguralo m\u00e1s largo si necesitas las fotos para registros fiscales, m\u00e1s corto si solo las usas " +
+            "como comprobante del momento.",
+        adminFeatureManageTitle = "Administrar Dispositivos y Disolver",
+        adminFeatureManageBody = "Mant\u00e9n pulsado un dispositivo en la lista para renombrarlo o eliminarlo. Usa esto cuando " +
+            "alguien obtiene un tel\u00e9fono nuevo, deja el hogar o quieres retirar un dispositivo viejo. " +
+            "Disolver el grupo desconecta permanentemente a todos los miembros y borra los datos almacenados en la " +
+            "nube \u2014 cada dispositivo conserva su propia copia local. Usa Disolver solo cuando est\u00e9s seguro de que " +
+            "el grupo debe terminar.",
         gettingStartedTitle = "Primeros Pasos",
-        gettingStartedBody = "Para configurar la sincronizaci\u00f3n: Abre Configuraci\u00f3n, toca Sincronizar y " +
-            "toca \"Crear Grupo\" (requiere suscripci\u00f3n). Se crear\u00e1 un grupo contigo como admin. " +
+        gettingStartedBody = "Para configurar SYNC: Abre Configuraci\u00f3n, toca SYNC y " +
+            "toca \"Crear Grupo\" (requiere suscripci\u00f3n). Se crear\u00e1 un grupo SYNC contigo como administrador. " +
             "Luego toca \"Generar C\u00f3digo\" y comparte el c\u00f3digo de 6 caracteres con " +
-            "tus familiares. Ellos ingresan el c\u00f3digo en su dispositivo para unirse. " +
+            "los dispositivos que quieras agregar. Ellos ingresan el c\u00f3digo en su dispositivo para unirse. " +
             "Los c\u00f3digos expiran despu\u00e9s de 10 minutos por seguridad.",
         joiningTitle = "Unirse a un Grupo",
         joiningBody = "Para unirte a un grupo existente, toca \"Unirse a Grupo\" e ingresa el " +
@@ -1673,12 +1670,12 @@ object SpanishStrings : AppStrings {
             "Importante: unirte reemplazar\u00e1 tus datos locales " +
             "con los datos compartidos del grupo. Tus transacciones, metas y configuraciones " +
             "actuales ser\u00e1n sobrescritas. Aseg\u00farate de hacer una copia de seguridad primero.",
-        syncStatusTitle = "Estado de Sincronizaci\u00f3n",
-        syncStatusBody = "El \u00edcono de sincronizaci\u00f3n en el panel principal y la tarjeta de estado en esta pantalla " +
-            "muestran el estado actual: Verde significa en l\u00ednea y sincronizando normalmente. " +
-            "Amarillo significa que los oyentes se est\u00e1n reconectando. Rojo significa sin conexi\u00f3n " +
-            "a internet o un error de sincronizaci\u00f3n. La lista de dispositivos muestra la presencia " +
-            "en tiempo real: verde = en l\u00ednea, azul oscuro = visto recientemente, " +
+        syncStatusTitle = "Estado de SYNC",
+        syncStatusBody = "El \u00edcono de SYNC en el panel principal y la tarjeta de estado en esta pantalla " +
+            "muestran el estado actual: verde significa en l\u00ednea y sincronizando normalmente, " +
+            "amarillo significa que la conexi\u00f3n se est\u00e1 recuperando, y rojo significa sin internet " +
+            "o un error. La lista de dispositivos muestra la presencia en tiempo real para cada " +
+            "dispositivo vinculado: verde = en l\u00ednea, azul oscuro = visto recientemente, " +
             "amarillo = hace 1\u20132 horas, rojo = hace m\u00e1s de 2 horas.",
         staleWarningsTitle = "Advertencias de Desactualizaci\u00f3n",
         staleWarningsBody = "Si tu dispositivo no se ha sincronizado por un per\u00edodo extendido, " +
@@ -1689,12 +1686,12 @@ object SpanishStrings : AppStrings {
             "la app carga una instant\u00e1nea reciente y combina tus cambios locales sin necesidad " +
             "de reproducir cada actualizaci\u00f3n perdida.",
         attributionTitle = "Atribuci\u00f3n de Transacciones",
-        attributionBody = "Cuando el admin lo habilita, cada transacci\u00f3n muestra qu\u00e9 dispositivo la cre\u00f3. " +
+        attributionBody = "Cuando el administrador lo habilita, cada transacci\u00f3n muestra qu\u00e9 dispositivo la cre\u00f3. " +
             "Tus propias transacciones muestran \"T\u00fa\" y las de otros dispositivos muestran " +
-            "el nombre del dispositivo. Esto ayuda a las familias a ver qui\u00e9n registr\u00f3 cada gasto.",
+            "el nombre del dispositivo. Esto ayuda a los hogares a ver qui\u00e9n registr\u00f3 cada gasto.",
         adminClaimsTitle = "Reclamos de Admin",
-        adminClaimsBody = "Si el dispositivo admin se pierde o no est\u00e1 disponible, cualquier suscriptor puede " +
-            "reclamar el rol de admin. Toca \"Reclamar Rol de Admin\" en la pantalla de Sincronizaci\u00f3n (requiere suscripci\u00f3n). " +
+        adminClaimsBody = "Si el dispositivo administrador se pierde o no est\u00e1 disponible, cualquier suscriptor puede " +
+            "reclamar el rol de administrador. Toca \"Reclamar Rol de Admin\" en la p\u00e1gina SYNC (requiere suscripci\u00f3n). " +
             "Los dem\u00e1s miembros tienen 24 horas para objetar. Si nadie objeta, el reclamo se aprueba. " +
             "Si alguien objeta, el reclamo se rechaza.",
         leavingTitle = "Salir o Disolver",
@@ -1704,11 +1701,11 @@ object SpanishStrings : AppStrings {
             "Los datos locales en cada dispositivo se conservan. " +
             "El admin tambi\u00e9n puede eliminar dispositivos individuales manteniendo pulsado en la lista.",
         privacyTitle = "Privacidad y Seguridad",
-        privacyBody = "Todos los datos de sincronizaci\u00f3n est\u00e1n cifrados de extremo a extremo con una clave de 256 bits " +
-            "generada al crear el grupo. La clave se comparte solo a trav\u00e9s del mecanismo de c\u00f3digo de emparejamiento " +
-            "y se almacena en almacenamiento cifrado del dispositivo. " +
-            "El servidor almacena solo datos cifrados \u2014 no puede leer tus transacciones, montos, " +
-            "nombres de comercios ni ning\u00fan dato financiero. Tu dinero, tus datos, tu control.",
+        privacyBody = "Todos los datos de SYNC est\u00e1n protegidos con cifrado de extremo a extremo de est\u00e1ndar industrial. " +
+            "La clave de cifrado se genera al crear el grupo y se comparte solo a trav\u00e9s del c\u00f3digo de emparejamiento, " +
+            "luego se almacena de forma segura en cada dispositivo. El servidor en la nube almacena solo datos " +
+            "cifrados \u2014 no puede leer tus transacciones, montos, nombres de comercios ni ninguna otra " +
+            "informaci\u00f3n financiera. Tu dinero, tus datos, tu control.",
         subscriptionTitle = "Suscripci\u00f3n y Ciclo de Vida del Grupo",
         subscriptionBody = "La suscripci\u00f3n del admin mantiene el grupo activo. Si la suscripci\u00f3n expira, " +
             "todos los miembros reciben notificaciones diarias y tienen un per\u00edodo de gracia de 7 d\u00edas " +
