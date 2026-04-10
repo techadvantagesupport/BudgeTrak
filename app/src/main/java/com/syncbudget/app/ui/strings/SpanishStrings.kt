@@ -800,7 +800,15 @@ object SpanishStrings : AppStrings {
             "ingresos o gastos directamente desde el widget. Al tocarlos se abre un di\u00e1logo simplificado " +
             "con selecci\u00f3n de categor\u00eda.",
         widgetFreeDesc = "Los usuarios gratuitos pueden agregar 1 transacci\u00f3n de widget por d\u00eda. La pantalla Solari muestra " +
-            "un mensaje de actualizaci\u00f3n. Los usuarios de pago tienen transacciones ilimitadas desde el widget y una pantalla limpia."
+            "un mensaje de actualizaci\u00f3n. Los usuarios de pago tienen transacciones ilimitadas desde el widget y una pantalla limpia.",
+        // TODO(Step 3): translate to Spanish
+        subExpiryWarningTitle = "Subscription Expiry Notice",
+        subExpiryWarningBody = "If you're using SYNC and the admin's subscription expires, a notice " +
+            "appears on the dashboard once per session. You'll have a 7-day grace period to resubscribe " +
+            "before the SYNC group is dissolved. During the grace period, any subscriber in the group " +
+            "can claim the admin role from the SYNC page to keep the group alive. If no admin " +
+            "subscription is active by the end of the 7 days, the group is dissolved and each device " +
+            "keeps its own local copy of the data."
     )
 
     override val settingsHelp = SettingsHelpStrings(
@@ -869,6 +877,12 @@ object SpanishStrings : AppStrings {
         matchCharsBullet = "Caracteres de coincidencia \u2014 longitud m\u00ednima de subcadena compartida para la coincidencia de nombres de comercio",
         matchingNote = "Los valores predeterminados funcionan bien para la mayor\u00eda. Aumenta las tolerancias si la " +
             "app no detecta coincidencias, o reduc\u00e9las si ves demasiados falsos positivos.",
+        // TODO(Step 3): translate to Spanish
+        autoCapitalizeTitle = "Auto Capitalize",
+        autoCapitalizeBody = "When enabled (default), merchant names and descriptions you type into transaction " +
+            "dialogs are automatically formatted in Title Case as you finish each word \u2014 \"chick fil a\" " +
+            "becomes \"Chick Fil A\", \"DOORDASH\" becomes \"Doordash\". This keeps your transaction list " +
+            "looking clean and consistent without extra effort. Turn it off if you prefer to type capitalization manually.",
         paidTitle = "Usuario de Pago y Suscriptor",
         paidBody = "BudgeTrak tiene dos niveles de mejora. Usuario de pago (compra \u00fanica) desbloquea:",
         paidSave = "Sin anuncios \u2014 el banner en la parte superior de todas las pantallas se oculta",
@@ -1130,7 +1144,36 @@ object SpanishStrings : AppStrings {
         tip2 = "Usa respaldos cifrados para copias de seguridad protegidas y transferencia de datos entre dispositivos.",
         tip3 = "El mismo archivo se puede cargar tantas veces como sea necesario \u2014 la detecci\u00f3n de duplicados evita entradas dobles accidentales.",
         tip4 = "Usa el filtro de categor\u00eda (toca cualquier icono de categor\u00eda) combinado con el modo de selecci\u00f3n para ediciones masivas eficientes.",
-        tip5 = "Despu\u00e9s de una importaci\u00f3n bancaria, revisa las transacciones categorizadas autom\u00e1ticamente y usa Cambiar categor\u00eda en lote para corregir asignaciones incorrectas."
+        tip5 = "Despu\u00e9s de una importaci\u00f3n bancaria, revisa las transacciones categorizadas autom\u00e1ticamente y usa Cambiar categor\u00eda en lote para corregir asignaciones incorrectas.",
+        // TODO(Step 3): translate to Spanish
+        sortTitle = "Sorting Transactions",
+        sortBody = "Tap the sort button in the action bar to choose how the transaction list is ordered. " +
+            "You can sort by:",
+        sortDateBullet = "Date \u2014 default; most recent at the top",
+        sortAmountBullet = "Amount \u2014 useful for spotting your largest expenses or smallest charges",
+        sortCategoryBullet = "Category \u2014 groups transactions by category for quick scanning",
+        sortDirectionNote = "Tap the sort button again to reverse the direction (ascending vs. descending). " +
+            "An arrow next to the sort button shows the current direction.",
+        filtersExpandedTitle = "Filtering Transactions",
+        filtersExpandedBody = "The filter button reveals toggles that narrow the list to specific kinds of transactions. " +
+            "You can combine filters with the date and merchant search:",
+        filterRecurringBullet = "Recurring \u2014 only transactions linked to a recurring expense or budget income",
+        filterExcludedBullet = "Excluded \u2014 only transactions marked as excluded from the budget (e.g., transfers between accounts)",
+        filterNotVerifiedBullet = "Not Verified \u2014 only auto-categorized transactions you haven't yet confirmed",
+        filterPhotosBullet = "Photos \u2014 only transactions that have a receipt photo attached",
+        rankedMatchTitle = "Multi-Candidate Match Dialogs",
+        rankedMatchBody = "When BudgeTrak detects that a transaction may match a recurring expense, " +
+            "savings goal contribution, amortization payment, or budgeted income source, it shows " +
+            "a confirmation dialog. If more than one of your entries could be a match, the dialog " +
+            "lists all candidates with radio buttons so you can pick the correct one.",
+        rankedMatchClosestNote = "Candidates are ranked by closeness: the entry whose date and amount " +
+            "most closely match your transaction is pre-selected at the top. " +
+            "Just tap Yes to accept the suggested match, or pick a different candidate first.",
+        pdfReportTitle = "PDF Expense Reports",
+        pdfReportBody = "Paid users can export a polished PDF report of their transactions for any date range. " +
+            "Tap the Save icon, choose \"PDF Report\", and pick the dates you want to include. " +
+            "The report groups transactions by category, totals each section, and includes a summary " +
+            "page \u2014 ideal for taxes, expense reimbursement, or sharing with an accountant."
     )
 
     override val budgetConfigHelp = BudgetConfigHelpStrings(
@@ -1374,6 +1417,20 @@ object SpanishStrings : AppStrings {
         manualOverrideBody = "Si el Presupuesto manual est\u00e1 activado en Configuraci\u00f3n del presupuesto, las deducciones " +
             "de Metas de Ahorro a\u00fan se restan de tu monto manual. Puedes pausar metas individuales " +
             "o todas las metas a la vez si quieres el monto manual completo.",
+        // TODO(Step 3): translate to Spanish
+        linkingTitle = "Linking Transactions to Goals",
+        linkingBody = "When you record a transaction that represents spending toward a goal " +
+            "(for example, you finally buy the car tires you've been saving for), you can link " +
+            "the transaction to the goal in the transaction edit dialog. The amount you've already " +
+            "saved toward that goal is credited to the purchase, so it doesn't double-count against " +
+            "your budget.",
+        linkingPartialNote = "If your purchase is larger than the amount you've saved, " +
+            "only the saved portion is credited \u2014 the remainder hits your budget normally. " +
+            "The transaction shows in green when fully covered, or in orange with the remaining " +
+            "amount when partially funded.",
+        linkingSuperchargeNote = "Supercharge contributions and any savings made with the bolt icon are " +
+            "automatically tracked separately so you can boost a goal at any time without affecting " +
+            "your linked-purchase calculations.",
         tipsTitle = "Consejos",
         tip1 = "Crea metas con fecha objetivo lo antes posible \u2014 cuanto m\u00e1s tiempo tengas, menor ser\u00e1 la deducci\u00f3n de cada per\u00edodo.",
         tip2 = "Usa metas de contribuci\u00f3n fija para ahorros sin fecha l\u00edmite, como fondos de emergencia o ahorro general.",

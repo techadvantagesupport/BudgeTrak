@@ -633,7 +633,7 @@ object EnglishStrings : AppStrings {
 
     override val dashboardHelp = DashboardHelpStrings(
         title = "Dashboard Help",
-        welcomeTitle = "Welcome to BudgeTrak",
+        welcomeTitle = "Welcome to BudgeTrak SYNC",
         welcomeBody = "BudgeTrak is a privacy-first budgeting app designed to give you " +
             "a clear, real-time picture of how much money you can safely spend right now. " +
             "Unlike traditional budget trackers that only show you where your money went, " +
@@ -780,17 +780,18 @@ object EnglishStrings : AppStrings {
         featureBullet9 = "Duplicate transaction detection",
         featureBullet10 = "Fully customizable categories with icon selection",
         featureBullet11 = "Multiple currency and date format support with transaction archiving",
-        featureBullet12 = "Sync \u2014 share budgets across devices with end-to-end encryption",
-        syncIndicatorTitle = "Sync Indicator",
-        syncIndicatorBody = "When Sync is enabled, a sync indicator appears in the bottom-left corner of the Solari display:",
-        syncArrowsBullet = "Sync icon \u2014 shows connection status: green = online and syncing, yellow = listeners recovering, red = no internet or error",
-        syncDotsBullet = "Colored dots \u2014 one per family member device (up to 4), showing real-time presence: green = online now, dark blue = seen < 1 hr, yellow = 1\u20132 hrs, red = > 2 hrs",
+        featureBullet12 = "SYNC \u2014 share your budget across household devices with end-to-end encryption",
+        syncIndicatorTitle = "SYNC Indicator",
+        syncIndicatorBody = "When SYNC is enabled, an indicator appears in the bottom-left corner of the Solari display:",
+        syncArrowsBullet = "SYNC icon \u2014 shows connection status: green = online and syncing, yellow = connection recovering, red = no internet or error",
+        syncDotsBullet = "Colored dots \u2014 one per linked device (up to 4), showing real-time presence: green = online now, dark blue = seen < 1 hr, yellow = 1\u20132 hrs, red = > 2 hrs",
         privacyTitle = "Privacy & Security",
         privacyBody = "Your financial data stays on your device by default. BudgeTrak does not collect analytics " +
-            "and does not share your data with anyone. When you export your transactions, you can choose encrypted " +
-            "format (ChaCha20-Poly1305 with PBKDF2 key derivation) for maximum security. " +
-            "If you enable Family Sync, data is shared between your devices using end-to-end encryption \u2014 " +
-            "the server cannot read your financial data. Your money, your data, your control.",
+            "and does not share your data with anyone. When you export your transactions, you can choose an encrypted " +
+            "format protected by a password you choose, using industry-standard end-to-end encryption. " +
+            "When you enable SYNC, data is shared between your linked devices with the same end-to-end encryption \u2014 " +
+            "the cloud server stores only encrypted data and cannot read your transactions, amounts, or merchant " +
+            "names. Your money, your data, your control.",
         widgetTitle = "Home Screen Widget",
         widgetBody = "BudgeTrak includes a home screen widget that displays your available cash " +
             "in a Solari flip-display style, so you can check your budget at a glance without opening the app. " +
@@ -801,7 +802,14 @@ object EnglishStrings : AppStrings {
             "or expenses directly from the widget. Tapping opens a streamlined transaction dialog " +
             "with category selection.",
         widgetFreeDesc = "Free users can add 1 widget transaction per day. The Solari display shows " +
-            "an upgrade message overlay. Paid users have unlimited widget transactions and a clean display."
+            "an upgrade message overlay. Paid users have unlimited widget transactions and a clean display.",
+        subExpiryWarningTitle = "Subscription Expiry Notice",
+        subExpiryWarningBody = "If you're using SYNC and the admin's subscription expires, a notice " +
+            "appears on the dashboard once per session. You'll have a 7-day grace period to resubscribe " +
+            "before the SYNC group is dissolved. During the grace period, any subscriber in the group " +
+            "can claim the admin role from the SYNC page to keep the group alive. If no admin " +
+            "subscription is active by the end of the 7 days, the group is dissolved and each device " +
+            "keeps its own local copy of the data."
     )
 
     override val settingsHelp = SettingsHelpStrings(
@@ -816,9 +824,9 @@ object EnglishStrings : AppStrings {
         helpDesc = "Opens this help page.",
         configureTitle = "Quick Start Guide & Budget Configuration",
         configureBody = "At the top of Settings, the Quick Start Guide walks new users through " +
-            "initial setup step by step. Below it, Configure Budget and Sync buttons " +
+            "initial setup step by step. Below it, Configure Budget and SYNC buttons " +
             "provide access to budget configuration (income sources, budget period, " +
-            "safe budget calculation) and family sync settings. See their help pages " +
+            "safe budget calculation) and SYNC settings. See their help pages " +
             "for full details.",
         currencyTitle = "Currency",
         currencyBody = "Choose the currency symbol displayed throughout the app. The dropdown includes " +
@@ -870,6 +878,11 @@ object EnglishStrings : AppStrings {
         matchCharsBullet = "Match Characters \u2014 minimum shared substring length for merchant name matching",
         matchingNote = "The defaults work well for most users. Increase the tolerances if you find " +
             "the app is missing matches, or decrease them if you're seeing too many false positives.",
+        autoCapitalizeTitle = "Auto Capitalize",
+        autoCapitalizeBody = "When enabled (default), merchant names and descriptions you type into transaction " +
+            "dialogs are automatically formatted in Title Case as you finish each word \u2014 \"chick fil a\" " +
+            "becomes \"Chick Fil A\", \"DOORDASH\" becomes \"Doordash\". This keeps your transaction list " +
+            "looking clean and consistent without extra effort. Turn it off if you prefer to type capitalization manually.",
         paidTitle = "Paid User & Subscriber",
         paidBody = "BudgeTrak has two upgrade tiers. Paid User (one-time purchase) unlocks:",
         paidSave = "Ad-free experience \u2014 the banner at the top of all screens is hidden",
@@ -884,7 +897,7 @@ object EnglishStrings : AppStrings {
             "home screen widget. Uncheck to hide the logo for a more minimal widget appearance.",
         receiptPhotosTitle = "Receipt Photos",
         receiptPhotosBody = "Paid users can attach up to 5 photos per transaction. Swipe left on a transaction to reveal the photo panel, or use the camera icon in the edit dialog.",
-        receiptPhotosBullet1 = "Photos are stored locally and synced across family devices",
+        receiptPhotosBullet1 = "Photos are stored locally and synced across linked devices when SYNC is enabled",
         receiptPhotosBullet2 = "Long-press a photo thumbnail to delete it",
         receiptPhotosBullet3 = "Tap a photo thumbnail to view it full-screen",
         receiptPhotosRetentionTitle = "Photo Retention",
@@ -892,7 +905,7 @@ object EnglishStrings : AppStrings {
         receiptPhotosRetentionNote = "When photos are pruned, the deletion syncs to all devices in the group automatically.",
         receiptPhotosBullet4 = "Tap the camera icon or choose from gallery to attach photos",
         receiptPhotosBullet5 = "Photos are automatically compressed for efficient storage (max 1000px, ~250KB)",
-        receiptPhotosBullet6 = "In a sync group, photos are encrypted and shared across family devices",
+        receiptPhotosBullet6 = "In a SYNC group, photos are encrypted and shared across all linked devices",
         receiptPhotosBullet7 = "An admin can set a retention period \u2014 photos older than the configured days are automatically cleaned up from cloud storage",
         categoriesTitle = "Categories",
         categoriesBody = "Categories let you classify your transactions for better spending insight. " +
@@ -1056,14 +1069,14 @@ object EnglishStrings : AppStrings {
             "protected with a password you choose. This is the recommended format for backups " +
             "and transferring data between devices, as it keeps your financial information private.",
         encryptionDetailsTitle = "Encryption Details",
-        encryptionDetailsBody = "Your file is protected with ChaCha20-Poly1305 authenticated encryption \u2014 " +
-            "the same family of ciphers used by modern messaging apps and VPNs. " +
-            "Your password is never stored; instead, it is transformed into an encryption key " +
-            "using PBKDF2 with 100,000 iterations, making brute-force attacks extremely slow.",
+        encryptionDetailsBody = "Your file is protected with industry-standard end-to-end encryption \u2014 " +
+            "the same caliber used by modern secure messaging apps. Your password is never stored; " +
+            "instead, BudgeTrak strengthens it cryptographically into an encryption key, " +
+            "making brute-force attacks impractical.",
         passwordImportanceTitle = "Why Your Password Matters",
         passwordImportanceBody = "Encryption is only as strong as your password. A short or common password " +
-            "can be guessed quickly, even with strong encryption. Here's what a modern high-end " +
-            "graphics card (capable of testing billions of simple hashes per second) could achieve:",
+            "can be guessed quickly even with strong encryption. The table below estimates how long " +
+            "a determined attacker would need to crack passwords of different lengths and complexity:",
         passwordTableHeader = "Password",
         passwordTableExample = "Example",
         passwordTableTime = "Time to Crack",
@@ -1085,10 +1098,10 @@ object EnglishStrings : AppStrings {
         pw4Word = "4-word phrase",
         pw4WordEx = "maple cloud river fox",
         pw4WordTime = "trillions of years",
-        pbkdfNote = "Because your password goes through 100,000 rounds of PBKDF2 before being used as an " +
-            "encryption key, each guess is deliberately made very expensive. A single high-end GPU " +
-            "can only attempt roughly 100,000\u2013500,000 passwords per second against this file \u2014 " +
-            "millions of times slower than attacking a simple hash.",
+        pbkdfNote = "BudgeTrak deliberately makes each password guess slow and expensive, so even an " +
+            "attacker with powerful hardware can only test a tiny fraction of the passwords " +
+            "they could attack a poorly-protected file with. Combined with a strong password, " +
+            "your encrypted file is effectively unbreakable.",
         recommendedTitle = "Recommended Password Strategy",
         recommendedBody = "Use 12 or more characters combining uppercase letters, lowercase letters, " +
             "numbers, and symbols. A passphrase of 4\u20135 random words (e.g., \"correct horse battery staple\") " +
@@ -1126,6 +1139,37 @@ object EnglishStrings : AppStrings {
             "category is assigned automatically. Transactions without a match are assigned to \"Other\". " +
             "Auto-categorized transactions show a default-colored icon until you manually confirm " +
             "or change the category.",
+        // Sorting and filtering
+        sortTitle = "Sorting Transactions",
+        sortBody = "Tap the sort button in the action bar to choose how the transaction list is ordered. " +
+            "You can sort by:",
+        sortDateBullet = "Date \u2014 default; most recent at the top",
+        sortAmountBullet = "Amount \u2014 useful for spotting your largest expenses or smallest charges",
+        sortCategoryBullet = "Category \u2014 groups transactions by category for quick scanning",
+        sortDirectionNote = "Tap the sort button again to reverse the direction (ascending vs. descending). " +
+            "An arrow next to the sort button shows the current direction.",
+        filtersExpandedTitle = "Filtering Transactions",
+        filtersExpandedBody = "The filter button reveals toggles that narrow the list to specific kinds of transactions. " +
+            "You can combine filters with the date and merchant search:",
+        filterRecurringBullet = "Recurring \u2014 only transactions linked to a recurring expense or budget income",
+        filterExcludedBullet = "Excluded \u2014 only transactions marked as excluded from the budget (e.g., transfers between accounts)",
+        filterNotVerifiedBullet = "Not Verified \u2014 only auto-categorized transactions you haven't yet confirmed",
+        filterPhotosBullet = "Photos \u2014 only transactions that have a receipt photo attached",
+        // Multi-candidate matching
+        rankedMatchTitle = "Multi-Candidate Match Dialogs",
+        rankedMatchBody = "When BudgeTrak detects that a transaction may match a recurring expense, " +
+            "savings goal contribution, amortization payment, or budgeted income source, it shows " +
+            "a confirmation dialog. If more than one of your entries could be a match, the dialog " +
+            "lists all candidates with radio buttons so you can pick the correct one.",
+        rankedMatchClosestNote = "Candidates are ranked by closeness: the entry whose date and amount " +
+            "most closely match your transaction is pre-selected at the top. " +
+            "Just tap Yes to accept the suggested match, or pick a different candidate first.",
+        // PDF reports
+        pdfReportTitle = "PDF Expense Reports",
+        pdfReportBody = "Paid users can export a polished PDF report of their transactions for any date range. " +
+            "Tap the Save icon, choose \"PDF Report\", and pick the dates you want to include. " +
+            "The report groups transactions by category, totals each section, and includes a summary " +
+            "page \u2014 ideal for taxes, expense reimbursement, or sharing with an accountant.",
         tipsTitle = "Tips",
         tip1 = "Use CSV saves for spreadsheet-compatible backups that you can review on a computer.",
         tip2 = "Use Encrypted saves for secure backups and transferring data between devices.",
@@ -1188,7 +1232,7 @@ object EnglishStrings : AppStrings {
             "recurring expenses, or the budget period. No manual recalculation is needed.",
         startResetTitle = "Start/Reset Budget",
         startResetBody = "Tap \"Start/Reset Budget\" when you first set up or need a fresh start. " +
-            "In a Family Sync group, only the admin device can reset the budget \u2014 " +
+            "In a SYNC group, only the admin device can reset the budget \u2014 " +
             "this button is disabled on non-admin devices. This:",
         resetBullet1 = "Recalculates the safe budget amount",
         resetBullet2 = "Resets the budget start date to today",
@@ -1375,6 +1419,19 @@ object EnglishStrings : AppStrings {
         manualOverrideBody = "If Manual Budget Override is enabled in Budget Configuration, Savings Goal " +
             "deductions are still subtracted from your manual budget amount. You can pause " +
             "individual goals or all goals at once if you want the full manual amount.",
+        linkingTitle = "Linking Transactions to Goals",
+        linkingBody = "When you record a transaction that represents spending toward a goal " +
+            "(for example, you finally buy the car tires you've been saving for), you can link " +
+            "the transaction to the goal in the transaction edit dialog. The amount you've already " +
+            "saved toward that goal is credited to the purchase, so it doesn't double-count against " +
+            "your budget.",
+        linkingPartialNote = "If your purchase is larger than the amount you've saved, " +
+            "only the saved portion is credited \u2014 the remainder hits your budget normally. " +
+            "The transaction shows in green when fully covered, or in orange with the remaining " +
+            "amount when partially funded.",
+        linkingSuperchargeNote = "Supercharge contributions and any savings made with the bolt icon are " +
+            "automatically tracked separately so you can boost a goal at any time without affecting " +
+            "your linked-purchase calculations.",
         tipsTitle = "Tips",
         tip1 = "Create target-date goals as early as possible \u2014 the more time you have, the smaller each period's deduction.",
         tip2 = "Use fixed contribution goals for open-ended savings like emergency funds or general savings.",
@@ -1553,11 +1610,11 @@ object EnglishStrings : AppStrings {
     )
 
     override val syncHelp = SyncHelpStrings(
-        title = "Sync Help",
-        whatTitle = "What is Sync?",
-        whatBody = "Sync lets you share a single household budget across up to 5 devices. " +
+        title = "SYNC Help",
+        whatTitle = "What is SYNC?",
+        whatBody = "SYNC lets you share a single household budget across up to 5 devices. " +
             "All transactions, income sources, recurring expenses, savings goals, and settings " +
-            "are kept in sync automatically using end-to-end encrypted cloud relay. " +
+            "are kept in step automatically using end-to-end encrypted cloud relay. " +
             "No one \u2014 not even the server \u2014 can read your financial data.",
         adminRoleTitle = "The Admin Role",
         adminRoleBody = "The person who creates the group becomes the admin. Creating a group " +
@@ -1565,15 +1622,15 @@ object EnglishStrings : AppStrings {
             "change shared budget settings (currency, budget period, reset schedule), " +
             "start or reset the budget, generate pairing codes to invite new devices, " +
             "remove devices (long-press on the device roster), " +
-            "set the family timezone, enable transaction attribution, and dissolve the " +
+            "set the household timezone, enable transaction attribution, and dissolve the " +
             "group. Non-admin members can view settings but cannot change them \u2014 " +
             "tapping a locked setting shows \"Administrator only\". " +
             "Free users can join an existing group without a subscription.",
         gettingStartedTitle = "Getting Started",
-        gettingStartedBody = "To set up Sync: Open Settings, tap Sync, and tap " +
-            "\"Create Group\" (requires subscription). A sync group is created with you as admin. " +
+        gettingStartedBody = "To set up SYNC: Open Settings, tap SYNC, and tap " +
+            "\"Create Group\" (requires subscription). A SYNC group is created with you as admin. " +
             "Then tap \"Generate Pairing Code\" and share the 6-character code with " +
-            "family members. They enter the code on their device to join. " +
+            "the people you want to add. They enter the code on their device to join. " +
             "Codes expire after 10 minutes for security.",
         joiningTitle = "Joining a Group",
         joiningBody = "To join an existing group, tap \"Join Group\" and enter the " +
@@ -1581,12 +1638,12 @@ object EnglishStrings : AppStrings {
             "Important: joining replaces your local budget data " +
             "with the group's shared data. Your current transactions, goals, and settings " +
             "will be overwritten. Make sure to back up first if needed.",
-        syncStatusTitle = "Sync Status",
-        syncStatusBody = "The sync icon on the dashboard and the status card on this screen " +
-            "show the current sync state: Green means online and syncing normally. " +
-            "Yellow means listeners are recovering. Red means no internet connection " +
-            "or a sync error. The device roster shows real-time presence for each " +
-            "family member: green = online now, dark blue = seen recently, " +
+        syncStatusTitle = "SYNC Status",
+        syncStatusBody = "The SYNC icon on the dashboard and the status card on this screen " +
+            "show the current state: green means online and syncing normally, " +
+            "yellow means the connection is recovering, and red means no internet or a sync error. " +
+            "The device roster shows real-time presence for each linked device: " +
+            "green = online now, dark blue = seen recently, " +
             "yellow = 1\u20132 hours ago, red = over 2 hours ago.",
         staleWarningsTitle = "Stale Warnings",
         staleWarningsBody = "If your device hasn't synced for an extended period, escalating " +
@@ -1613,11 +1670,11 @@ object EnglishStrings : AppStrings {
             "The admin can also remove individual devices by long-pressing on the device roster.",
 
         privacyTitle = "Privacy & Security",
-        privacyBody = "All sync data is encrypted end-to-end with a 256-bit key generated " +
-            "when the group is created. The key is shared only via the pairing code " +
-            "mechanism and stored in encrypted device storage. The server stores only " +
-            "encrypted blobs \u2014 it cannot read your transactions, amounts, merchant " +
-            "names, or any financial data. Your money, your data, your control.",
+        privacyBody = "All SYNC data is protected with industry-standard end-to-end encryption. " +
+            "The encryption key is generated when the group is created and shared only through " +
+            "the pairing code, then stored securely on each device. The cloud server stores only " +
+            "encrypted data \u2014 it cannot read your transactions, amounts, merchant names, or any " +
+            "other financial information. Your money, your data, your control.",
         subscriptionTitle = "Subscription & Group Lifecycle",
         subscriptionBody = "The admin's subscription keeps the group active. If the subscription " +
             "expires, all group members are notified daily and have a 7-day grace period " +

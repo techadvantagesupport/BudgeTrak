@@ -774,6 +774,45 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
 
             HelpDivider()
 
+            // ─── SECTION: PDF EXPENSE REPORTS ───
+            SectionTitle(S.transactionsHelp.pdfReportTitle)
+            BodyText(S.transactionsHelp.pdfReportBody)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDivider()
+
+            // ─── SECTION: SORTING ───
+            SectionTitle(S.transactionsHelp.sortTitle)
+            BodyText(S.transactionsHelp.sortBody)
+            BulletText(S.transactionsHelp.sortDateBullet)
+            BulletText(S.transactionsHelp.sortAmountBullet)
+            BulletText(S.transactionsHelp.sortCategoryBullet)
+            Spacer(modifier = Modifier.height(8.dp))
+            BodyText(S.transactionsHelp.sortDirectionNote)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDivider()
+
+            // ─── SECTION: FILTERING ───
+            SectionTitle(S.transactionsHelp.filtersExpandedTitle)
+            BodyText(S.transactionsHelp.filtersExpandedBody)
+            BulletText(S.transactionsHelp.filterRecurringBullet)
+            BulletText(S.transactionsHelp.filterExcludedBullet)
+            BulletText(S.transactionsHelp.filterNotVerifiedBullet)
+            BulletText(S.transactionsHelp.filterPhotosBullet)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDivider()
+
+            // ─── SECTION: MULTI-CANDIDATE MATCHING ───
+            SectionTitle(S.transactionsHelp.rankedMatchTitle)
+            BodyText(S.transactionsHelp.rankedMatchBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            BodyText(S.transactionsHelp.rankedMatchClosestNote)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDivider()
+
             // ─── SECTION 11: TIPS ───
             SectionTitle(S.transactionsHelp.tipsTitle)
             BulletText(S.transactionsHelp.tip1)

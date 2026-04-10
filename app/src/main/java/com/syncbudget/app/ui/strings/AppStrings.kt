@@ -774,7 +774,10 @@ data class DashboardHelpStrings(
     val widgetBody: String,
     val widgetSolariDesc: String,
     val widgetButtonsDesc: String,
-    val widgetFreeDesc: String
+    val widgetFreeDesc: String,
+    // Subscription expiry warning popup (admin's subscription expired)
+    val subExpiryWarningTitle: String,
+    val subExpiryWarningBody: String
 )
 
 data class SettingsHelpStrings(
@@ -823,6 +826,9 @@ data class SettingsHelpStrings(
     val matchDollarBullet: String,
     val matchCharsBullet: String,
     val matchingNote: String,
+    // Auto-Capitalize
+    val autoCapitalizeTitle: String,
+    val autoCapitalizeBody: String,
     val paidTitle: String,
     val paidBody: String,
     val paidSave: String,
@@ -1018,6 +1024,26 @@ data class TransactionsHelpStrings(
     val loadDuplicateNote: String,
     val autoCatTitle: String,
     val autoCatBody: String,
+    // Sorting and filtering
+    val sortTitle: String,
+    val sortBody: String,
+    val sortDateBullet: String,
+    val sortAmountBullet: String,
+    val sortCategoryBullet: String,
+    val sortDirectionNote: String,
+    val filtersExpandedTitle: String,
+    val filtersExpandedBody: String,
+    val filterRecurringBullet: String,
+    val filterExcludedBullet: String,
+    val filterNotVerifiedBullet: String,
+    val filterPhotosBullet: String,
+    // Multi-candidate matching
+    val rankedMatchTitle: String,
+    val rankedMatchBody: String,
+    val rankedMatchClosestNote: String,
+    // PDF reports
+    val pdfReportTitle: String,
+    val pdfReportBody: String,
     val tipsTitle: String,
     val tip1: String,
     val tip2: String,
@@ -1188,6 +1214,11 @@ data class SavingsGoalsHelpStrings(
     val goalReachedBody: String,
     val manualOverrideTitle: String,
     val manualOverrideBody: String,
+    // Transaction linking
+    val linkingTitle: String,
+    val linkingBody: String,
+    val linkingPartialNote: String,
+    val linkingSuperchargeNote: String,
     val tipsTitle: String,
     val tip1: String,
     val tip2: String,

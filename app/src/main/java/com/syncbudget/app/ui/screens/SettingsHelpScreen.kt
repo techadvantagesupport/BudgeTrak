@@ -216,6 +216,13 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
+            // ─── SECTION: AUTO CAPITALIZE ───
+            HelpSectionTitle(S.settingsHelp.autoCapitalizeTitle)
+            HelpBodyText(S.settingsHelp.autoCapitalizeBody)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
             // ─── SECTION 9: PAID USER ───
             HelpSectionTitle(S.settingsHelp.paidTitle)
             HelpBodyText(S.settingsHelp.paidBody)

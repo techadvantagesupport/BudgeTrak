@@ -429,6 +429,13 @@ fun DashboardHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
+            // ─── SUBSCRIPTION EXPIRY NOTICE ───
+            HelpSectionTitle(S.dashboardHelp.subExpiryWarningTitle)
+            HelpBodyText(S.dashboardHelp.subExpiryWarningBody)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
             // ─── SECTION 9: PRIVACY ───
             HelpSectionTitle(S.dashboardHelp.privacyTitle)
             HelpBodyText(S.dashboardHelp.privacyBody)

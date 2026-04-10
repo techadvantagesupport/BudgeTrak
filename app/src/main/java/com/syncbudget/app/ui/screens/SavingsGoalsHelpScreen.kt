@@ -274,6 +274,17 @@ fun SavingsGoalsHelpScreen(onBack: () -> Unit) {
 
             HelpDividerLine()
 
+            // ─── SECTION: LINKING TRANSACTIONS TO GOALS ───
+            HelpSectionTitle(S.savingsGoalsHelp.linkingTitle)
+            HelpBodyText(S.savingsGoalsHelp.linkingBody)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(S.savingsGoalsHelp.linkingPartialNote)
+            Spacer(modifier = Modifier.height(8.dp))
+            HelpBodyText(S.savingsGoalsHelp.linkingSuperchargeNote)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDividerLine()
+
             // ─── SECTION 9: TIPS ───
             HelpSectionTitle(S.savingsGoalsHelp.tipsTitle)
             HelpBulletText(S.savingsGoalsHelp.tip1)
