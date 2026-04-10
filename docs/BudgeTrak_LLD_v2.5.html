@@ -177,10 +177,10 @@ pre code { background: none; padding: 0; color: inherit; }
             <li><a href="#s2-3">TransactionsScreen</a></li>
             <li><a href="#s2-4">BudgetConfigScreen</a></li>
             <li><a href="#s2-5">SettingsScreen</a></li>
-            <li><a href="#s2-6">FutureExpendituresScreen</a></li>
+            <li><a href="#s2-6">SavingsGoalsScreen</a></li>
             <li><a href="#s2-7">AmortizationScreen</a></li>
             <li><a href="#s2-8">RecurringExpensesScreen</a></li>
-            <li><a href="#s2-9">FamilySyncScreen</a></li>
+            <li><a href="#s2-9">SyncScreen</a></li>
             <li><a href="#s2-10">BudgetCalendarScreen</a></li>
             <li><a href="#s2-11">SimulationGraphScreen</a></li>
             <li><a href="#s2-12">QuickStartGuide</a></li>
@@ -278,7 +278,7 @@ pre code { background: none; padding: 0; color: inherit; }
 
 <p>BudgeTrak is a personal budget management Android application built with Jetpack Compose and Material Design 3. The application enables users to track income and expenses, configure recurring financial entries, amortize large purchases over time, set and manage savings goals, simulate cash-flow projections, capture receipt photos, and visualize spending through interactive charts. A distinctive Solari-style split-flap display animates the user's available cash on the dashboard.</p>
 
-<p>The app supports two languages (English and Spanish), multiple currency formats, encrypted file save/load functionality, CSV import from US Bank statements, a home screen widget with quick-add transactions, and multi-device family synchronization via <strong>Firestore-native per-document encrypted sync</strong>. All domain data is persisted as JSON files in the application's private storage directory, with user preferences stored in SharedPreferences.</p>
+<p>The app supports two languages (English and Spanish), multiple currency formats, encrypted file save/load functionality, CSV import from US Bank statements, a home screen widget with quick-add transactions, and multi-device SYNChronization via <strong>Firestore-native per-document encrypted sync</strong>. All domain data is persisted as JSON files in the application's private storage directory, with user preferences stored in SharedPreferences.</p>
 
 <p>The architecture follows a single-activity Compose pattern with an <code>AndroidViewModel</code> (<code>MainViewModel</code>) that holds all application state and business logic. <code>MainActivity</code> is a thin UI-only shell (~2,327 lines) that delegates to composable screen functions and includes a <code>LoadingScreen</code> composable gating on <code>dataLoaded</code>, while <code>MainViewModel</code> (~2,171 lines) manages ~80 state variables, save functions, sync lifecycle, background loops, and all business logic via <code>viewModelScope</code>. Data loading runs asynchronously on <code>Dispatchers.IO</code> with a learned-timing progress bar.</p>
 
@@ -293,6 +293,24 @@ pre code { background: none; padding: 0; color: inherit; }
 
 <h4>v2.5 Architecture Change: Async Data Loading, Loading Screen, Maintenance Consolidation, Transaction Archiving</h4>
 <p>In v2.5, <code>MainViewModel.init</code> was restructured for async data loading: seven repository loads run sequentially on <code>Dispatchers.IO</code> with per-segment progress tracking, and all <code>addAll()</code> calls plus <code>dataLoaded = true</code> execute on <code>Dispatchers.Main</code>. A <strong>LoadingScreen</strong> composable (app icon + title + <code>LinearProgressIndicator</code>) gates the UI via <code>if (!vm.dataLoaded)</code>. A <strong>learned-timing progress bar</strong> stores segment times in SharedPreferences with EMA smoothing and a 60fps ticker interpolating within segments. <strong>Back = Home</strong>: <code>BackHandler { moveTaskToBack(true) }</code> when on the dashboard. <strong>Synchronous <code>recomputeCash()</code></strong>: removed the <code>viewModelScope.launch(Dispatchers.Default)</code> wrapper; now computes inline. <strong>MainViewModel companion object</strong> exposes a <code>@Volatile WeakReference&lt;MainViewModel&gt;</code> for <code>BackgroundSyncWorker</code>. <strong>Consolidated <code>runPeriodicMaintenance()</code></strong>: a single 24h-gated suspend function called from <code>onResume</code> containing backup check, integrity check, receipt orphan cleanup, receipt pruning, and admin tombstone cleanup. <strong>Extracted <code>runIntegrityCheck()</code></strong>: reusable private suspend function comparing local IDs against Firestore cache. <strong>Three-tier <code>BackgroundSyncWorker</code></strong>: checks <code>isAppActive</code> (skip), then <code>MainViewModel.instance</code> (restart dead listeners only), then full sync when ViewModel is null. <strong>Calculated period refresh</strong>: sleeps until <code>nextBoundary + 60s</code> instead of fixed 30s delay. <strong>Lifecycle observer</strong> moved below loading gate. <strong>Transaction archiving</strong>: <code>archiveThreshold</code> setting, <code>archiveCutoffDate</code> on SharedSettings, <code>applyArchiveCutoff()</code> moves old transactions to a separate archive file.</p>
+
+<h4>v2.5 Maintenance Updates (April 2026)</h4>
+<p>The v2.5 line received several reliability and observability updates that did not warrant a version bump:</p>
+<ul>
+    <li><strong>SYNC rebrand</strong>: the multi-device feature was renamed from "Family Sync" to "SYNC" (always all-caps as a brand mark). The Settings button label, the page header, and all in-app strings were updated. Code symbols (<code>FamilySyncScreen</code> &rarr; <code>SyncScreen</code>, <code>FamilySyncHelpScreen</code> &rarr; <code>SyncHelpScreen</code>, the <code>familySync</code>/<code>familySyncDescription</code> string fields, the <code>familySyncHelp</code> field, and navigation routes <code>"family_sync"</code>/<code>"family_sync_help"</code> &rarr; <code>"sync"</code>/<code>"sync_help"</code>) were renamed to match. The "Future Expenditures" terminology was likewise swept to "Savings Goals" everywhere except the local persistence file (<code>future_expenditures.json</code>) and the corresponding SharedSettings/Firestore field (<code>familyTimezone</code>) which are preserved for backwards compatibility.</li>
+    <li><strong>Two-layer consistency check</strong>: <code>runConsistencyCheck()</code> in <code>MainViewModel</code> performs Layer 1 (per-collection <code>countActiveDocs()</code> aggregation vs. local <code>.active.size</code>; cursor cleared on mismatch) and Layer 2 (cashHash majority vote, with checkpoints written to <code>deviceChecksums</code> on the group doc and a 1-hour confirmation gate before any re-read recovery is triggered). Cash hash uses a hex digest (<code>availableCash.toString().hashCode().toString(16)</code>), not the raw value, to keep financial data out of Crashlytics and the cloud-stored checksum doc. Mismatch recheck runs from both <code>onResume</code> and <code>BackgroundSyncWorker</code> Tier 3 step 4b.</li>
+    <li><strong>Echo suppression</strong>: cursor advances even for echo-filtered batches (both pure-echo and mixed). Background pushes persist their pushed doc keys to <code>sync_engine</code> prefs (<code>bgPushKeys</code>) so the next foreground <code>FirestoreDocSync</code> can filter them via <code>recentPushes</code> + <code>lastEditBy</code>. Eliminates wasted Firestore reads + decryption cycles. The encryption-hash skip cache (<code>enc_hash_cache.json</code>) is now populated at push time as well as at read time, so own writes do not trigger re-decryption when listeners later deliver the echo.</li>
+    <li><strong>App Check token reliability</strong>: proactive token refresh now runs from four places &mdash; <code>onResume</code>, <code>onAvailable</code> (network restored), a 45-minute ViewModel keep-alive coroutine, and all three tiers of <code>BackgroundSyncWorker</code> (Tier 2 when the ViewModel is alive, Tier 3 when the process is restarted). The threshold is "within 35 min of expiry" (greater than the max Doze worker interval). All <code>getAppCheckToken()</code> calls are wrapped with <code>withTimeoutOrNull(10&ndash;15s)</code> to prevent hangs when Play Integrity itself is unavailable. <code>triggerFullRestart()</code> is the recovery path on PERMISSION_DENIED: it stops every listener, force-refreshes the App Check token (with timeout), waits for the refresh, and starts all listeners fresh on the SDK's new auth state. The 30-second debounce prevents recovery storms.</li>
+    <li><strong>Crashlytics observability</strong>: <code>BudgeTrakApplication.syncEvent(msg)</code> logs key sync lifecycle events (listener start/stop, recovery, worker tiers) to the Crashlytics breadcrumb log + logcat. <code>BudgeTrakApplication.updateDiagKeys(map)</code> sets custom keys (<code>cashDigest</code>, <code>listenerStatus</code>, <code>activeDevices</code>, <code>txnCount</code>, etc.) attached to every future crash and non-fatal. A daily <code>HEALTH_BEACON</code> non-fatal is recorded from <code>runPeriodicMaintenance()</code> so production devices remain visible in the Crashlytics dashboard even when nothing is wrong. BigQuery streaming export is active.</li>
+    <li><strong>Real-time SYNC eviction</strong>: device removal, leave, and dissolution events propagate via Firestore in real time, surfacing as a one-shot dashboard popup (<code>syncEvictionMessage</code>) the next time the user opens the app.</li>
+    <li><strong>Admin claim voting</strong>: when the admin device is unavailable, any subscriber can claim the admin role; other members have 24 hours to object before the claim is approved. Implemented as a single-document workflow on the group doc with real-time listener delivery.</li>
+    <li><strong>TTL fix</strong>: group documents now use a separate <code>expiresAt</code> Firestore Timestamp field (refreshed to <code>now + 90 days</code> on every launch) for the TTL policy, replacing the earlier broken use of <code>lastActivity</code> (a server-set timestamp that was always in the past, causing immediate TTL eligibility).</li>
+    <li><strong>Subscription expiry dashboard popup</strong>: replaces the earlier notification-based approach. Shown once per session when the admin's subscription has expired, with the 7-day grace period and admin-claim instructions inline.</li>
+    <li><strong>Match dialog improvements</strong>: ranked multi-candidate match dialogs (the closest entry pre-selected at the top, ranked by date and amount distance). Recurring expense and income source dialogs now show the nearest expected occurrence date alongside the new transaction's date.</li>
+    <li><strong>Auto-Capitalize</strong>: a Settings toggle (default on) that formats merchant names and descriptions in Title Case as the user finishes each word.</li>
+    <li><strong>Match-character normalization</strong>: merchant matching strips non-alphanumeric characters before comparing, so "Wal-Mart" and "Walmart" match.</li>
+    <li><strong>Solo user improvements</strong>: Tier 2 and Tier 3 of <code>BackgroundSyncWorker</code>, Firebase Auth gating, App Check refresh, and a tombstone purge in <code>runPeriodicMaintenance()</code> are now all gated on <code>isSyncConfigured</code>/<code>groupId != null</code>. Solo users skip Auth, App Check, RTDB, and Firestore entirely; only period refresh and widget update run.</li>
+</ul>
 
 <p>This Low-Level Design document describes every class, composable function, data model, utility object, and persistence schema in the BudgeTrak application. Each entry includes its file path, line count, purpose, key methods, and relevant design notes.</p>
 
@@ -380,11 +398,11 @@ Cloud Storage:
 <tr><td>"main"</td><td>MainScreen (dashboard)</td></tr>
 <tr><td>"settings"</td><td>SettingsScreen</td></tr>
 <tr><td>"transactions"</td><td>TransactionsScreen</td></tr>
-<tr><td>"future_expenditures"</td><td>FutureExpendituresScreen</td></tr>
+<tr><td>"savings_goals"</td><td>SavingsGoalsScreen</td></tr>
 <tr><td>"amortization"</td><td>AmortizationScreen</td></tr>
 <tr><td>"recurring_expenses"</td><td>RecurringExpensesScreen</td></tr>
 <tr><td>"budget_config"</td><td>BudgetConfigScreen</td></tr>
-<tr><td>"family_sync"</td><td>FamilySyncScreen</td></tr>
+<tr><td>"sync"</td><td>SyncScreen</td></tr>
 <tr><td>"budget_calendar"</td><td>BudgetCalendarScreen</td></tr>
 <tr><td>"simulation_graph"</td><td>SimulationGraphScreen</td></tr>
 <tr><td>"*_help"</td><td>Respective help screens (10 routes)</td></tr>
@@ -418,7 +436,7 @@ Cloud Storage:
 <tr><td><code>DashboardDialogs</code></td><td>@Composable function receiving 79 parameters, encapsulating 9 dialog blocks from the dashboard. Each dialog has an if-guard so it only composes when visible.</td></tr>
 <tr><td><code>SettingsScreenBranch</code></td><td>@Composable wrapper for SettingsScreen rendering when <code>currentScreen == "settings"</code>.</td></tr>
 <tr><td><code>TransactionsScreenBranch</code></td><td>@Composable wrapper for TransactionsScreen rendering when <code>currentScreen == "transactions"</code>.</td></tr>
-<tr><td><code>FamilySyncScreenBranch</code></td><td>@Composable wrapper for FamilySyncScreen rendering when <code>currentScreen == "family_sync"</code>.</td></tr>
+<tr><td><code>SyncScreenBranch</code></td><td>@Composable wrapper for SyncScreen rendering when <code>currentScreen == "sync"</code>.</td></tr>
 </table>
 <p class="desc"><strong>BudgetConfigScreen extraction reverted:</strong> An attempt to extract BudgetConfigScreen into a composable wrapper was reverted because the 18 setter lambdas required added more bytecode instructions than the inline code saved, negating the JIT benefit.</p>
 
@@ -669,10 +687,10 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <p class="desc">Currency selection, category management (with charted/widgetVisible toggles), matching tolerances, language selection, date format, chart palette, widget logo toggle, paid features, backup/restore, and expense report generation.</p>
 
 
-<!-- 2.6 FutureExpendituresScreen -->
-<h3 id="s2-6">2.6 FutureExpendituresScreen</h3>
+<!-- 2.6 SavingsGoalsScreen -->
+<h3 id="s2-6">2.6 SavingsGoalsScreen</h3>
 <div class="file-info">
-    <strong>File:</strong> <code>ui/screens/FutureExpendituresScreen.kt</code> (804 lines) &nbsp;|&nbsp;
+    <strong>File:</strong> <code>ui/screens/SavingsGoalsScreen.kt</code> (804 lines) &nbsp;|&nbsp;
     <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
 </div>
 <p class="desc">Savings goals management with target-date and fixed-contribution types, progress tracking, Supercharge integration, and PulsingScrollArrow in form dialogs.</p>
@@ -696,10 +714,10 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <p class="desc">Recurring expense management with 6 repeat types, savings required simulation box, Why explanation dialog, set-aside tracking, accelerated expense support, and PulsingScrollArrow in all dialogs.</p>
 
 
-<!-- 2.9 FamilySyncScreen -->
-<h3 id="s2-9">2.9 FamilySyncScreen</h3>
+<!-- 2.9 SyncScreen -->
+<h3 id="s2-9">2.9 SyncScreen</h3>
 <div class="file-info">
-    <strong>File:</strong> <code>ui/screens/FamilySyncScreen.kt</code> (1,160 lines) &nbsp;|&nbsp;
+    <strong>File:</strong> <code>ui/screens/SyncScreen.kt</code> (1,160 lines) &nbsp;|&nbsp;
     <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
 </div>
 <p class="desc">Family sync configuration screen. Allows creating/joining/leaving/dissolving family groups. Shows sync status, device list with online status, admin claims, subscription management. Admin-only settings enforcement for budget period and reset configuration. Device naming, removal, debug file request via FCM.</p>
@@ -846,7 +864,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 </table>
 
 <h3 id="s5-4">5.4 SuperchargeMode / IncomeMode (Enums)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/FutureExpenditure.kt</code> / <code>data/BudgetCalculator.kt</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/SavingsGoal.kt</code> / <code>data/BudgetCalculator.kt</code></div>
 <table>
 <tr><th>Enum</th><th>Value</th><th>Description</th></tr>
 <tr><td>SuperchargeMode</td><td>REDUCE_CONTRIBUTIONS</td><td>Lower per-period contribution to maintain timeline</td></tr>
@@ -957,7 +975,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 </table>
 
 <h3 id="s5-11">5.11 SavingsGoal (Data Class)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/FutureExpenditure.kt</code> (48 lines)</div>
+<div class="file-info"><strong>File:</strong> <code>data/SavingsGoal.kt</code> (48 lines)</div>
 <table>
 <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
 <tr><td>id</td><td>Int</td><td>(required)</td><td>Unique identifier</td></tr>
@@ -1023,7 +1041,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 </table>
 
 <h3 id="s5-15">5.15 ID Generation Functions</h3>
-<div class="file-info"><strong>Files:</strong> Transaction.kt, IncomeSource.kt, RecurringExpense.kt, AmortizationEntry.kt, FutureExpenditure.kt</div>
+<div class="file-info"><strong>Files:</strong> Transaction.kt, IncomeSource.kt, RecurringExpense.kt, AmortizationEntry.kt, SavingsGoal.kt</div>
 <p>All use the same pattern: random Int in 0..65535 with collision avoidance via do-while loop.</p>
 <table>
 <tr><th>Function</th><th>File</th></tr>
@@ -1031,7 +1049,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <tr><td>generateIncomeSourceId(existingIds: Set&lt;Int&gt;): Int</td><td>IncomeSource.kt</td></tr>
 <tr><td>generateRecurringExpenseId(existingIds: Set&lt;Int&gt;): Int</td><td>RecurringExpense.kt</td></tr>
 <tr><td>generateAmortizationEntryId(existingIds: Set&lt;Int&gt;): Int</td><td>AmortizationEntry.kt</td></tr>
-<tr><td>generateSavingsGoalId(existingIds: Set&lt;Int&gt;): Int</td><td>FutureExpenditure.kt</td></tr>
+<tr><td>generateSavingsGoalId(existingIds: Set&lt;Int&gt;): Int</td><td>SavingsGoal.kt</td></tr>
 </table>
 
 
@@ -1829,7 +1847,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>settings</td><td>SettingsStrings</td><td>40</td></tr>
 <tr><td>budgetConfig</td><td>BudgetConfigStrings</td><td>30</td></tr>
 <tr><td>transactions</td><td>TransactionsStrings</td><td>80</td></tr>
-<tr><td>futureExpenditures</td><td>FutureExpendituresStrings</td><td>35</td></tr>
+<tr><td>savingsGoals</td><td>SavingsGoalsStrings</td><td>35</td></tr>
 <tr><td>amortization</td><td>AmortizationStrings</td><td>20</td></tr>
 <tr><td>recurringExpenses</td><td>RecurringExpensesStrings</td><td>20</td></tr>
 <tr><td>sync</td><td>SyncStrings</td><td>50</td></tr>
@@ -1876,10 +1894,10 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>TransactionsHelpScreen</td><td>TransactionsHelpScreen.kt</td><td>998</td></tr>
 <tr><td>BudgetConfigHelpScreen</td><td>BudgetConfigHelpScreen.kt</td><td>374</td></tr>
 <tr><td>SettingsHelpScreen</td><td>SettingsHelpScreen.kt</td><td>380</td></tr>
-<tr><td>FutureExpendituresHelpScreen</td><td>FutureExpendituresHelpScreen.kt</td><td>289</td></tr>
+<tr><td>SavingsGoalsHelpScreen</td><td>SavingsGoalsHelpScreen.kt</td><td>289</td></tr>
 <tr><td>RecurringExpensesHelpScreen</td><td>RecurringExpensesHelpScreen.kt</td><td>289</td></tr>
 <tr><td>AmortizationHelpScreen</td><td>AmortizationHelpScreen.kt</td><td>269</td></tr>
-<tr><td>FamilySyncHelpScreen</td><td>FamilySyncHelpScreen.kt</td><td>101</td></tr>
+<tr><td>SyncHelpScreen</td><td>SyncHelpScreen.kt</td><td>101</td></tr>
 <tr><td>BudgetCalendarHelpScreen</td><td>BudgetCalendarHelpScreen.kt</td><td>86</td></tr>
 <tr><td>SimulationGraphHelpScreen</td><td>SimulationGraphHelpScreen.kt</td><td>88</td></tr>
 </table>
@@ -2002,7 +2020,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>deviceId, deleted</td><td>String, Boolean</td><td>Sync fields</td></tr>
 </table>
 
-<h3>12.6 future_expenditures.json</h3>
+<h3>12.6 future_expenditures.json (Savings Goals — legacy filename)</h3>
 <table>
 <tr><th>Key</th><th>Type</th><th>Description</th></tr>
 <tr><td>id, name, targetAmount</td><td>Int, String, Double</td><td>Core fields</td></tr>
@@ -2060,7 +2078,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>CategoryRepository</td><td>data/CategoryRepository.kt</td><td>55</td><td>categories.json</td></tr>
 <tr><td>IncomeSourceRepository</td><td>data/IncomeSourceRepository.kt</td><td>67</td><td>income_sources.json</td></tr>
 <tr><td>RecurringExpenseRepository</td><td>data/RecurringExpenseRepository.kt</td><td>72</td><td>recurring_expenses.json</td></tr>
-<tr><td>SavingsGoalRepository</td><td>data/FutureExpenditureRepository.kt</td><td>65</td><td>future_expenditures.json</td></tr>
+<tr><td>SavingsGoalRepository</td><td>data/SavingsGoalRepository.kt</td><td>65</td><td>future_expenditures.json</td></tr>
 <tr><td>AmortizationRepository</td><td>data/AmortizationRepository.kt</td><td>60</td><td>amortization_entries.json</td></tr>
 <tr><td>SharedSettingsRepository</td><td>data/SharedSettingsRepository.kt</td><td>130</td><td>shared_settings.json</td></tr>
 <tr><td>PeriodLedgerRepository</td><td>data/sync/PeriodLedger.kt</td><td>(part of 73)</td><td>period_ledger.json</td></tr>
@@ -2130,8 +2148,8 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>DuplicateDetector.kt</td><td>217</td><td>Transaction matching functions</td></tr>
 <tr><td>ExpenseReportGenerator.kt</td><td>365</td><td>PDF expense report generation</td></tr>
 <tr><td>FullBackupSerializer.kt</td><td>281</td><td>Complete state serialization (incl. archive support)</td></tr>
-<tr><td>FutureExpenditure.kt</td><td>48</td><td>SavingsGoal data class + helpers</td></tr>
-<tr><td>FutureExpenditureRepository.kt</td><td>65</td><td>JSON persistence</td></tr>
+<tr><td>SavingsGoal.kt</td><td>48</td><td>SavingsGoal data class + helpers</td></tr>
+<tr><td>SavingsGoalRepository.kt</td><td>65</td><td>JSON persistence</td></tr>
 <tr><td>IncomeSource.kt</td><td>28</td><td>Data class + ID generator</td></tr>
 <tr><td>IncomeSourceRepository.kt</td><td>67</td><td>JSON persistence</td></tr>
 <tr><td>PeriodRefreshService.kt</td><td>275</td><td>Shared period refresh logic (foreground + background)</td></tr>
@@ -2174,10 +2192,10 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>BudgetConfigHelpScreen.kt</td><td>374</td><td>Budget config help documentation</td></tr>
 <tr><td>BudgetConfigScreen.kt</td><td>1,241</td><td>Income/budget configuration</td></tr>
 <tr><td>DashboardHelpScreen.kt</td><td>470</td><td>Dashboard help documentation</td></tr>
-<tr><td>FamilySyncHelpScreen.kt</td><td>101</td><td>Sync help documentation</td></tr>
-<tr><td>FamilySyncScreen.kt</td><td>1,160</td><td>Family sync management</td></tr>
-<tr><td>FutureExpendituresHelpScreen.kt</td><td>289</td><td>Savings goals help</td></tr>
-<tr><td>FutureExpendituresScreen.kt</td><td>804</td><td>Savings goals management</td></tr>
+<tr><td>SyncHelpScreen.kt</td><td>101</td><td>Sync help documentation</td></tr>
+<tr><td>SyncScreen.kt</td><td>1,160</td><td>Family sync management</td></tr>
+<tr><td>SavingsGoalsHelpScreen.kt</td><td>289</td><td>Savings goals help</td></tr>
+<tr><td>SavingsGoalsScreen.kt</td><td>804</td><td>Savings goals management</td></tr>
 <tr><td>HelpComponents.kt</td><td>165</td><td>Shared help composables</td></tr>
 <tr><td>MainScreen.kt</td><td>1,302</td><td>Dashboard with flip display</td></tr>
 <tr><td>QuickStartGuide.kt</td><td>357</td><td>Onboarding overlay</td></tr>
@@ -2227,7 +2245,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 </tr>
 <tr>
     <td>2.0</td><td>March 2026</td><td>BudgeTrak Team</td>
-    <td>Major update. Added Family Sync system (14 sync classes, CRDT merge, Firestore transport). Added SavingsSimulator for cash flow simulation. Added AdAwareDialog, PulsingScrollArrow. Added linked transactions with remembered amounts. Added ANNUAL RepeatType. All data classes extended with per-field _clock sync fields. 68 source files, 27,738 lines.</td>
+    <td>Major update. Added SYNC system (14 sync classes, CRDT merge, Firestore transport). Added SavingsSimulator for cash flow simulation. Added AdAwareDialog, PulsingScrollArrow. Added linked transactions with remembered amounts. Added ANNUAL RepeatType. All data classes extended with per-field _clock sync fields. 68 source files, 27,738 lines.</td>
 </tr>
 <tr>
     <td>2.2</td><td>March 2026</td><td>BudgeTrak Team</td>
