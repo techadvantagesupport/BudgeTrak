@@ -289,7 +289,7 @@ object EnglishStrings : AppStrings {
         amount = "Amount",
         total = "Total",
         pieChart = "Pie chart mode",
-        calculator = "Amount mode",
+        calculator = "Calculator mode",
         percentage = "Percentage mode",
         save = "Save",
         load = "Load",

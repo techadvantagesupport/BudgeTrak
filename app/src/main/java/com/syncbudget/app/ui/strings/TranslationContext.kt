@@ -302,7 +302,7 @@ object TranslationContext {
         "amount" to "Column header or field label for the monetary value of a transaction. Noun meaning sum of money.",
         "total" to "Label for the sum of all displayed transaction amounts. Noun/adjective.",
         "pieChart" to "Toggle button label to switch the multi-category entry mode to an interactive pie chart. Noun phrase describing a circular graph.",
-        "calculator" to "Toggle button label to switch the multi-category entry mode to entering specific dollar amounts per category. Noun referring to the amount-entry mode, not a math calculator.",
+        "calculator" to "Toggle button label to switch the multi-category entry mode to entering specific dollar amounts per category, like using a calculator. Refers to the entry mode, not a math calculator app.",
         "percentage" to "Toggle button label to switch the multi-category entry mode to entering percentage splits per category. Noun.",
         "save" to "Header icon/button label for exporting transactions to a file. Means to write/export to a file — not rescue. Action verb.",
         "load" to "Header icon/button label for importing transactions from a file. Means to read/import from a file — not a physical load/weight. Action verb.",

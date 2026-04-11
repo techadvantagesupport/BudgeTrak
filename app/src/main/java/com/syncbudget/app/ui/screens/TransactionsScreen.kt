@@ -738,25 +738,26 @@ fun TransactionsScreen(
                     }
                 },
                 actions = {
+                    val canSaveLoad = isPaidUser || isSubscriber
                     IconButton(onClick = {
-                        if (isSubscriber) showSaveDialog = true
+                        if (canSaveLoad) showSaveDialog = true
                         else toastState.show(S.settings.subscribeToAccess)
                     }) {
                         Icon(
                             imageVector = Icons.Filled.Save,
                             contentDescription = S.transactions.save,
-                            tint = if (isSubscriber) customColors.headerText
+                            tint = if (canSaveLoad) customColors.headerText
                                    else customColors.headerText.copy(alpha = 0.35f)
                         )
                     }
                     IconButton(onClick = {
-                        if (isSubscriber) showImportFormatDialog = true
+                        if (canSaveLoad) showImportFormatDialog = true
                         else toastState.show(S.settings.subscribeToAccess)
                     }) {
                         Icon(
                             imageVector = Icons.Filled.MoveToInbox,
                             contentDescription = S.transactions.load,
-                            tint = if (isSubscriber) customColors.headerText
+                            tint = if (canSaveLoad) customColors.headerText
                                    else customColors.headerText.copy(alpha = 0.35f)
                         )
                     }

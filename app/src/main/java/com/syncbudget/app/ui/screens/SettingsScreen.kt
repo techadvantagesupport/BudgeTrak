@@ -647,77 +647,82 @@ fun SettingsScreen(
                 } // Box
             }
 
-            // Paid User checkbox
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = isPaidUser,
-                        onCheckedChange = onPaidUserChange,
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary,
-                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+            // Paid User / Subscriber test toggles — DEBUG BUILDS ONLY.
+            // In release builds these tiers are controlled by Google Play Billing,
+            // not by user-facing checkboxes.
+            if (com.syncbudget.app.BuildConfig.DEBUG) {
+                // Paid User checkbox (debug override)
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = isPaidUser,
+                            onCheckedChange = onPaidUserChange,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
                         )
-                    )
-                    Text(
-                        text = S.settings.paidUser,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-            }
-
-            // Subscriber checkbox + expiration date picker (for testing)
-            item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Checkbox(
-                        checked = isSubscriber,
-                        onCheckedChange = { newValue ->
-                            onSubscriberChange(newValue)
-                            if (newValue && !isPaidUser) onPaidUserChange(true)
-                        },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary,
-                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                        )
-                    )
-                    Text(
-                        text = S.settings.subscriber,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    if (isSubscriber) {
-                        Spacer(modifier = Modifier.weight(1f))
-                        val dateFormatter = remember { java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd") }
-                        val expiryDate = java.time.Instant.ofEpochMilli(subscriptionExpiry)
-                            .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
-                        var showExpiryPicker by remember { mutableStateOf(false) }
-                        val pickerContext = LocalContext.current
                         Text(
-                            text = "Exp: ${expiryDate.format(dateFormatter)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .clickable { showExpiryPicker = true }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                            text = S.settings.paidUser,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground
                         )
-                        if (showExpiryPicker) {
-                            LaunchedEffect(Unit) {
-                                val dialog = android.app.DatePickerDialog(
-                                    pickerContext,
-                                    { _, year, month, day ->
-                                        val picked = java.time.LocalDate.of(year, month + 1, day)
-                                        val millis = picked.atStartOfDay(java.time.ZoneId.systemDefault())
-                                            .toInstant().toEpochMilli()
-                                        onSubscriptionExpiryChange(millis)
-                                        showExpiryPicker = false
-                                    },
-                                    expiryDate.year, expiryDate.monthValue - 1, expiryDate.dayOfMonth
-                                )
-                                dialog.setOnDismissListener { showExpiryPicker = false }
-                                dialog.show()
+                    }
+                }
+
+                // Subscriber checkbox + expiration date picker (debug override)
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Checkbox(
+                            checked = isSubscriber,
+                            onCheckedChange = { newValue ->
+                                onSubscriberChange(newValue)
+                                if (newValue && !isPaidUser) onPaidUserChange(true)
+                            },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
+                        )
+                        Text(
+                            text = S.settings.subscriber,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        if (isSubscriber) {
+                            Spacer(modifier = Modifier.weight(1f))
+                            val dateFormatter = remember { java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd") }
+                            val expiryDate = java.time.Instant.ofEpochMilli(subscriptionExpiry)
+                                .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                            var showExpiryPicker by remember { mutableStateOf(false) }
+                            val pickerContext = LocalContext.current
+                            Text(
+                                text = "Exp: ${expiryDate.format(dateFormatter)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clickable { showExpiryPicker = true }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                            if (showExpiryPicker) {
+                                LaunchedEffect(Unit) {
+                                    val dialog = android.app.DatePickerDialog(
+                                        pickerContext,
+                                        { _, year, month, day ->
+                                            val picked = java.time.LocalDate.of(year, month + 1, day)
+                                            val millis = picked.atStartOfDay(java.time.ZoneId.systemDefault())
+                                                .toInstant().toEpochMilli()
+                                            onSubscriptionExpiryChange(millis)
+                                            showExpiryPicker = false
+                                        },
+                                        expiryDate.year, expiryDate.monthValue - 1, expiryDate.dayOfMonth
+                                    )
+                                    dialog.setOnDismissListener { showExpiryPicker = false }
+                                    dialog.show()
+                                }
                             }
                         }
                     }

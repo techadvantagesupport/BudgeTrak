@@ -33,7 +33,7 @@ import com.syncbudget.app.ui.theme.FlipFontFamily
 import com.syncbudget.app.ui.theme.LocalSyncBudgetColors
 import kotlin.math.abs
 
-val CURRENCY_OPTIONS = listOf("$", "€", "£", "¥", "₹", "₩", "Fr")
+val CURRENCY_OPTIONS = listOf("$", "€", "£", "¥", "₹", "₩", "₱", "Fr")
 
 val CURRENCY_DECIMALS = mapOf(
     "$" to 2,
@@ -42,6 +42,7 @@ val CURRENCY_DECIMALS = mapOf(
     "¥" to 0,
     "₹" to 2,
     "₩" to 0,
+    "₱" to 2,
     "Fr" to 2
 )
 
