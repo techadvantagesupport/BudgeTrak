@@ -278,7 +278,7 @@ pre code { background: none; padding: 0; color: inherit; }
 
 <p>BudgeTrak is a personal budget management Android application built with Jetpack Compose and Material Design 3. The application enables users to track income and expenses, configure recurring financial entries, amortize large purchases over time, set and manage savings goals, simulate cash-flow projections, capture receipt photos, and visualize spending through interactive charts. A distinctive Solari-style split-flap display animates the user's available cash on the dashboard.</p>
 
-<p>The app supports two languages (English and Spanish), multiple currency formats, encrypted file save/load functionality, CSV import from US Bank statements, a home screen widget with quick-add transactions, and multi-device SYNChronization via <strong>Firestore-native per-document encrypted sync</strong>. All domain data is persisted as JSON files in the application's private storage directory, with user preferences stored in SharedPreferences.</p>
+<p>The app supports two languages (English and Spanish), multiple currency formats, transaction export to CSV / Excel (.xlsx) / PDF expense report, CSV import from any bank with auto-detect or specific US Bank format, automatic encrypted backups in Settings, a home screen widget with quick-add transactions, and multi-device synchronization via <strong>SYNC, the Firestore-native per-document encrypted sync feature</strong>. All domain data is persisted as JSON files in the application's private storage directory, with user preferences stored in SharedPreferences.</p>
 
 <p>The architecture follows a single-activity Compose pattern with an <code>AndroidViewModel</code> (<code>MainViewModel</code>) that holds all application state and business logic. <code>MainActivity</code> is a thin UI-only shell (~2,327 lines) that delegates to composable screen functions and includes a <code>LoadingScreen</code> composable gating on <code>dataLoaded</code>, while <code>MainViewModel</code> (~2,171 lines) manages ~80 state variables, save functions, sync lifecycle, background loops, and all business logic via <code>viewModelScope</code>. Data loading runs asynchronously on <code>Dispatchers.IO</code> with a learned-timing progress bar.</p>
 
@@ -644,7 +644,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
     <strong>File:</strong> <code>ui/screens/TransactionsScreen.kt</code> (5,573 lines) &nbsp;|&nbsp;
     <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
 </div>
-<p class="desc">Comprehensive transaction management with list display, filtering, searching, multi-select, entry/editing dialogs, CSV import pipeline with duplicate detection, encrypted save/load, linked transaction display, receipt photo capture/display, and expense report PDF generation. The largest screen in the application.</p>
+<p class="desc">Comprehensive transaction management with list display, filtering, searching, multi-select, entry/editing dialogs, CSV import pipeline with duplicate detection (Generic CSV auto-detect, US Bank, BudgeTrak CSV), Save export to CSV / Excel (.xlsx) / PDF expense report, linked transaction display, receipt photo capture/display, and full backup load. The manual encrypted save format was removed in v2.5.x; encryption is still used by the auto-backup feature in Settings. The largest screen in the application.</p>
 
 <h4>Key Composable Functions</h4>
 <table>
@@ -1134,11 +1134,20 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 </table>
 <h4>BankFormat Enum</h4>
 <table>
-<tr><th>Value</th><th>Description</th></tr>
-<tr><td>US_BANK</td><td>US Bank CSV format</td></tr>
+<tr><th>Value</th><th>Display Name</th></tr>
+<tr><td>GENERIC_CSV</td><td>Any Bank CSV (auto-detect)</td></tr>
+<tr><td>US_BANK</td><td>US Bank</td></tr>
 <tr><td>SECURESYNC_CSV</td><td>BudgeTrak CSV Save File</td></tr>
-<tr><td>SECURESYNC_ENCRYPTED</td><td>BudgeTrak Encrypted Save File</td></tr>
 </table>
+
+<h4>SaveFormat Enum (TransactionsScreen)</h4>
+<table>
+<tr><th>Value</th><th>Display Name</th></tr>
+<tr><td>CSV</td><td>CSV (.csv)</td></tr>
+<tr><td>XLS</td><td>Excel (.xlsx)</td></tr>
+<tr><td>PDF</td><td>PDF Expense Report (.pdf)</td></tr>
+</table>
+<p>Note: the legacy <code>SECURESYNC_ENCRYPTED</code> import format and matching encrypted save format were removed in v2.5.x (commit 292c5e6, 2026-03-18). The corresponding <code>encryptedFormatTitle</code>, <code>loadEncrypted</code>, password-strength help table, and PBKDF2 explanation strings were removed from <code>TransactionsHelpStrings</code> in v2.5.x; the encryption explanation and password strength table were rewritten and moved to <code>SettingsHelpStrings</code> as part of the Backups section, where they document the still-active auto-backup encryption.</p>
 
 
 <h3 id="s6-4">6.4 DuplicateDetector (Top-Level Functions)</h3>

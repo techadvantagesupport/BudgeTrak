@@ -641,7 +641,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             BodyText(S.transactionsHelp.savingBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Save format mockup
+            // Save format mockup — three pills (CSV, Excel, PDF)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -652,6 +652,7 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(S.transactions.saveTransactions, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall, color = textColor)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // CSV — selected (highlighted)
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
@@ -661,17 +662,23 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
                         ) {
                             Text(S.transactions.csv, style = MaterialTheme.typography.bodyMedium, color = textColor)
                         }
+                        // Excel
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
                                 .border(1.dp, dimColor.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
                                 .padding(horizontal = 16.dp, vertical = 6.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(14.dp), tint = textColor)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(S.transactions.encrypted, style = MaterialTheme.typography.bodyMedium, color = textColor)
-                            }
+                            Text(S.transactions.xls, style = MaterialTheme.typography.bodyMedium, color = textColor)
+                        }
+                        // PDF
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .border(1.dp, dimColor.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                        ) {
+                            Text(S.transactions.pdf, style = MaterialTheme.typography.bodyMedium, color = textColor)
                         }
                     }
                 }
@@ -682,69 +689,12 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             BodyText(S.transactionsHelp.csvFormatBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            SubSectionTitle(S.transactionsHelp.encryptedFormatTitle)
-            BodyText(S.transactionsHelp.encryptedFormatBody)
+            SubSectionTitle(S.transactionsHelp.xlsxFormatTitle)
+            BodyText(S.transactionsHelp.xlsxFormatBody)
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Encryption details box
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(accentColor.copy(alpha = 0.07f))
-                    .border(1.dp, accentColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                    .padding(14.dp)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Lock, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(S.transactionsHelp.encryptionDetailsTitle, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = textColor)
-                    }
-                    Text(
-                        S.transactionsHelp.encryptionDetailsBody,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textColor,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(14.dp))
-
-            SubSectionTitle(S.transactionsHelp.passwordImportanceTitle)
-            BodyText(S.transactionsHelp.passwordImportanceBody)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Password strength table
-            PasswordStrengthTable(S)
-            Spacer(modifier = Modifier.height(10.dp))
-
-            BodyText(S.transactionsHelp.pbkdfNote)
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF4CAF50).copy(alpha = 0.08f))
-                    .border(1.dp, Color(0xFF4CAF50).copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-                    .padding(14.dp)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(S.transactionsHelp.recommendedTitle, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = textColor)
-                    Text(
-                        S.transactionsHelp.recommendedBody,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textColor,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            BodyText(
-                S.transactionsHelp.passwordMinNote,
-                italic = true
-            )
+            SubSectionTitle(S.transactionsHelp.pdfReportFormatTitle)
+            BodyText(S.transactionsHelp.pdfReportFormatBody)
             Spacer(modifier = Modifier.height(16.dp))
 
             HelpDivider()
@@ -754,15 +704,13 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
             BodyText(S.transactionsHelp.loadingBody)
             Spacer(modifier = Modifier.height(8.dp))
 
-            NumberedItem(1, S.transactionsHelp.loadUsBank, S.transactionsHelp.loadUsBankDesc)
+            NumberedItem(1, S.transactionsHelp.loadGeneric, S.transactionsHelp.loadGenericDesc)
             Spacer(modifier = Modifier.height(4.dp))
-            NumberedItem(2, S.transactionsHelp.loadCsv, S.transactionsHelp.loadCsvDesc)
+            NumberedItem(2, S.transactionsHelp.loadUsBank, S.transactionsHelp.loadUsBankDesc)
             Spacer(modifier = Modifier.height(4.dp))
-            NumberedItem(3, S.transactionsHelp.loadEncrypted, S.transactionsHelp.loadEncryptedDesc)
+            NumberedItem(3, S.transactionsHelp.loadCsv, S.transactionsHelp.loadCsvDesc)
             Spacer(modifier = Modifier.height(10.dp))
 
-            BodyText(S.transactionsHelp.loadPasswordNote)
-            Spacer(modifier = Modifier.height(8.dp))
             BodyText(S.transactionsHelp.fullRestoreNote)
             Spacer(modifier = Modifier.height(8.dp))
             BodyText(S.transactionsHelp.loadDuplicateNote)
@@ -957,81 +905,3 @@ private fun PieLegendItem(color: Color, label: String) {
     }
 }
 
-@Composable
-private fun PasswordStrengthTable(S: com.syncbudget.app.ui.strings.AppStrings) {
-    val textColor = MaterialTheme.colorScheme.onBackground
-    val dimColor = textColor.copy(alpha = 0.6f)
-    val headerColor = MaterialTheme.colorScheme.primary
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, dimColor.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-    ) {
-        // Table header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(headerColor.copy(alpha = 0.1f))
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-        ) {
-            Text(S.transactionsHelp.passwordTableHeader, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1.2f))
-            Text(S.transactionsHelp.passwordTableExample, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            Text(S.transactionsHelp.passwordTableTime, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
-        }
-        HorizontalDivider(color = dimColor.copy(alpha = 0.2f))
-
-        PasswordTableRow(S.transactionsHelp.pw8Lower, S.transactionsHelp.pw8LowerEx, S.transactionsHelp.pw8LowerTime, Color(0xFFF44336))
-        HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
-        PasswordTableRow(S.transactionsHelp.pw8Mixed, S.transactionsHelp.pw8MixedEx, S.transactionsHelp.pw8MixedTime, Color(0xFFF44336))
-        HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
-        PasswordTableRow(S.transactionsHelp.pw10Mixed, S.transactionsHelp.pw10MixedEx, S.transactionsHelp.pw10MixedTime, Color(0xFFFF9800))
-        HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
-        PasswordTableRow(S.transactionsHelp.pw12Mixed, S.transactionsHelp.pw12MixedEx, S.transactionsHelp.pw12MixedTime, Color(0xFF4CAF50))
-        HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
-        PasswordTableRow(S.transactionsHelp.pw16Mixed, S.transactionsHelp.pw16MixedEx, S.transactionsHelp.pw16MixedTime, Color(0xFF4CAF50))
-        HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
-        PasswordTableRow(S.transactionsHelp.pw4Word, S.transactionsHelp.pw4WordEx, S.transactionsHelp.pw4WordTime, Color(0xFF4CAF50))
-    }
-}
-
-@Composable
-private fun PasswordTableRow(
-    type: String,
-    example: String,
-    timeToCrack: String,
-    strengthColor: Color
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            type,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1.2f),
-            lineHeight = 16.sp
-        )
-        Text(
-            example,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-            modifier = Modifier.weight(1f),
-            textAlign = TextAlign.Center,
-            lineHeight = 16.sp
-        )
-        Text(
-            timeToCrack,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.SemiBold,
-            color = strengthColor,
-            modifier = Modifier.weight(1f),
-            textAlign = TextAlign.End,
-            lineHeight = 16.sp
-        )
-    }
-}

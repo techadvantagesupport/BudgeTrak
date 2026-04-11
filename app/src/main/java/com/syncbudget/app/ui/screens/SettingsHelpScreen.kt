@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.syncbudget.app.ui.strings.LocalStrings
@@ -307,6 +309,54 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
             HelpBulletText(S.settingsHelp.backupsRestoreBullet4)
             Spacer(modifier = Modifier.height(16.dp))
 
+            // ─── BACKUP ENCRYPTION DETAILS ───
+            // Subsection of Backups: explains how the encryption works and why a
+            // strong password matters. Moved here from the Transactions help page
+            // when the manual encrypted save format was removed; the same crypto
+            // logic still powers the auto-backup feature above.
+            HelpSubSectionTitle(S.settingsHelp.backupEncryptionTitle)
+            HelpBodyText(S.settingsHelp.backupEncryptionBody)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            HelpSubSectionTitle(S.settingsHelp.passwordImportanceTitle)
+            HelpBodyText(S.settingsHelp.passwordImportanceBody)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Password strength table
+            PasswordStrengthTable(S)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            HelpBodyText(S.settingsHelp.pbkdfNote)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Recommended-strategy callout
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF4CAF50).copy(alpha = 0.08f))
+                    .border(1.dp, Color(0xFF4CAF50).copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                    .padding(14.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        S.settingsHelp.recommendedTitle,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = textColor
+                    )
+                    Text(
+                        S.settingsHelp.recommendedBody,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textColor,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            HelpBodyText(S.settingsHelp.passwordMinNote, italic = true)
+            Spacer(modifier = Modifier.height(16.dp))
+
             HelpDividerLine()
 
             // ─── SECTION 10: CATEGORIES ───
@@ -383,5 +433,84 @@ fun SettingsHelpScreen(onBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+}
+
+@Composable
+private fun PasswordStrengthTable(S: com.syncbudget.app.ui.strings.AppStrings) {
+    val textColor = MaterialTheme.colorScheme.onBackground
+    val dimColor = textColor.copy(alpha = 0.6f)
+    val headerColor = MaterialTheme.colorScheme.primary
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .border(1.dp, dimColor.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+    ) {
+        // Table header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(headerColor.copy(alpha = 0.1f))
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Text(S.settingsHelp.passwordTableHeader, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1.2f))
+            Text(S.settingsHelp.passwordTableExample, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            Text(S.settingsHelp.passwordTableTime, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = textColor, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+        }
+        HorizontalDivider(color = dimColor.copy(alpha = 0.2f))
+
+        PasswordTableRow(S.settingsHelp.pw8Lower, S.settingsHelp.pw8LowerEx, S.settingsHelp.pw8LowerTime, Color(0xFFF44336))
+        HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
+        PasswordTableRow(S.settingsHelp.pw8Mixed, S.settingsHelp.pw8MixedEx, S.settingsHelp.pw8MixedTime, Color(0xFFF44336))
+        HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
+        PasswordTableRow(S.settingsHelp.pw10Mixed, S.settingsHelp.pw10MixedEx, S.settingsHelp.pw10MixedTime, Color(0xFFFF9800))
+        HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
+        PasswordTableRow(S.settingsHelp.pw12Mixed, S.settingsHelp.pw12MixedEx, S.settingsHelp.pw12MixedTime, Color(0xFF4CAF50))
+        HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
+        PasswordTableRow(S.settingsHelp.pw16Mixed, S.settingsHelp.pw16MixedEx, S.settingsHelp.pw16MixedTime, Color(0xFF4CAF50))
+        HorizontalDivider(color = dimColor.copy(alpha = 0.1f))
+        PasswordTableRow(S.settingsHelp.pw4Word, S.settingsHelp.pw4WordEx, S.settingsHelp.pw4WordTime, Color(0xFF4CAF50))
+    }
+}
+
+@Composable
+private fun PasswordTableRow(
+    type: String,
+    example: String,
+    timeToCrack: String,
+    strengthColor: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            type,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1.2f),
+            lineHeight = 16.sp
+        )
+        Text(
+            example,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Center,
+            lineHeight = 16.sp
+        )
+        Text(
+            timeToCrack,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            color = strengthColor,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.End,
+            lineHeight = 16.sp
+        )
     }
 }

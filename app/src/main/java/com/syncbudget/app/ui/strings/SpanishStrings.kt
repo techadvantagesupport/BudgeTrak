@@ -297,13 +297,10 @@ object SpanishStrings : AppStrings {
         loadTransactions = "Importar / Cargar",
         csv = "CSV",
         xls = "Excel (.xlsx)",
-        encrypted = "Cifrado",
-        password = "Contrase\u00f1a",
-        confirmPassword = "Confirmar contrase\u00f1a",
+        pdf = "PDF",
         selectFile = "Seleccionar archivo",
         usBank = "US Bank",
         secureSyncCsv = "Archivo CSV de BudgeTrak",
-        secureSyncEncrypted = "Archivo cifrado de BudgeTrak",
         duplicateDetected = "Posible duplicado",
         duplicateExisting = "Existente:",
         duplicateNew = "Nuevo:",
@@ -417,7 +414,6 @@ object SpanishStrings : AppStrings {
         formatGenericCsv = "CSV de cualquier banco",
         formatUsBank = "US Bank",
         formatBudgeTrakCsv = "Archivo CSV de BudgeTrak",
-        formatBudgeTrakEncrypted = "Archivo cifrado de BudgeTrak",
         unknown = "Desconocido",
         amountExample = "ej. 42.50",
         moveCategoryBody = { valueLabel, catName -> "¿Dónde desea colocar $valueLabel de $catName?" },
@@ -953,6 +949,50 @@ object SpanishStrings : AppStrings {
         backupsRestoreBullet3 = "Restaurar estar\u00e1 entonces disponible",
         backupsRestoreBullet4 = "Despu\u00e9s de Restaurar, crea un nuevo grupo SYNC y proporciona c\u00f3digos de emparejamiento a los otros miembros para que se re\u00fanan",
         backupsRestoreNote = "La sincronizaci\u00f3n sobrescribir\u00e1 los datos restaurados \u2014 siempre sal de tu grupo antes de restaurar.",
+        backupEncryptionTitle = "C\u00f3mo funciona el cifrado del respaldo",
+        backupEncryptionBody = "Tu archivo de respaldo autom\u00e1tico est\u00e1 protegido con cifrado de extremo a extremo de est\u00e1ndar industrial \u2014 " +
+            "del mismo nivel que utilizan las apps de mensajer\u00eda segura modernas. La contrase\u00f1a que estableces nunca se almacena " +
+            "en ning\u00fan sitio; en su lugar, BudgeTrak la fortalece criptogr\u00e1ficamente para convertirla en la clave de cifrado cada vez " +
+            "que se escribe o se restaura el respaldo. Esto significa que cualquiera que encuentre tu archivo de respaldo (en este " +
+            "dispositivo o copiado a la nube) no puede leerlo sin la contrase\u00f1a.",
+        passwordImportanceTitle = "Por qu\u00e9 importa la contrase\u00f1a de tu respaldo",
+        passwordImportanceBody = "El cifrado es tan fuerte como tu contrase\u00f1a. Una contrase\u00f1a corta o com\u00fan " +
+            "puede adivinarse r\u00e1pidamente incluso con cifrado fuerte. La siguiente tabla estima cu\u00e1nto " +
+            "tardar\u00eda un atacante decidido en descifrar contrase\u00f1as de distintas longitudes y complejidades:",
+        passwordTableHeader = "Contrase\u00f1a",
+        passwordTableExample = "Ejemplo",
+        passwordTableTime = "Tiempo para descifrar",
+        pw8Lower = "8 caract., min\u00fasculas",
+        pw8LowerEx = "password",
+        pw8LowerTime = "minutos",
+        pw8Mixed = "8 caract., mixtos",
+        pw8MixedEx = "Pa\$sw0rd",
+        pw8MixedTime = "horas",
+        pw10Mixed = "10 caract., mixtos",
+        pw10MixedEx = "K9#mP2x!qL",
+        pw10MixedTime = "meses",
+        pw12Mixed = "12 caract., mixtos",
+        pw12MixedEx = "7hR!q2Lp#9Zk",
+        pw12MixedTime = "milenios",
+        pw16Mixed = "16+ caract., mixtos",
+        pw16MixedEx = "cT8!nQ#2mK@5rW9j",
+        pw16MixedTime = "billones de a\u00f1os",
+        pw4Word = "Frase de 4 palabras",
+        pw4WordEx = "maple cloud river fox",
+        pw4WordTime = "billones de a\u00f1os",
+        pbkdfNote = "BudgeTrak hace que cada intento de adivinar tu contrase\u00f1a sea deliberadamente lento y costoso, " +
+            "de modo que incluso un atacante con hardware potente solo puede probar una fracci\u00f3n diminuta de las " +
+            "contrase\u00f1as que podr\u00eda atacar contra un archivo mal protegido. Combinado con una contrase\u00f1a fuerte, " +
+            "tu archivo de respaldo es pr\u00e1cticamente irrompible.",
+        recommendedTitle = "Estrategia de contrase\u00f1a recomendada",
+        recommendedBody = "Usa 12 o m\u00e1s caracteres combinando may\u00fasculas, min\u00fasculas, n\u00fameros y s\u00edmbolos. " +
+            "Una frase de 4\u20135 palabras aleatorias (ej. \"correct horse battery staple\") tambi\u00e9n es excelente. " +
+            "Con una contrase\u00f1a fuerte de este tipo, incluso un atacante decidido con hardware avanzado " +
+            "necesitar\u00eda billones de a\u00f1os para descifrar tu respaldo.",
+        passwordMinNote = "La longitud m\u00ednima requerida es de 8 caracteres, pero m\u00e1s largo siempre es mejor. " +
+            "Debes ingresar tu contrase\u00f1a dos veces para confirmarla la primera vez que activas los respaldos. " +
+            "No hay recuperaci\u00f3n de contrase\u00f1a \u2014 si la olvidas, tus archivos de respaldo no se podr\u00e1n abrir. " +
+            "Guarda tu contrase\u00f1a en un lugar seguro (un gestor de contrase\u00f1as es ideal).",
         tipsTitle = "Consejos",
         tip1 = "Configura las categor\u00edas antes de importar transacciones \u2014 la categorizaci\u00f3n autom\u00e1tica usa tu historial de transacciones existente para identificar comercios.",
         tip2 = "Crea categor\u00edas que reflejen tus h\u00e1bitos de gasto. Ejemplos comunes: Comida, Transporte, Entretenimiento, Salud, Vivienda, Servicios, Compras.",
@@ -1059,72 +1099,32 @@ object SpanishStrings : AppStrings {
         dupKeepExisting = "Conservar existente \u2014 descartar la nueva transacci\u00f3n",
         dupIgnoreAll = "Ignorar todos \u2014 conservar todos los duplicados restantes (solo al importar)",
         savingTitle = "Guardar transacciones",
-        savingBody = "Toca el icono de Guardar en la barra superior para exportar todas las transacciones a un archivo. Dos formatos est\u00e1n disponibles:",
+        savingBody = "Toca el icono de Guardar en la barra superior para exportar todas las transacciones a un archivo. Hay tres formatos disponibles:",
         csvFormatTitle = "Formato CSV",
         csvFormatBody = "Guarda tus transacciones como un archivo CSV de texto plano (budgetrak_transactions.csv). " +
-            "Este archivo conserva todos los datos incluyendo categor\u00edas y puede cargarse de nuevo en la app. " +
-            "Tambi\u00e9n se puede abrir en hojas de c\u00e1lculo como Excel o Google Sheets para su revisi\u00f3n.",
-        encryptedFormatTitle = "Formato cifrado",
-        encryptedFormatBody = "Guarda tus transacciones en un archivo cifrado (budgetrak_transactions.enc) " +
-            "protegido con una contrase\u00f1a que t\u00fa eliges. Este es el formato recomendado para respaldos " +
-            "y transferencia de datos entre dispositivos, ya que mantiene tu informaci\u00f3n financiera privada.",
-        encryptionDetailsTitle = "Detalles del cifrado",
-        encryptionDetailsBody = "Tu archivo est\u00e1 protegido con cifrado de extremo a extremo de est\u00e1ndar industrial \u2014 " +
-            "del mismo nivel que utilizan las apps de mensajer\u00eda segura modernas. Tu contrase\u00f1a nunca se almacena; " +
-            "en su lugar, BudgeTrak la fortalece criptogr\u00e1ficamente para convertirla en una clave de cifrado, " +
-            "haciendo que los ataques de fuerza bruta sean impracticables.",
-        passwordImportanceTitle = "Por qu\u00e9 importa tu contrase\u00f1a",
-        passwordImportanceBody = "El cifrado es tan fuerte como tu contrase\u00f1a. Una contrase\u00f1a corta o com\u00fan " +
-            "puede adivinarse r\u00e1pidamente incluso con cifrado fuerte. La siguiente tabla estima cu\u00e1nto " +
-            "tardar\u00eda un atacante decidido en descifrar contrase\u00f1as de distintas longitudes y complejidades:",
-        passwordTableHeader = "Contrase\u00f1a",
-        passwordTableExample = "Ejemplo",
-        passwordTableTime = "Tiempo para descifrar",
-        pw8Lower = "8 caract., min\u00fasculas",
-        pw8LowerEx = "password",
-        pw8LowerTime = "minutos",
-        pw8Mixed = "8 caract., mixtos",
-        pw8MixedEx = "Pa\$sw0rd",
-        pw8MixedTime = "horas",
-        pw10Mixed = "10 caract., mixtos",
-        pw10MixedEx = "K9#mP2x!qL",
-        pw10MixedTime = "meses",
-        pw12Mixed = "12 caract., mixtos",
-        pw12MixedEx = "7hR!q2Lp#9Zk",
-        pw12MixedTime = "milenios",
-        pw16Mixed = "16+ caract., mixtos",
-        pw16MixedEx = "cT8!nQ#2mK@5rW9j",
-        pw16MixedTime = "billones de a\u00f1os",
-        pw4Word = "Frase de 4 palabras",
-        pw4WordEx = "maple cloud river fox",
-        pw4WordTime = "billones de a\u00f1os",
-        pbkdfNote = "BudgeTrak hace que cada intento de adivinar tu contrase\u00f1a sea deliberadamente lento y costoso, " +
-            "de modo que incluso un atacante con hardware potente solo puede probar una fracci\u00f3n diminuta de las " +
-            "contrase\u00f1as que podr\u00eda atacar contra un archivo mal protegido. Combinado con una contrase\u00f1a fuerte, " +
-            "tu archivo cifrado es pr\u00e1cticamente irrompible.",
-        recommendedTitle = "Estrategia de contrase\u00f1a recomendada",
-        recommendedBody = "Usa 12 o m\u00e1s caracteres combinando may\u00fasculas, min\u00fasculas, " +
-            "n\u00fameros y s\u00edmbolos. Una frase de 4\u20135 palabras aleatorias (ej. \"correct horse battery staple\") " +
-            "tambi\u00e9n es excelente. Con una contrase\u00f1a fuerte de este tipo, " +
-            "incluso un atacante decidido con hardware avanzado " +
-            "necesitar\u00eda billones de a\u00f1os para descifrar tu archivo.",
-        passwordMinNote = "La longitud m\u00ednima requerida es de 8 caracteres, pero m\u00e1s largo siempre es mejor. " +
-            "Debes ingresar tu contrase\u00f1a dos veces para confirmarla antes de guardar. " +
-            "No hay recuperaci\u00f3n de contrase\u00f1a \u2014 si olvidas tu contrase\u00f1a, " +
-            "el archivo no se podr\u00e1 abrir.",
+            "Conserva todas las transacciones y se puede cargar de nuevo en la app o abrir en hojas de c\u00e1lculo " +
+            "como Excel o Google Sheets para revisarlas.",
+        xlsxFormatTitle = "Formato Excel (.xlsx)",
+        xlsxFormatBody = "Guarda tus transacciones como un libro nativo de Excel (budgetrak_transactions.xlsx) " +
+            "con columnas formateadas, totales monetarios y un encabezado limpio. Usa este formato cuando quieras " +
+            "abrir el archivo directamente en Excel o Google Sheets sin pasos de conversi\u00f3n.",
+        pdfReportFormatTitle = "Reporte de gastos PDF",
+        pdfReportFormatBody = "Genera un informe PDF bien presentado de tus transacciones para cualquier rango de fechas. " +
+            "El reporte agrupa las transacciones por categor\u00eda, suma cada secci\u00f3n e incluye una p\u00e1gina de " +
+            "resumen \u2014 ideal para impuestos, reembolsos de gastos o para compartir con un contador.",
         loadingTitle = "Cargar e importar",
-        loadingBody = "Toca el icono de Cargar en la barra superior para importar transacciones desde un archivo. Se admiten tres formatos:",
+        loadingBody = "Toca el icono de Cargar en la barra superior para importar transacciones desde un archivo. Se admiten tres formatos CSV:",
+        loadGeneric = "CSV de cualquier banco",
+        loadGenericDesc = "Detecta autom\u00e1ticamente la disposici\u00f3n de columnas de la mayor\u00eda de los CSV bancarios. " +
+            "Pru\u00e9balo primero con cualquier banco \u2014 normalmente encuentra la fecha, el monto, el comercio y " +
+            "(si est\u00e1 disponible) el saldo sin necesidad de configuraci\u00f3n. Si no logra identificar las columnas, " +
+            "vuelve a uno de los otros formatos.",
         loadUsBank = "US Bank",
         loadUsBankDesc = "Importa transacciones desde un archivo CSV de US Bank. " +
             "Las transacciones se categorizan autom\u00e1ticamente seg\u00fan tu historial de comercios.",
         loadCsv = "Archivo CSV de BudgeTrak",
-        loadCsvDesc = "Carga un archivo CSV guardado previamente desde esta app. " +
+        loadCsvDesc = "Carga un archivo CSV guardado previamente desde esta app con la opci\u00f3n Guardar \u2192 CSV. " +
             "Todas las categor\u00edas y datos se conservan exactamente como estaban.",
-        loadEncrypted = "Archivo cifrado de BudgeTrak",
-        loadEncryptedDesc = "Carga un archivo cifrado guardado previamente. " +
-            "Debes ingresar la contrase\u00f1a usada al guardar el archivo.",
-        loadPasswordNote = "Para archivos cifrados, el campo de contrase\u00f1a aparece autom\u00e1ticamente al seleccionar el " +
-            "formato cifrado. El bot\u00f3n \"Seleccionar archivo\" se desactiva hasta que ingreses al menos 8 caracteres.",
         fullRestoreNote = "Al cargar un respaldo completo, \"Cargar todos los datos y sobrescribir\" reemplaza TODOS los datos " +
             "de la app (transacciones, categor\u00edas, configuraci\u00f3n, metas, etc.) con el contenido del respaldo. " +
             "Cualquier transacci\u00f3n o cambio realizado despu\u00e9s de crear el respaldo se perder\u00e1 y deber\u00e1 " +
@@ -1141,7 +1141,7 @@ object SpanishStrings : AppStrings {
             "confirmes o cambies la categor\u00eda manualmente.",
         tipsTitle = "Consejos",
         tip1 = "Usa respaldos CSV para copias de seguridad compatibles con hojas de c\u00e1lculo que puedas revisar en una computadora.",
-        tip2 = "Usa respaldos cifrados para copias de seguridad protegidas y transferencia de datos entre dispositivos.",
+        tip2 = "Usa el formato Excel para tener formato enriquecido en hojas de c\u00e1lculo; usa el formato PDF para imprimir o compartir un reporte de gastos pulido.",
         tip3 = "El mismo archivo se puede cargar tantas veces como sea necesario \u2014 la detecci\u00f3n de duplicados evita entradas dobles accidentales.",
         tip4 = "Usa el filtro de categor\u00eda (toca cualquier icono de categor\u00eda) combinado con el modo de selecci\u00f3n para ediciones masivas eficientes.",
         tip5 = "Despu\u00e9s de una importaci\u00f3n bancaria, revisa las transacciones categorizadas autom\u00e1ticamente y usa Cambiar categor\u00eda en lote para corregir asignaciones incorrectas.",

@@ -297,13 +297,10 @@ object EnglishStrings : AppStrings {
         loadTransactions = "Import / Load",
         csv = "CSV",
         xls = "Excel (.xlsx)",
-        encrypted = "Encrypted",
-        password = "Password",
-        confirmPassword = "Confirm Password",
+        pdf = "PDF",
         selectFile = "Select File",
         usBank = "US Bank",
         secureSyncCsv = "BudgeTrak CSV Save File",
-        secureSyncEncrypted = "BudgeTrak Encrypted Save File",
         duplicateDetected = "Possible Duplicate",
         duplicateExisting = "Existing:",
         duplicateNew = "New:",
@@ -417,7 +414,6 @@ object EnglishStrings : AppStrings {
         formatGenericCsv = "Any Bank CSV",
         formatUsBank = "US Bank",
         formatBudgeTrakCsv = "BudgeTrak CSV Save File",
-        formatBudgeTrakEncrypted = "BudgeTrak Encrypted Save File",
         unknown = "Unknown",
         amountExample = "e.g. 42.50",
         moveCategoryBody = { valueLabel, catName -> "Where would you like to place $valueLabel from $catName?" },
@@ -953,6 +949,53 @@ object EnglishStrings : AppStrings {
         backupsRestoreBullet3 = "Restore will then be available",
         backupsRestoreBullet4 = "After Restore, create a new SYNC group and provide pairing codes to other members to rejoin",
         backupsRestoreNote = "Sync will overwrite restored data — always leave your group before restoring.",
+        // Backup encryption explanation (moved here from the Transactions help page,
+        // since the manual encrypted save format was removed; the same encryption
+        // logic still powers the auto-backup feature above).
+        backupEncryptionTitle = "How Backup Encryption Works",
+        backupEncryptionBody = "Your auto-backup file is protected with industry-standard end-to-end encryption \u2014 " +
+            "the same caliber used by modern secure messaging apps. The password you set is never stored anywhere; " +
+            "instead, BudgeTrak strengthens it cryptographically into the encryption key each time the backup is " +
+            "written or restored. That means anyone who finds your backup file (on this device or copied to the cloud) " +
+            "cannot read it without the password.",
+        passwordImportanceTitle = "Why Your Backup Password Matters",
+        passwordImportanceBody = "Encryption is only as strong as your password. A short or common password " +
+            "can be guessed quickly even with strong encryption. The table below estimates how long " +
+            "a determined attacker would need to crack passwords of different lengths and complexity:",
+        passwordTableHeader = "Password",
+        passwordTableExample = "Example",
+        passwordTableTime = "Time to Crack",
+        pw8Lower = "8 chars, lowercase",
+        pw8LowerEx = "password",
+        pw8LowerTime = "minutes",
+        pw8Mixed = "8 chars, mixed",
+        pw8MixedEx = "Pa\$sw0rd",
+        pw8MixedTime = "hours",
+        pw10Mixed = "10 chars, mixed",
+        pw10MixedEx = "K9#mP2x!qL",
+        pw10MixedTime = "months",
+        pw12Mixed = "12 chars, mixed",
+        pw12MixedEx = "7hR!q2Lp#9Zk",
+        pw12MixedTime = "millennia",
+        pw16Mixed = "16+ chars, mixed",
+        pw16MixedEx = "cT8!nQ#2mK@5rW9j",
+        pw16MixedTime = "trillions of years",
+        pw4Word = "4-word phrase",
+        pw4WordEx = "maple cloud river fox",
+        pw4WordTime = "trillions of years",
+        pbkdfNote = "BudgeTrak deliberately makes each password guess slow and expensive, so even an " +
+            "attacker with powerful hardware can only test a tiny fraction of the passwords " +
+            "they could attack a poorly-protected file with. Combined with a strong password, " +
+            "your backup file is effectively unbreakable.",
+        recommendedTitle = "Recommended Password Strategy",
+        recommendedBody = "Use 12 or more characters combining uppercase letters, lowercase letters, " +
+            "numbers, and symbols. A passphrase of 4\u20135 random words (e.g., \"correct horse battery staple\") " +
+            "is also excellent. With a strong password of this kind, even a determined attacker " +
+            "with high-end hardware would need trillions of years to crack your backup.",
+        passwordMinNote = "The minimum required length is 8 characters, but longer is always better. " +
+            "You must enter your password twice to confirm it the first time you enable backups. " +
+            "There is no password recovery \u2014 if you forget your password, your backup files cannot be opened. " +
+            "Store your password somewhere safe (a password manager is ideal).",
         tipsTitle = "Tips",
         tip1 = "Set up categories before importing transactions \u2014 the auto-categorization uses your existing transaction history to match merchants.",
         tip2 = "Create categories that match your spending habits. Common examples: Food, Transport, Entertainment, Health, Housing, Utilities, Shopping.",
@@ -1059,72 +1102,31 @@ object EnglishStrings : AppStrings {
         dupKeepExisting = "Keep Existing \u2014 discard the new transaction",
         dupIgnoreAll = "Ignore All \u2014 keep all remaining duplicates (import only)",
         savingTitle = "Saving Transactions",
-        savingBody = "Tap the Save icon in the header to export all transactions to a file. Two formats are available:",
+        savingBody = "Tap the Save icon in the header to export all transactions to a file. Three formats are available:",
         csvFormatTitle = "CSV Format",
         csvFormatBody = "Saves your transactions as a plain-text CSV file (budgetrak_transactions.csv). " +
-            "This file preserves all data including categories and can be loaded back into the app. " +
-            "It can also be opened in spreadsheet software like Excel or Google Sheets for review.",
-        encryptedFormatTitle = "Encrypted Format",
-        encryptedFormatBody = "Saves your transactions in an encrypted file (budgetrak_transactions.enc) " +
-            "protected with a password you choose. This is the recommended format for backups " +
-            "and transferring data between devices, as it keeps your financial information private.",
-        encryptionDetailsTitle = "Encryption Details",
-        encryptionDetailsBody = "Your file is protected with industry-standard end-to-end encryption \u2014 " +
-            "the same caliber used by modern secure messaging apps. Your password is never stored; " +
-            "instead, BudgeTrak strengthens it cryptographically into an encryption key, " +
-            "making brute-force attacks impractical.",
-        passwordImportanceTitle = "Why Your Password Matters",
-        passwordImportanceBody = "Encryption is only as strong as your password. A short or common password " +
-            "can be guessed quickly even with strong encryption. The table below estimates how long " +
-            "a determined attacker would need to crack passwords of different lengths and complexity:",
-        passwordTableHeader = "Password",
-        passwordTableExample = "Example",
-        passwordTableTime = "Time to Crack",
-        pw8Lower = "8 chars, lowercase",
-        pw8LowerEx = "password",
-        pw8LowerTime = "minutes",
-        pw8Mixed = "8 chars, mixed",
-        pw8MixedEx = "Pa\$sw0rd",
-        pw8MixedTime = "hours",
-        pw10Mixed = "10 chars, mixed",
-        pw10MixedEx = "K9#mP2x!qL",
-        pw10MixedTime = "months",
-        pw12Mixed = "12 chars, mixed",
-        pw12MixedEx = "7hR!q2Lp#9Zk",
-        pw12MixedTime = "millennia",
-        pw16Mixed = "16+ chars, mixed",
-        pw16MixedEx = "cT8!nQ#2mK@5rW9j",
-        pw16MixedTime = "trillions of years",
-        pw4Word = "4-word phrase",
-        pw4WordEx = "maple cloud river fox",
-        pw4WordTime = "trillions of years",
-        pbkdfNote = "BudgeTrak deliberately makes each password guess slow and expensive, so even an " +
-            "attacker with powerful hardware can only test a tiny fraction of the passwords " +
-            "they could attack a poorly-protected file with. Combined with a strong password, " +
-            "your encrypted file is effectively unbreakable.",
-        recommendedTitle = "Recommended Password Strategy",
-        recommendedBody = "Use 12 or more characters combining uppercase letters, lowercase letters, " +
-            "numbers, and symbols. A passphrase of 4\u20135 random words (e.g., \"correct horse battery staple\") " +
-            "is also excellent. With a strong password of this kind, " +
-            "even a nation-state adversary with thousands of GPUs " +
-            "would need trillions of years to crack your file.",
-        passwordMinNote = "The minimum required length is 8 characters, but longer is always better. " +
-            "You must enter your password twice to confirm it before saving. " +
-            "There is no password recovery \u2014 if you forget your password, " +
-            "the file cannot be opened.",
+            "It preserves all transactions and can be loaded back into the app or opened in spreadsheet " +
+            "software like Excel or Google Sheets for review.",
+        xlsxFormatTitle = "Excel Format (.xlsx)",
+        xlsxFormatBody = "Saves your transactions as a native Excel workbook (budgetrak_transactions.xlsx) " +
+            "with formatted columns, currency totals, and a clean header row. Use this when you want " +
+            "to open the file directly in Excel or Google Sheets without any conversion step.",
+        pdfReportFormatTitle = "PDF Expense Report",
+        pdfReportFormatBody = "Generates a polished PDF report of your transactions for any date range. " +
+            "The report groups transactions by category, totals each section, and includes a summary " +
+            "page \u2014 ideal for taxes, expense reimbursement, or sharing with an accountant.",
         loadingTitle = "Loading & Importing",
-        loadingBody = "Tap the Load icon in the header to import transactions from a file. Three formats are supported:",
+        loadingBody = "Tap the Load icon in the header to import transactions from a file. Three CSV formats are supported:",
+        loadGeneric = "Any Bank CSV",
+        loadGenericDesc = "Auto-detects the column layout of most US bank CSV exports. Try this format first " +
+            "for any bank \u2014 it usually finds the date, amount, merchant, and (when available) running balance " +
+            "without any setup. Falls back to one of the other formats if it cannot identify the columns.",
         loadUsBank = "US Bank",
         loadUsBankDesc = "Import transactions from a US Bank CSV export file. " +
             "Transactions are automatically categorized based on your existing merchant history.",
         loadCsv = "BudgeTrak CSV Save File",
-        loadCsvDesc = "Load a CSV file previously saved from this app. " +
+        loadCsvDesc = "Load a CSV file previously saved from this app's Save \u2192 CSV option. " +
             "All categories and data are preserved exactly as they were.",
-        loadEncrypted = "BudgeTrak Encrypted Save File",
-        loadEncryptedDesc = "Load a previously encrypted save file. " +
-            "You must enter the password used when the file was saved.",
-        loadPasswordNote = "For encrypted files, the password field appears automatically when you select the " +
-            "encrypted format. The \"Select File\" button is disabled until you enter at least 8 characters.",
         fullRestoreNote = "When loading a full backup, \"Load All Data & Overwrite\" replaces ALL app data " +
             "(transactions, categories, settings, goals, etc.) with the backup contents. " +
             "Any transactions or changes made after the save was created will be lost and must " +
@@ -1172,7 +1174,7 @@ object EnglishStrings : AppStrings {
             "page \u2014 ideal for taxes, expense reimbursement, or sharing with an accountant.",
         tipsTitle = "Tips",
         tip1 = "Use CSV saves for spreadsheet-compatible backups that you can review on a computer.",
-        tip2 = "Use Encrypted saves for secure backups and transferring data between devices.",
+        tip2 = "Use Excel format for richer formatting in spreadsheet apps; use PDF format for printing or sharing a polished expense report.",
         tip3 = "The same file can be loaded as many times as needed \u2014 duplicate detection prevents accidental double-entries.",
         tip4 = "Use the category filter (tap any category icon) combined with selection mode for efficient bulk edits.",
         tip5 = "After a bank import, review auto-categorized transactions and use bulk Change Category to correct any misassignments."
