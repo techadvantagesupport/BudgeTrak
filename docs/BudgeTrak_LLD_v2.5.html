@@ -152,7 +152,7 @@ pre code { background: none; padding: 0; color: inherit; }
 <h1>BudgeTrak &mdash; Low-Level Design Document</h1>
 <div class="meta">
     <span><strong>Application:</strong> BudgeTrak</span>
-    <span><strong>Package:</strong> com.syncbudget.app</span><br>
+    <span><strong>Package:</strong> com.techadvantage.budgetrak</span><br>
     <span><strong>Platform:</strong> Android (minSdk 28, targetSdk 34)</span>
     <span><strong>Framework:</strong> Jetpack Compose, Material Design 3</span><br>
     <span><strong>Language:</strong> Kotlin</span>
@@ -310,6 +310,12 @@ pre code { background: none; padding: 0; color: inherit; }
     <li><strong>Auto-Capitalize</strong>: a Settings toggle (default on) that formats merchant names and descriptions in Title Case as the user finishes each word.</li>
     <li><strong>Match-character normalization</strong>: merchant matching strips non-alphanumeric characters before comparing, so "Wal-Mart" and "Walmart" match.</li>
     <li><strong>Solo user improvements</strong>: Tier 2 and Tier 3 of <code>BackgroundSyncWorker</code>, Firebase Auth gating, App Check refresh, and a tombstone purge in <code>runPeriodicMaintenance()</code> are now all gated on <code>isSyncConfigured</code>/<code>groupId != null</code>. Solo users skip Auth, App Check, RTDB, and Firestore entirely; only period refresh and widget update run.</li>
+    <li><strong>Crashlytics opt-out toggle</strong>: Settings &rarr; Privacy &rarr; Send crash reports. Honored at app startup in <code>BudgeTrakApplication.onCreate</code> before any other Firebase calls. The <code>HEALTH_BEACON</code> daily non-fatal and <code>updateDiagKeys()</code> calls are gated on the new <code>crashlyticsEnabled</code> flag. Help page documents what is and isn't sent (stack traces, counts, hashed cash digest &mdash; never raw values, transaction details, or receipt photos).</li>
+    <li><strong>Full namespace + applicationId rebrand</strong>: Kotlin namespace renamed from <code>com.syncbudget.app</code> to <code>com.techadvantage.budgetrak</code>. <code>applicationId</code> renamed from <code>com.securesync.app</code> to <code>com.techadvantage.budgetrak</code>. 103 source files moved, 715 references rewritten, ProGuard rules updated. Manifest needed zero changes (uses relative <code>.ClassName</code> and <code>${applicationId}</code> substitution). Persistence-layer protocol identifiers (<code>"syncbudget_full_backup"</code>, <code>"syncbudget_join_snapshot"</code>) intentionally preserved for backwards compatibility. GitHub repo transferred from <code>pksteichen/syncBudget</code> to <code>techadvantagesupport/BudgeTrak</code> (old URL 301-redirects). Firebase project retains both the legacy <code>com.securesync.app</code> and new <code>com.techadvantage.budgetrak</code> app entries during transition.</li>
+    <li><strong>SAF directory picker for backup restore</strong>: replaces the <code>File.listFiles()</code> scan (broken by Android scoped storage when the <code>applicationId</code> changes) with a Storage Access Framework directory picker that opens at <code>Download/BudgeTrak/backups/</code>. The user taps &ldquo;Use this folder&rdquo; once, the app auto-discovers and pairs both system + photos backup files by date prefix, copies them to cache, and shows the standard backup selection dialog. Zero permissions needed &mdash; the user's folder selection IS the permission grant. BudgeTrak remains a zero-permission app (<code>INTERNET</code> only).</li>
+    <li><strong>Immediate backup on enable</strong>: enabling auto-backups now immediately creates the first backup rather than waiting for the next scheduled check.</li>
+    <li><strong>Same-day backup versioning</strong>: same-day backups get a letter suffix (<code>backup_2026-04-11b_system.enc</code>) instead of silently overwriting the previous one. Photos file uses the same tag for correct pairing.</li>
+    <li><strong>Privacy policy</strong>: published at <code>https://techadvantagesupport.github.io/budgetrak-legal/privacy</code> via GitHub Pages. Covers data collection, encryption, third-party services (Firebase suite), user rights, and the new Crashlytics opt-out toggle. Hosted in a separate public repo (<code>techadvantagesupport/budgetrak-legal</code>).</li>
     <li><strong>Help-page audit and drift fixes</strong>: every help-page string was re-verified against the corresponding screen's actual behavior &mdash; not against prior help text. Fixes included removing all lingering references to the long-deleted manual encrypted save format (the encryption explanation + password-strength table were rewritten and moved to <code>SettingsHelpStrings</code> where they document the still-active auto-backup encryption); adding a missing Accelerated Set-Aside section to <code>recurringExpensesHelp</code> (the green Speed icon toggle in the add/edit dialog, the per-row indicator, and the per-period set-aside math from <code>BudgetCalculator.acceleratedREExtraDeductions()</code>); correcting <code>syncHelp</code>'s claim that date format and transaction attribution were admin-synced (both are per-device &mdash; only <code>currencySymbol</code> lives in <code>SharedSettings</code>); documenting the blue reset-day tint in <code>budgetCalendarHelp</code> (added in commit 5903923 but never written up); adding a remembered-amount preservation note to <code>amortizationHelp</code>'s delete action for parity with the equivalent notes in <code>recurringExpensesHelp</code> and <code>savingsGoalsHelp</code>; marking the Cash Flow Simulation page as a subscriber feature in <code>simulationGraphHelp</code>; and deleting the dead <code>biWeeklyTitle</code>/<code>biWeeklyBody</code> fields from both <code>BudgetConfigHelpStrings</code> and <code>RecurringExpensesHelpStrings</code> (the <code>BI_WEEKLY</code> enum value is filtered out of the user-facing dropdown &mdash; users get Weekly with interval=2). All English and Spanish strings plus their <code>TranslationContext</code> descriptions were kept in sync throughout.</li>
 </ul>
 
@@ -318,15 +324,15 @@ pre code { background: none; padding: 0; color: inherit; }
 <h4>Source File Summary</h4>
 <table>
 <tr><th>Package / Directory</th><th>Files</th><th>Lines</th><th>Description</th></tr>
-<tr><td>com.syncbudget.app</td><td>2</td><td>4,498</td><td>MainActivity (LoadingScreen, BackHandler) + MainViewModel (async loading, companion, maintenance)</td></tr>
-<tr><td>com.syncbudget.app.data</td><td>30</td><td>5,280</td><td>Data classes, repositories, utilities, PeriodRefreshService, DiagDumpBuilder</td></tr>
-<tr><td>com.syncbudget.app.data.sync</td><td>22</td><td>6,528</td><td>Sync engine, encryption, receipts, SyncMergeProcessor, BackgroundSyncWorker (3-tier), RealtimePresenceService</td></tr>
-<tr><td>com.syncbudget.app.ui.screens</td><td>22</td><td>18,410</td><td>Main screens + help screens</td></tr>
-<tr><td>com.syncbudget.app.ui.components</td><td>5</td><td>2,005</td><td>Flip display, charts, photo row</td></tr>
-<tr><td>com.syncbudget.app.ui.theme</td><td>3</td><td>712</td><td>Theme, colors, typography</td></tr>
-<tr><td>com.syncbudget.app.ui.strings</td><td>5</td><td>5,977</td><td>i18n, translation context</td></tr>
-<tr><td>com.syncbudget.app.sound</td><td>1</td><td>134</td><td>Flip sound player</td></tr>
-<tr><td>com.syncbudget.app.widget</td><td>3</td><td>1,551</td><td>Home screen widget</td></tr>
+<tr><td>com.techadvantage.budgetrak</td><td>2</td><td>4,498</td><td>MainActivity (LoadingScreen, BackHandler) + MainViewModel (async loading, companion, maintenance)</td></tr>
+<tr><td>com.techadvantage.budgetrak.data</td><td>30</td><td>5,280</td><td>Data classes, repositories, utilities, PeriodRefreshService, DiagDumpBuilder</td></tr>
+<tr><td>com.techadvantage.budgetrak.data.sync</td><td>22</td><td>6,528</td><td>Sync engine, encryption, receipts, SyncMergeProcessor, BackgroundSyncWorker (3-tier), RealtimePresenceService</td></tr>
+<tr><td>com.techadvantage.budgetrak.ui.screens</td><td>22</td><td>18,410</td><td>Main screens + help screens</td></tr>
+<tr><td>com.techadvantage.budgetrak.ui.components</td><td>5</td><td>2,005</td><td>Flip display, charts, photo row</td></tr>
+<tr><td>com.techadvantage.budgetrak.ui.theme</td><td>3</td><td>712</td><td>Theme, colors, typography</td></tr>
+<tr><td>com.techadvantage.budgetrak.ui.strings</td><td>5</td><td>5,977</td><td>i18n, translation context</td></tr>
+<tr><td>com.techadvantage.budgetrak.sound</td><td>1</td><td>134</td><td>Flip sound player</td></tr>
+<tr><td>com.techadvantage.budgetrak.widget</td><td>3</td><td>1,551</td><td>Home screen widget</td></tr>
 <tr><td colspan="2"><strong>Total</strong></td><td><strong>~45,095</strong></td><td><strong>93 Kotlin source files</strong></td></tr>
 </table>
 
@@ -384,7 +390,7 @@ Cloud Storage:
 <h3 id="s2-1">2.1 MainActivity</h3>
 <div class="file-info">
     <strong>File:</strong> <code>MainActivity.kt</code> (2,327 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app</code> &nbsp;|&nbsp;
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak</code> &nbsp;|&nbsp;
     <strong>Extends:</strong> <code>ComponentActivity</code>
 </div>
 <p class="desc">Thin UI shell for the BudgeTrak application. In v2.4, all state management and business logic were extracted to <code>MainViewModel</code>. This activity handles only: edge-to-edge display setup, crash logger installation, Firebase anonymous auth, lifecycle callbacks (<code>ON_START</code>/<code>ON_STOP</code> to set <code>isAppActive</code>), obtaining the ViewModel via <code>viewModel()</code>, a <strong>loading gate</strong> with <code>LoadingScreen</code> composable (v2.5), <code>setContent</code> block for the Compose UI tree, screen routing to composable screens, and composable wrapper functions for JIT optimization.</p>
@@ -446,7 +452,7 @@ Cloud Storage:
 <h3 id="s2-1b">2.1b MainViewModel</h3>
 <div class="file-info">
     <strong>File:</strong> <code>MainViewModel.kt</code> (2,171 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app</code> &nbsp;|&nbsp;
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak</code> &nbsp;|&nbsp;
     <strong>Extends:</strong> <code>AndroidViewModel</code>
 </div>
 <p class="desc">Central state coordinator extracted from <code>MainActivity.setContent</code> in v2.4. Holds all ~80 mutable state variables, all save functions, budget calculation logic, sync lifecycle management, transaction matching chain, period refresh orchestration, and background loops. Uses <code>viewModelScope</code> for all coroutine work, replacing the previous <code>rememberCoroutineScope</code> pattern. Survives configuration changes. In v2.5, the <code>init</code> block was restructured for async data loading on <code>Dispatchers.IO</code>, a <code>companion object</code> with a <code>WeakReference</code> was added, <code>recomputeCash()</code> is now synchronous, maintenance tasks were consolidated, and transaction archiving was added.</p>
@@ -627,7 +633,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-2">2.2 MainScreen</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/MainScreen.kt</code> (1,302 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Dashboard screen with Solari-style split-flap display, spending charts (pie and bar), quick-add transaction dialogs, Supercharge dialog, sync status indicators, and five-button navigation bar.</p>
 
@@ -643,7 +649,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-3">2.3 TransactionsScreen</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/TransactionsScreen.kt</code> (5,573 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Comprehensive transaction management with list display, filtering, searching, multi-select, entry/editing dialogs, CSV import pipeline with duplicate detection (Generic CSV auto-detect, US Bank, BudgeTrak CSV), Save export to CSV / Excel (.xlsx) / PDF expense report, linked transaction display, receipt photo capture/display, and full backup load. The manual encrypted save format was removed in v2.5.x; encryption is still used by the auto-backup feature in Settings. The largest screen in the application.</p>
 
@@ -674,7 +680,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-4">2.4 BudgetConfigScreen</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/BudgetConfigScreen.kt</code> (1,241 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Income sources management, budget period selection, reset hour/day configuration, safe budget display, manual override with warnings, income mode selection, and budget reset functionality.</p>
 
@@ -683,7 +689,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-5">2.5 SettingsScreen</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/SettingsScreen.kt</code> (1,492 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Currency selection, category management (with charted/widgetVisible toggles), matching tolerances, language selection, date format, chart palette, widget logo toggle, paid features, backup/restore, and expense report generation.</p>
 
@@ -692,7 +698,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-6">2.6 SavingsGoalsScreen</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/SavingsGoalsScreen.kt</code> (804 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Savings goals management with target-date and fixed-contribution types, progress tracking, Supercharge integration, and PulsingScrollArrow in form dialogs.</p>
 
@@ -701,7 +707,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-7">2.7 AmortizationScreen</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/AmortizationScreen.kt</code> (638 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Amortization entries with progress tracking, per-period deductions, pause/resume support, and PulsingScrollArrow in form dialogs.</p>
 
@@ -710,7 +716,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-8">2.8 RecurringExpensesScreen</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/RecurringExpensesScreen.kt</code> (1,093 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Recurring expense management with 6 repeat types, savings required simulation box, Why explanation dialog, set-aside tracking, accelerated expense support, and PulsingScrollArrow in all dialogs.</p>
 
@@ -719,7 +725,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-9">2.9 SyncScreen</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/SyncScreen.kt</code> (1,160 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Family sync configuration screen. Allows creating/joining/leaving/dissolving family groups. Shows sync status, device list with online status, admin claims, subscription management. Admin-only settings enforcement for budget period and reset configuration. Device naming, removal, debug file request via FCM.</p>
 
@@ -728,7 +734,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-10">2.10 BudgetCalendarScreen</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/BudgetCalendarScreen.kt</code> (434 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Calendar view showing daily spending, income events, and recurring expense/income due dates across budget periods.</p>
 
@@ -737,7 +743,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-11">2.11 SimulationGraphScreen</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/SimulationGraphScreen.kt</code> (686 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Cash flow simulation graph showing projected balance over time based on income, recurring expenses, savings goals, and budget spending.</p>
 
@@ -746,7 +752,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s2-12">2.12 QuickStartGuide</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/screens/QuickStartGuide.kt</code> (357 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.screens</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.screens</code>
 </div>
 <p class="desc">Multi-step onboarding overlay guiding new users through initial budget setup: income sources, period selection, and first transaction.</p>
 
@@ -759,7 +765,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s3-1">3.1 FlipDisplay</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/components/FlipDisplay.kt</code> (257 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.components</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.components</code>
 </div>
 <p class="desc">Top-level Solari-style display compositor. Arranges FlipChar and FlipDigit cards into a complete currency readout with responsive sizing, leading zero suppression, and optional decimal places.</p>
 <table>
@@ -775,35 +781,35 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3 id="s3-2">3.2 FlipChar</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/components/FlipChar.kt</code> (293 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.components</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.components</code>
 </div>
 <p class="desc">Animated flip card for string values (sign + currency). 250ms flip with 3D rotation, gradient overlays, and sound callback at midpoint.</p>
 
 <h3 id="s3-3">3.3 FlipDigit</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/components/FlipDigit.kt</code> (316 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.components</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.components</code>
 </div>
 <p class="desc">Animated flip card for digits 0-9 with blank state (digit -1). Same animation mechanics as FlipChar with integer-based targets and monospace FlipFontFamily.</p>
 
 <h3 id="s3-4">3.4 PieChartEditor</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/components/PieChartEditor.kt</code> (470 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.components</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.components</code>
 </div>
 <p class="desc">Interactive donut-style pie chart for multi-category transaction allocation. Supports drag, calculator, and percentage input modes with real-time visual feedback and 6 palette variants.</p>
 
 <h3 id="s3-5">3.5 SwipeablePhotoRow</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/components/SwipeablePhotoRow.kt</code> (669 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.components</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.components</code>
 </div>
 <p class="desc">Horizontally swipeable row for displaying receipt photo thumbnails attached to transactions. Supports up to 5 photo slots per transaction with tap-to-enlarge, swipe-to-delete, and loading states for photos pending download from Cloud Storage.</p>
 
 <h3 id="s3-6">3.6 AdAwareDialog / AdAwareAlertDialog / PulsingScrollArrow</h3>
 <div class="file-info">
     <strong>File:</strong> <code>ui/theme/Theme.kt</code> (part of 665 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.ui.theme</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.ui.theme</code>
 </div>
 <p class="desc"><strong>AdAwareDialog:</strong> Custom dialog wrapper using Dialog() composable with SOFT_INPUT_ADJUST_NOTHING. <strong>AdAwareAlertDialog:</strong> Drop-in replacement for Material3 AlertDialog with proper Surface, Column layout, and optional PulsingScrollArrow. <strong>PulsingScrollArrow:</strong> Animated bouncing down-arrow (600ms, RepeatMode.Reverse) that shows when scrollable content exists below the visible area.</p>
 <p>Theme.kt also defines: <strong>DialogHeader</strong>, <strong>DialogFooter</strong>, <strong>DialogPrimaryButton</strong>, <strong>DialogSecondaryButton</strong>, <strong>DialogDangerButton</strong>, <strong>DialogWarningButton</strong>, <strong>DialogStyle</strong> &mdash; a standardized dialog design system with colored headers and footers.</p>
@@ -817,7 +823,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h3>4.1 FlipSoundPlayer</h3>
 <div class="file-info">
     <strong>File:</strong> <code>sound/FlipSoundPlayer.kt</code> (134 lines) &nbsp;|&nbsp;
-    <strong>Package:</strong> <code>com.syncbudget.app.sound</code>
+    <strong>Package:</strong> <code>com.techadvantage.budgetrak.sound</code>
 </div>
 <p class="desc">Procedural audio generator and player for Solari flip card animations. Generates a synthetic mechanical clack at initialization and plays it via SoundPool with low-latency overlap support.</p>
 <table>
@@ -1060,7 +1066,7 @@ When in a sync group, period refresh is deferred until after <code>awaitInitialS
 <h2 id="sec6">6. Utility Classes</h2>
 
 <h3 id="s6-1">6.1 BudgetCalculator (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/BudgetCalculator.kt</code> (491 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/BudgetCalculator.kt</code> (491 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Singleton utility for all budget calculations. Normalizes income and expenses to the active period, computes safe budget, deterministically recomputes available cash from synced data, and provides occurrence generation for repeat schedules.</p>
 <h4>Methods</h4>
 <div class="method"><span class="method-name">generateOccurrences(repeatType, repeatInterval, startDate, monthDay1, monthDay2, rangeStart, rangeEnd): List&lt;LocalDate&gt;</span></div>
@@ -1105,7 +1111,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 
 <h3 id="s6-2">6.2 CryptoHelper (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/CryptoHelper.kt</code> (93 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/CryptoHelper.kt</code> (93 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Cryptographic utility providing authenticated encryption via ChaCha20-Poly1305. Supports both password-based (PBKDF2) and direct-key modes.</p>
 <table>
 <tr><th>Constant</th><th>Value</th><th>Purpose</th></tr>
@@ -1122,7 +1128,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 
 <h3 id="s6-3">6.3 CsvParser (Top-Level Functions)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/CsvParser.kt</code> (996 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/CsvParser.kt</code> (996 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Comprehensive CSV parsing supporting US Bank format, BudgeTrak native CSV format, and BudgeTrak encrypted format. Includes merchant name cleaning, amount parsing, and multi-format detection.</p>
 <h4>Key Functions</h4>
 <table>
@@ -1152,7 +1158,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 
 <h3 id="s6-4">6.4 DuplicateDetector (Top-Level Functions)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/DuplicateDetector.kt</code> (217 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/DuplicateDetector.kt</code> (217 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <table>
 <tr><th>Function</th><th>Description</th></tr>
 <tr><td>filterAlreadyLoadedDays(fileTransactions, appTransactions)</td><td>Filter transactions from already-imported days</td></tr>
@@ -1167,18 +1173,18 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 
 <h3 id="s6-5">6.5 AutoCategorizer (Top-Level Functions)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/AutoCategorizer.kt</code> (49 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/AutoCategorizer.kt</code> (49 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <div class="method"><span class="method-name">autoCategorize(imported, existing, categories): Transaction</span> &mdash; Auto-categorizes imported transaction based on merchant name substring matches against existing categorized transactions.</div>
 <div class="method"><span class="method-name">sharesFiveCharSubstring(a, b): Boolean</span> (private) &mdash; 5-character sliding window substring match.</div>
 
 
 <h3 id="s6-6">6.6 CategoryIcons (Top-Level Declarations)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/CategoryIcons.kt</code> (327 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/CategoryIcons.kt</code> (327 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p>Constants: <code>CATEGORY_ICON_MAP: Map&lt;String, ImageVector&gt;</code> (120+ entries). Function: <code>getCategoryIcon(iconName): ImageVector</code>.</p>
 
 
 <h3 id="s6-7">6.7 SavingsSimulator (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/SavingsSimulator.kt</code> (517 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/SavingsSimulator.kt</code> (517 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Forward-looking cash flow simulation that determines how much savings buffer the user needs. Walks forward from today through all upcoming income deposits, expense due dates, and budget spending to find the point where cash balance dips lowest.</p>
 <h4>Inner Classes</h4>
 <p><code>SimResult(savingsRequired: Double, lowPointDate: LocalDate?)</code>, <code>CashEvent(date: LocalDate, amount: Double, priority: Int)</code> [private]</p>
@@ -1193,15 +1199,15 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 
 <h3 id="s6-8">6.8 DefaultCategories</h3>
-<div class="file-info"><strong>File:</strong> <code>data/DefaultCategories.kt</code> (50 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/DefaultCategories.kt</code> (50 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Defines default category tags, their default names, and localized name lookup. System categories are identified by tag and auto-provisioned on startup.</p>
 
 <h3 id="s6-9">6.9 FullBackupSerializer</h3>
-<div class="file-info"><strong>File:</strong> <code>data/FullBackupSerializer.kt</code> (281 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/FullBackupSerializer.kt</code> (281 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Serializes and deserializes complete app state for backup/restore functionality. Handles all entity types including sync fields. Used by BackupManager for encrypted backup files.</p>
 
 <h3 id="s6-10">6.10 BackupManager</h3>
-<div class="file-info"><strong>File:</strong> <code>data/BackupManager.kt</code> (390 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/BackupManager.kt</code> (390 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Manages backup/restore operations including encrypted system backups and photo archive backups. Files are written to <code>/storage/emulated/0/Download/BudgeTrak/</code>. Supports multi-part backup (system data + photos as separate files).</p>
 <h4>Key Methods</h4>
 <table>
@@ -1214,7 +1220,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 </table>
 
 <h3 id="s6-11">6.11 SafeIO (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/SafeIO.kt</code> (119 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/SafeIO.kt</code> (119 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Utilities for crash-safe file I/O and defensive JSON parsing. Uses atomic write (temp file + rename) and per-file ReentrantLock to prevent concurrent writes.</p>
 <h4>Methods</h4>
 <table>
@@ -1226,15 +1232,15 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 </table>
 
 <h3 id="s6-12">6.12 PrefsCompat</h3>
-<div class="file-info"><strong>File:</strong> <code>data/PrefsCompat.kt</code> (23 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/PrefsCompat.kt</code> (23 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <div class="method"><span class="method-name">SharedPreferences.getDoubleCompat(key, default): Double</span> &mdash; Reads a numeric pref that may have been stored as Float, Double, Int, Long, or String. Multi-level try-catch cascade.</div>
 
 <h3 id="s6-13">6.13 ExpenseReportGenerator</h3>
-<div class="file-info"><strong>File:</strong> <code>data/ExpenseReportGenerator.kt</code> (365 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/ExpenseReportGenerator.kt</code> (365 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Generates PDF expense reports for selected transactions. Uses Android PdfDocument API with Canvas rendering. Letter-size pages (612x792 points). Output to <code>Download/BudgeTrak/PDF/</code>.</p>
 
 <h3 id="s6-14">6.14 DiagDumpBuilder (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/DiagDumpBuilder.kt</code> (239 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/DiagDumpBuilder.kt</code> (239 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Builds comprehensive diagnostic dump text for debug support. Extracted from <code>MainActivity</code> in v2.3+ to allow reuse by both the foreground (Settings &rarr; "Dump &amp; Sync Debug") and background <code>DebugDumpWorker</code> (FCM debug request flow). Loads all repositories and preferences, computes budget amounts, and assembles a structured text dump.</p>
 <h4>Methods</h4>
 <table>
@@ -1264,7 +1270,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 <h2 id="sec7">7. Sync Classes</h2>
 
 <h3 id="s7-1">7.1 EncryptedDocSerializer (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/EncryptedDocSerializer.kt</code> (1,035 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/EncryptedDocSerializer.kt</code> (1,035 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Serializes data classes to/from encrypted Firestore documents using per-field encryption. Each business field is individually encrypted and stored as <code>enc_&lt;fieldName&gt;</code>. Metadata fields (deviceId, updatedAt, deleted, lastEditBy) are stored in plain text for Firestore queries and conflict resolution. Backward-compatible: detects old single-blob format (has "enc" key) and falls back to decrypting that blob as JSON.</p>
 
 <h4>Collection Name Constants</h4>
@@ -1338,7 +1344,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 
 <h3 id="s7-2">7.2 FirestoreDocService (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/FirestoreDocService.kt</code> (240 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/FirestoreDocService.kt</code> (240 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Low-level Firestore operations for the native-doc sync system. Each synced record lives at <code>groups/{groupId}/{collection}/{docId}</code>. Handles writes, batch writes, reads, filtered and unfiltered snapshot listeners, and local cache reads. Does NOT handle encryption &mdash; that is EncryptedDocSerializer's job.</p>
 
 <h4>Methods</h4>
@@ -1359,7 +1365,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 
 <h3 id="s7-3">7.3 FirestoreDocSync</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/FirestoreDocSync.kt</code> (716 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/FirestoreDocSync.kt</code> (716 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Firestore-native sync coordinator. Replaces the old CRDT-based SyncEngine. Each record is a separate Firestore document with per-field encryption. Manages 8 persistent snapshot listeners (7 collection + 1 document), per-collection filtered cursors, <code>awaitInitialSync()</code> gate, echo prevention, enc hash skip optimization, diff-based field updates, and conflict detection. Listeners are managed by ViewModel lifecycle (not DisposableEffect).</p>
 
 <h4>Constructor Parameters</h4>
@@ -1430,7 +1436,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 </table>
 
 <h3 id="s7-4">7.4 SyncWriteHelper (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/SyncWriteHelper.kt</code> (67 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/SyncWriteHelper.kt</code> (67 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Convenience layer for pushing records to Firestore on local edits. Initialized when sync starts (listeners attached). Disposed on leave. All pushes are fire-and-forget on IO dispatcher &mdash; Firestore SDK handles offline queue and retry internally.</p>
 <h4>Methods</h4>
 <table>
@@ -1452,7 +1458,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 
 <h3 id="s7-5">7.5 DebugDumpWorker</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/DebugDumpWorker.kt</code> (80 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>CoroutineWorker</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/DebugDumpWorker.kt</code> (80 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>CoroutineWorker</code></div>
 <p class="desc">Background worker for sync housekeeping. With Firestore-native sync, the foreground FirestoreDocSync handles all real-time data sync via snapshot listeners. This worker handles: (1) Firebase anonymous auth, (2) FCM debug dump requests, (3) background receipt photo sync (loads transactions from disk, gets devices from RTDB via <code>RealtimePresenceService.getDevices()</code>, runs <code>ReceiptSyncManager.syncReceipts()</code>), (4) Firestore lastSeen heartbeat as fallback for RTDB presence. Widget updates are handled by <code>BackgroundSyncWorker</code>.</p>
 <h4>doWork() Steps</h4>
 <ol>
@@ -1474,7 +1480,7 @@ Uses remembered amounts (not live lookups) for linked transaction deltas, ensuri
 
 
 <h3 id="s7-6">7.6 FirestoreService (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/FirestoreService.kt</code> (556 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/FirestoreService.kt</code> (556 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Device/group management, pairing, admin claims, subscription management, and debug file upload. In v2.2, all delta/snapshot methods were removed. Dissolve deletes 13 subcollections + Cloud Storage receipt files + group doc. In v2.4, <code>updateDeviceMetadata()</code> no longer writes <code>lastSeen</code> (RTDB handles foreground presence). A separate <code>updateDeviceLastSeen()</code> exists as a background-only fallback. <code>getGroupHealthStatus()</code> returns dissolution and subscription status from a single group doc read. <code>fingerprintJson</code> is no longer written or read.</p>
 
 <h4>Data Classes Defined</h4>
@@ -1515,7 +1521,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-7">7.7 GroupManager (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/GroupManager.kt</code> (195 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/GroupManager.kt</code> (195 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Family group lifecycle management. Handles create, join, leave, dissolve, pairing code generation, and device listing.</p>
 
 <h4>Data Classes</h4>
@@ -1540,7 +1546,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-8">7.8 SyncFilters</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/SyncFilters.kt</code> (37 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/SyncFilters.kt</code> (37 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Extension properties for filtering tombstoned and skeleton records. Skeleton records are incomplete records received via sync with missing critical field values (empty source, empty name).</p>
 <table>
 <tr><th>Extension</th><th>Filter Logic</th></tr>
@@ -1554,12 +1560,12 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-9">7.9 SyncIdGenerator (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/SyncIdGenerator.kt</code> (20 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/SyncIdGenerator.kt</code> (20 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <div class="method"><span class="method-name">getOrCreateDeviceId(context): String</span> &mdash; Creates a UUID-based unique device identifier. Persisted in SharedPreferences <code>"sync_device"</code>. Thread-safe via @Synchronized.</div>
 
 
 <h3 id="s7-10">7.10 PeriodLedger / PeriodLedgerRepository</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/PeriodLedger.kt</code> (73 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/PeriodLedger.kt</code> (73 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Records budget amounts at each period refresh boundary. Used for deterministic cash recomputation across synced devices.</p>
 <h4>PeriodLedgerRepository Methods</h4>
 <table>
@@ -1571,12 +1577,12 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-11">7.11 SecurePrefs (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/SecurePrefs.kt</code> (59 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/SecurePrefs.kt</code> (59 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Provides encrypted SharedPreferences for sensitive sync data (encryption keys). Uses AndroidX EncryptedSharedPreferences with AES256-GCM. Falls back to plain prefs if KeyStore unavailable. One-time migration from plain to encrypted prefs on first access.</p>
 
 
 <h3 id="s7-12">7.12 FcmService</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/FcmService.kt</code> (47 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>FirebaseMessagingService</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/FcmService.kt</code> (47 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>FirebaseMessagingService</code></div>
 <p class="desc">Firebase Cloud Messaging service. Handles FCM token rotation and debug_request messages. On debug_request (debug builds only), triggers a one-shot DebugDumpWorker to upload diagnostic files.</p>
 <h4>Methods</h4>
 <div class="method"><span class="method-name">onNewToken(token)</span> &mdash; Stores new FCM token in <code>"fcm_prefs"</code>, flags for upload on next sync.</div>
@@ -1584,13 +1590,13 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-13">7.13 FcmSender (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/FcmSender.kt</code> (134 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/FcmSender.kt</code> (134 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Sends FCM v1 data-only messages to wake up remote devices for debug upload. Uses OAuth2 service account JWT for authentication. Debug builds only.</p>
 <div class="method"><span class="method-name">sendDebugRequest(context, targetFcmToken): Boolean</span> &mdash; Sends high-priority FCM message with type="debug_request".</div>
 
 
 <h3 id="s7-14">7.14 SubscriptionReminderReceiver</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/SubscriptionReminder.kt</code> (109 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>BroadcastReceiver</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/SubscriptionReminder.kt</code> (109 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>BroadcastReceiver</code></div>
 <p class="desc">Schedules and shows daily noon notifications during the subscription grace period, reminding group members that the admin subscription has expired. Bilingual (English/Spanish). Self-rescheduling via AlarmManager.</p>
 <h4>Companion Methods</h4>
 <table>
@@ -1602,7 +1608,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-15">7.15 ReceiptManager (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/ReceiptManager.kt</code> (391 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/ReceiptManager.kt</code> (391 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Manages receipt photos locally: capture from camera/gallery, downsize to MAX_IMAGE_DIMENSION (1000px), encrypt/decrypt, store in app-private <code>receipts/</code> directory, generate THUMBNAIL_SIZE (200px) thumbnails in <code>receipt_thumbs/</code>, and maintain the pending upload queue.</p>
 <h4>Key Methods</h4>
 <table>
@@ -1622,7 +1628,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-16">7.16 ReceiptSyncManager</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/ReceiptSyncManager.kt</code> (724 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/ReceiptSyncManager.kt</code> (724 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Coordinates receipt photo sync: upload-first flow, recovery with snapshot support, speed-based upload assignment, download, orphan scan with time guard, and 14-day pruning. Only runs on paid (photo-capable) devices. In v2.4, takes <code>List&lt;DeviceInfo&gt;</code> instead of <code>List&lt;DeviceRecord&gt;</code> everywhere.</p>
 <h4>Key Methods</h4>
 <table>
@@ -1637,7 +1643,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-17">7.17 ImageLedgerService (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/ImageLedgerService.kt</code> (736 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/ImageLedgerService.kt</code> (736 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Firestore CRUD operations for the image ledger and Cloud Storage upload/download for encrypted receipt photos.</p>
 <p><strong>Note (v2.3):</strong> <code>SNAPSHOT_DOC_ID</code> changed from <code>"__snapshot_request__"</code> to <code>"_snapshot_request"</code> (Firestore reserved ID fix &mdash; double-underscore prefixes are reserved by Firestore).</p>
 <h4>Key Methods</h4>
@@ -1664,7 +1670,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-18">7.18 SyncMergeProcessor (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/SyncMergeProcessor.kt</code> (303 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/SyncMergeProcessor.kt</code> (303 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Stateless object singleton that processes batches of <code>DataChangeEvent</code>s into merged data. Extracted from <code>MainActivity.onBatchChanged</code> in v2.3 to enable reuse by both the foreground ViewModel and <code>BackgroundSyncWorker</code>.</p>
 
 <h4>Key Method</h4>
@@ -1698,7 +1704,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-19">7.19 BackgroundSyncWorker</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/BackgroundSyncWorker.kt</code> (483 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>CoroutineWorker</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/BackgroundSyncWorker.kt</code> (483 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code> &nbsp;|&nbsp; <strong>Extends:</strong> <code>CoroutineWorker</code></div>
 <p class="desc">15-minute periodic background worker that performs a short-lived Firestore sync, processes incoming changes via <code>SyncMergeProcessor</code>, runs period refresh via <code>PeriodRefreshService</code>, pushes results back to Firestore, and updates the home screen widget. Replaces <code>WidgetRefreshWorker</code> from v2.2.</p>
 
 <h4>Constructor</h4>
@@ -1733,7 +1739,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-20">7.20 PeriodRefreshService (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/PeriodRefreshService.kt</code> (275 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/PeriodRefreshService.kt</code> (275 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data</code></div>
 <p class="desc">Shared service for period refresh logic, extracted from <code>MainActivity</code> in v2.3. Provides a single <code>@Synchronized</code> entry point usable by both the foreground ViewModel and <code>BackgroundSyncWorker</code>.</p>
 
 <h4>Data Classes</h4>
@@ -1761,7 +1767,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 
 
 <h3 id="s7-21">7.21 RealtimePresenceService (Object Singleton)</h3>
-<div class="file-info"><strong>File:</strong> <code>data/sync/RealtimePresenceService.kt</code> (180 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.syncbudget.app.data.sync</code></div>
+<div class="file-info"><strong>File:</strong> <code>data/sync/RealtimePresenceService.kt</code> (180 lines) &nbsp;|&nbsp; <strong>Package:</strong> <code>com.techadvantage.budgetrak.data.sync</code></div>
 <p class="desc">Firebase Realtime Database presence service. Manages online/offline status for devices using RTDB's server-side disconnect detection (<code>onDisconnect</code>). Replaces Firestore device polling with instant presence updates. RTDB path: <code>groups/{groupId}/presence/{deviceId}</code>.</p>
 
 <h4>Data Class</h4>
@@ -2138,10 +2144,10 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <p>All Kotlin source files in the codebase, sorted by package then by file name. Line counts as of v2.5.</p>
 <table>
 <tr><th>File</th><th>Lines</th><th>Primary Purpose</th></tr>
-<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.syncbudget.app</td></tr>
+<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.techadvantage.budgetrak</td></tr>
 <tr><td>MainActivity.kt</td><td>2,327</td><td>UI shell, screen navigation, lifecycle, LoadingScreen, BackHandler</td></tr>
 <tr><td>MainViewModel.kt</td><td>2,171</td><td>All state, business logic, sync lifecycle, save functions, async loading, companion, maintenance, archiving</td></tr>
-<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.syncbudget.app.data</td></tr>
+<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.techadvantage.budgetrak.data</td></tr>
 <tr><td>AmortizationEntry.kt</td><td>24</td><td>Data class + ID generator</td></tr>
 <tr><td>AmortizationRepository.kt</td><td>60</td><td>JSON persistence</td></tr>
 <tr><td>AutoCategorizer.kt</td><td>49</td><td>Auto-categorize imported transactions</td></tr>
@@ -2172,7 +2178,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>SharedSettingsRepository.kt</td><td>118</td><td>JSON persistence</td></tr>
 <tr><td>Transaction.kt</td><td>48</td><td>Data class + ID generator</td></tr>
 <tr><td>TransactionRepository.kt</td><td>122</td><td>JSON persistence</td></tr>
-<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.syncbudget.app.data.sync</td></tr>
+<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.techadvantage.budgetrak.data.sync</td></tr>
 <tr><td>EncryptedDocSerializer.kt</td><td>1,035</td><td>Per-field encryption for 8 data types</td></tr>
 <tr><td>FcmSender.kt</td><td>134</td><td>FCM v1 message sending</td></tr>
 <tr><td>FcmService.kt</td><td>47</td><td>FCM message handling</td></tr>
@@ -2194,7 +2200,7 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>SyncMergeProcessor.kt</td><td>303</td><td>Batch sync event processing (shared service)</td></tr>
 <tr><td>DebugDumpWorker.kt</td><td>80</td><td>One-shot FCM debug dump upload (debug builds only)</td></tr>
 <tr><td>SyncWriteHelper.kt</td><td>67</td><td>Fire-and-forget push dispatcher</td></tr>
-<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.syncbudget.app.ui.screens</td></tr>
+<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.techadvantage.budgetrak.ui.screens</td></tr>
 <tr><td>AmortizationHelpScreen.kt</td><td>269</td><td>Amortization help documentation</td></tr>
 <tr><td>AmortizationScreen.kt</td><td>638</td><td>Amortization management</td></tr>
 <tr><td>BudgetCalendarHelpScreen.kt</td><td>86</td><td>Calendar help documentation</td></tr>
@@ -2217,25 +2223,25 @@ devices, imageLedger, adminClaim, deltas (legacy), snapshots (legacy)</code></pr
 <tr><td>SimulationGraphScreen.kt</td><td>686</td><td>Cash flow projection graph</td></tr>
 <tr><td>TransactionsHelpScreen.kt</td><td>998</td><td>Transactions help documentation</td></tr>
 <tr><td>TransactionsScreen.kt</td><td>5,573</td><td>Transaction list, import, edit, photos, archive view</td></tr>
-<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.syncbudget.app.ui.components</td></tr>
+<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.techadvantage.budgetrak.ui.components</td></tr>
 <tr><td>FlipChar.kt</td><td>293</td><td>Animated flip card for characters</td></tr>
 <tr><td>FlipDigit.kt</td><td>316</td><td>Animated flip card for digits</td></tr>
 <tr><td>FlipDisplay.kt</td><td>257</td><td>Solari display compositor</td></tr>
 <tr><td>PieChartEditor.kt</td><td>470</td><td>Interactive donut chart</td></tr>
 <tr><td>SwipeablePhotoRow.kt</td><td>669</td><td>Receipt photo carousel</td></tr>
-<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.syncbudget.app.ui.theme</td></tr>
+<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.techadvantage.budgetrak.ui.theme</td></tr>
 <tr><td>Color.kt</td><td>29</td><td>Color constants</td></tr>
 <tr><td>Theme.kt</td><td>665</td><td>Theme, dialogs, scroll arrow</td></tr>
 <tr><td>Type.kt</td><td>18</td><td>Typography, font family</td></tr>
-<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.syncbudget.app.ui.strings</td></tr>
+<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.techadvantage.budgetrak.ui.strings</td></tr>
 <tr><td>AppStrings.kt</td><td>1,405</td><td>Localization interface</td></tr>
 <tr><td>EnglishStrings.kt</td><td>1,704</td><td>English translations</td></tr>
 <tr><td>LocalStrings.kt</td><td>5</td><td>CompositionLocal provider</td></tr>
 <tr><td>SpanishStrings.kt</td><td>1,699</td><td>Spanish translations</td></tr>
 <tr><td>TranslationContext.kt</td><td>1,425</td><td>Translation context descriptions</td></tr>
-<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.syncbudget.app.sound</td></tr>
+<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.techadvantage.budgetrak.sound</td></tr>
 <tr><td>FlipSoundPlayer.kt</td><td>134</td><td>Procedural audio generation</td></tr>
-<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.syncbudget.app.widget</td></tr>
+<tr><td colspan="3" style="background:#2c5282;color:#fff;font-weight:600;">com.techadvantage.budgetrak.widget</td></tr>
 <tr><td>BudgetWidgetProvider.kt</td><td>252</td><td>Widget provider + alarms</td></tr>
 <tr><td>WidgetRenderer.kt</td><td>276</td><td>Canvas bitmap rendering</td></tr>
 <tr><td>WidgetTransactionActivity.kt</td><td>987</td><td>Quick-add transaction from widget</td></tr>
