@@ -313,11 +313,7 @@ object FirestoreService {
         // devices an affirmative signal to auto-leave, even if they check
         // before the subcollection cleanup finishes.
         onProgress?.invoke("Notifying devices…")
-        try {
-            groupRef.set(mapOf("status" to "dissolved"), SetOptions.merge()).await()
-        } catch (e: Exception) {
-            android.util.Log.w("FirestoreService", "Set dissolved status failed: ${e.message}")
-        }
+        groupRef.set(mapOf("status" to "dissolved"), SetOptions.merge()).await()
 
         // Delete all subcollections in paginated batches
         val allSubCollections = listOf(
@@ -332,11 +328,7 @@ object FirestoreService {
         )
         for (subCollection in allSubCollections) {
             onProgress?.invoke("Removing $subCollection…")
-            try {
-                deleteSubcollection(groupRef.collection(subCollection), onProgress = onProgress)
-            } catch (e: Exception) {
-                android.util.Log.w("FirestoreService", "Subcollection cleanup failed for $subCollection: ${e.message}")
-            }
+            deleteSubcollection(groupRef.collection(subCollection), onProgress = onProgress)
         }
 
         // Delete Cloud Storage receipt files + snapshot archive
@@ -359,13 +351,9 @@ object FirestoreService {
             RealtimePresenceService.deleteGroupPresence(groupId)
         } catch (_: Exception) {}
 
-        // Delete the group document itself (triggers cleanupGroupData Cloud Function)
+        // Delete the group document itself
         onProgress?.invoke("Finalizing…")
-        try {
-            groupRef.delete().await()
-        } catch (e: Exception) {
-            android.util.Log.w("FirestoreService", "Group doc delete failed: ${e.message}")
-        }
+        groupRef.delete().await()
     }
 
     /** Paginated subcollection delete — fetches only document IDs in
