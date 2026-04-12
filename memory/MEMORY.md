@@ -106,7 +106,8 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - Two branches: `dev` → `main`. Default push: **dev only**.
 - Tags: v2.1–v2.6 (see `project_firestore_native_sync.md`).
 - Post-commit hook copies repo → `Download/BudgeTrak Dev Project Files/` (one-way). See `feedback_git_hook_direction.md`.
-- `gh` CLI auth'd as `pksteichen`; `dailyBudget` + `budgetrak-legal` use local credential-helper overrides with a `techadvantagesupport` PAT.
+- `gh` CLI has both `pksteichen` and `techadvantagesupport` accounts logged in; active account is `techadvantagesupport`. `gh auth switch -u <user>` toggles (affects all terminals). Git push/pull uses `~/.git-credentials` (techadvantagesupport PAT), independent of `gh` active account.
+- Memory files live at `memory/` inside this repo. A symlink at `~/.claude/projects/-data-data-com-termux-files-home-dailyBudget/memory` points here so Claude Code reads the tracked copy — `/push` backs them up alongside code.
 - Persistence-layer names preserved across rename: `future_expenditures.json`, `familyTimezone`, `syncbudget_full_backup`. See `feedback_preserve_persistence_names.md`.
 
 ## Specifications
