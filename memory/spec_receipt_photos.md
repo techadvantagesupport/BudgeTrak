@@ -51,10 +51,12 @@ The flag clock is bumped on: recovery request, re-upload complete, cleanup, requ
 
 `BackgroundSyncWorker` (Tier 3 only — ViewModel dead) constructs a `ReceiptSyncManager(photoCapable = isPaidUser)` and calls `syncReceipts()`. Tiers 1 and 2 skip receipt sync.
 
-## Possession model
-- `possessions["deviceId"] = true` when a device holds a valid local copy of the encrypted blob.
-- Marked on successful upload (originator) or download (receiver).
+## Possession model (three-state)
+- `possessions["deviceId"] = true` — device holds a valid local copy of the encrypted blob. Marked on successful upload (originator) or download (receiver).
+- `possessions["deviceId"] = false` — device has confirmed it does NOT have the file (via `ImageLedgerService.markNonPossession`). Used after a join snapshot / batch recovery completes without finding the photo.
+- Key absent — device hasn't evaluated the entry yet; don't count against it.
 - When all group devices have the photo (`pruneCheckTransaction` confirms), the cloud file + ledger entry can be removed safely.
+- When all photo-capable devices report `false` (`ImageLedgerService.checkPhotoLost`), the photo is confirmed permanently lost; the cleanup path nulls the corresponding `receiptIdN` on the transaction and deletes the ledger entry so placeholder frames disappear. Gated behind "device has completed initial sync" to prevent a newly joined device from marking everything lost before its recovery runs.
 
 ## Recovery — download retry
 
