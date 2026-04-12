@@ -1165,6 +1165,7 @@ class MainActivity : ComponentActivity() {
                                     val result = BackupManager.performBackup(context, savedPwd)
                                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                         if (result.isSuccess) toastState.show("Backup created")
+                                        else toastState.show("Backup failed — please try again")
                                     }
                                 }
                             }
@@ -1667,6 +1668,7 @@ class MainActivity : ComponentActivity() {
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                             vm.lastBackupDate = vm.backupPrefs.getString("last_backup_date", null)
                             if (result.isSuccess) toastState.show("Backup created")
+                            else toastState.show("Backup failed — please try again")
                         }
                     }
                 }
