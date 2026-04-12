@@ -63,9 +63,11 @@ class BudgeTrakApplication : Application() {
         // the process is started by WorkManager without a foreground Activity.
         try {
             val appCheck = com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
-            appCheck.installAppCheckProviderFactory(
+            val providerFactory = if (BuildConfig.DEBUG)
+                com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory.getInstance()
+            else
                 com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance()
-            )
+            appCheck.installAppCheckProviderFactory(providerFactory)
             appCheck.addAppCheckListener { token ->
                 val expiresIn = (token.expireTimeMillis - System.currentTimeMillis()) / 1000
                 tokenLog("AppCheck token refreshed: expires in ${expiresIn}s (${expiresIn / 60}m)")

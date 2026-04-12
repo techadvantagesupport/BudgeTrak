@@ -85,6 +85,7 @@ dependencies {
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    implementation("com.google.firebase:firebase-appcheck-debug")
     implementation("com.google.firebase:firebase-crashlytics")
 
     // WorkManager
