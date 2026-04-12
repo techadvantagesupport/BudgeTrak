@@ -64,7 +64,13 @@ class DebugDumpWorker(
                     val syncLogText = try {
                         java.io.File(supportDir, "native_sync_log.txt").readText()
                     } catch (_: Exception) { "" }
-                    FirestoreService.uploadDebugFiles(groupId, deviceId, devName, syncLogText, diagText, key)
+                    val tokenLogText = try {
+                        java.io.File(supportDir, "token_log.txt").readText()
+                    } catch (_: Exception) { "" }
+                    val combinedLog = if (tokenLogText.isNotEmpty())
+                        "$syncLogText\n\n── Token Log ──\n$tokenLogText"
+                    else syncLogText
+                    FirestoreService.uploadDebugFiles(groupId, deviceId, devName, combinedLog, diagText, key)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("DebugDumpWorker", "Debug upload failed: ${e.message}")
