@@ -32,8 +32,8 @@ ALL memory documents, help screens, and translations must be updated whenever co
 - Check that "BudgeTrak" brand name is preserved (not translated)
 
 **After updating memory files:**
-- Copy changed files to `.claude-memory/` in project root
-- Update MEMORY.md index if new files were added
+- Memory lives at `memory/` in the repo (symlinked from `~/.claude/projects/.../memory/`). Edits are automatically tracked by git — no mirror copy needed.
+- Update MEMORY.md index if new files were added.
 
 **When adding new subsystems:**
 - Create a new spec document
