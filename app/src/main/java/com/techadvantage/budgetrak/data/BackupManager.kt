@@ -71,7 +71,9 @@ object BackupManager {
             val systemResult = createSystemBackup(context, password)
             if (systemResult.isFailure) return Result.failure(systemResult.exceptionOrNull()!!)
 
-            val photosResult = createPhotosBackup(context, password)
+            val systemFile = systemResult.getOrThrow()
+            val tag = systemFile.name.removePrefix("backup_").removeSuffix(SYSTEM_SUFFIX)
+            val photosResult = createPhotosBackup(context, password, tag)
             val photosFile = photosResult.getOrNull()
 
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -88,12 +90,23 @@ object BackupManager {
         }
     }
 
+    private fun nextAvailableSuffix(dir: File, dateStr: String, fileSuffix: String): String {
+        val base = File(dir, "backup_${dateStr}${fileSuffix}")
+        if (!base.exists()) return dateStr
+        for (c in 'b'..'z') {
+            val candidate = File(dir, "backup_${dateStr}${c}${fileSuffix}")
+            if (!candidate.exists()) return "${dateStr}${c}"
+        }
+        return "${dateStr}z"
+    }
+
     fun createSystemBackup(context: Context, password: CharArray): Result<File> {
         return try {
             val json = FullBackupSerializer.serialize(context)
             val encrypted = CryptoHelper.encrypt(json.toByteArray(Charsets.UTF_8), password)
             val dateStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-            val file = File(getBackupDir(), "backup_${dateStr}${SYSTEM_SUFFIX}")
+            val tag = nextAvailableSuffix(getBackupDir(), dateStr, SYSTEM_SUFFIX)
+            val file = File(getBackupDir(), "backup_${tag}${SYSTEM_SUFFIX}")
             file.writeBytes(encrypted)
             Log.d(TAG, "System backup created: ${file.name} (${encrypted.size} bytes)")
             Result.success(file)
@@ -102,7 +115,7 @@ object BackupManager {
         }
     }
 
-    fun createPhotosBackup(context: Context, password: CharArray): Result<File?> {
+    fun createPhotosBackup(context: Context, password: CharArray, tag: String? = null): Result<File?> {
         return try {
             val transactions = TransactionRepository.load(context)
             val allReceiptIds = ReceiptManager.collectAllReceiptIds(transactions)
@@ -116,8 +129,9 @@ object BackupManager {
             val derivedKey = CryptoHelper.deriveKey(password, salt)
 
             val tempEntries = File(context.cacheDir, "backup_entries.tmp")
-            val dateStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-            val finalFile = File(getBackupDir(), "backup_${dateStr}${PHOTOS_SUFFIX}")
+            val effectiveTag = tag ?: nextAvailableSuffix(getBackupDir(),
+                LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE), PHOTOS_SUFFIX)
+            val finalFile = File(getBackupDir(), "backup_${effectiveTag}${PHOTOS_SUFFIX}")
 
             // Build entries to temp file
             val manifestEntries = JSONArray()
