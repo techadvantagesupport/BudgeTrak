@@ -304,34 +304,33 @@ object FirestoreService {
     }
 
     suspend fun deleteGroup(groupId: String, onProgress: ((String) -> Unit)? = null) {
+        val log = { msg: String -> com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog("deleteGroup[$groupId]: $msg") }
         val caller = Thread.currentThread().stackTrace.drop(2).take(5)
             .joinToString(" → ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" }
-        com.techadvantage.budgetrak.BudgeTrakApplication.tokenLog("deleteGroup CALLED for group=$groupId caller=$caller")
+        log("CALLED caller=$caller")
         val groupRef = db.collection("groups").document(groupId)
 
-        // Write dissolved flag BEFORE deleting anything — gives non-admin
-        // devices an affirmative signal to auto-leave, even if they check
-        // before the subcollection cleanup finishes.
+        log("Step 1: set status=dissolved")
         onProgress?.invoke("Notifying devices…")
         groupRef.set(mapOf("status" to "dissolved"), SetOptions.merge()).await()
+        log("Step 1: OK")
 
-        // Delete all subcollections in paginated batches
-        val allSubCollections = listOf(
-            // Firestore-native sync collections
+        val queryableSubCollections = listOf(
             "transactions", "recurringExpenses", "incomeSources",
             "savingsGoals", "amortizationEntries", "categories",
             "periodLedger", "sharedSettings",
-            // Group management
-            "devices", "members", "imageLedger", "adminClaim",
-            // Legacy CRDT (may still exist from old groups)
-            "deltas", "snapshots"
+            "devices", "imageLedger", "adminClaim"
+            // "deltas" and "snapshots" omitted — legacy CRDT collections
+            // with no security rule. Cloud Function handles them via admin SDK.
         )
-        for (subCollection in allSubCollections) {
+        for (subCollection in queryableSubCollections) {
+            log("Step 2: deleting $subCollection")
             onProgress?.invoke("Removing $subCollection…")
             deleteSubcollection(groupRef.collection(subCollection), onProgress = onProgress)
         }
+        log("Step 2: all subcollections OK")
 
-        // Delete Cloud Storage receipt files + snapshot archive
+        log("Step 3: Storage cleanup")
         try {
             onProgress?.invoke("Removing receipt photos…")
             val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance()
@@ -340,20 +339,34 @@ object FirestoreService {
             for (item in items.items) {
                 try { item.delete().await() } catch (_: Exception) {}
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) { log("Step 3a: receipts failed: ${e.message}") }
         try {
             com.google.firebase.storage.FirebaseStorage.getInstance()
                 .reference.child("groups/$groupId/photoSnapshot.enc").delete().await()
-        } catch (_: Exception) {}
+        } catch (e: Exception) { log("Step 3b: snapshot failed: ${e.message}") }
+        log("Step 3: done")
 
-        // Delete RTDB presence nodes for entire group
+        log("Step 4: RTDB cleanup")
         try {
             RealtimePresenceService.deleteGroupPresence(groupId)
-        } catch (_: Exception) {}
+        } catch (e: Exception) { log("Step 4: RTDB failed: ${e.message}") }
 
-        // Delete the group document itself
+        log("Step 5: delete group doc")
         onProgress?.invoke("Finalizing…")
         groupRef.delete().await()
+        log("Step 5: OK")
+
+        log("Step 6: delete own member doc")
+        try {
+            val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            if (authUid != null) {
+                db.collection("groups").document(groupId)
+                    .collection("members").document(authUid).delete().await()
+            }
+            log("Step 6: OK")
+        } catch (e: Exception) { log("Step 6: failed: ${e.message}") }
+
+        log("COMPLETE")
     }
 
     /** Paginated subcollection delete — fetches only document IDs in
