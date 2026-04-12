@@ -48,8 +48,10 @@ android {
     }
 
     defaultConfig {
-        val buildTime = SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date())
-        buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
+        val buildTime = SimpleDateFormat("yyyy-MM-dd HH:mm").apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.format(Date())
+        buildConfigField("String", "BUILD_TIME", "\"$buildTime UTC\"")
     }
 }
 
