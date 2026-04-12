@@ -101,21 +101,25 @@ object BackupManager {
     }
 
     fun createSystemBackup(context: Context, password: CharArray): Result<File> {
+        val dateStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val tag = nextAvailableSuffix(getBackupDir(), dateStr, SYSTEM_SUFFIX)
+        val file = File(getBackupDir(), "backup_${tag}${SYSTEM_SUFFIX}")
         return try {
             val json = FullBackupSerializer.serialize(context)
             val encrypted = CryptoHelper.encrypt(json.toByteArray(Charsets.UTF_8), password)
-            val dateStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-            val tag = nextAvailableSuffix(getBackupDir(), dateStr, SYSTEM_SUFFIX)
-            val file = File(getBackupDir(), "backup_${tag}${SYSTEM_SUFFIX}")
             file.writeBytes(encrypted)
             Log.d(TAG, "System backup created: ${file.name} (${encrypted.size} bytes)")
             Result.success(file)
         } catch (e: Exception) {
+            file.delete()
             Result.failure(e)
         }
     }
 
     fun createPhotosBackup(context: Context, password: CharArray, tag: String? = null): Result<File?> {
+        val effectiveTag = tag ?: nextAvailableSuffix(getBackupDir(),
+            LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE), PHOTOS_SUFFIX)
+        val finalFile = File(getBackupDir(), "backup_${effectiveTag}${PHOTOS_SUFFIX}")
         return try {
             val transactions = TransactionRepository.load(context)
             val allReceiptIds = ReceiptManager.collectAllReceiptIds(transactions)
@@ -129,9 +133,6 @@ object BackupManager {
             val derivedKey = CryptoHelper.deriveKey(password, salt)
 
             val tempEntries = File(context.cacheDir, "backup_entries.tmp")
-            val effectiveTag = tag ?: nextAvailableSuffix(getBackupDir(),
-                LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE), PHOTOS_SUFFIX)
-            val finalFile = File(getBackupDir(), "backup_${effectiveTag}${PHOTOS_SUFFIX}")
 
             // Build entries to temp file
             val manifestEntries = JSONArray()
@@ -178,8 +179,8 @@ object BackupManager {
             Log.d(TAG, "Photos backup created: ${finalFile.name} (${manifestEntries.length()} photos)")
             Result.success(finalFile)
         } catch (e: Exception) {
-            // Clean up temp file on failure to prevent cache accumulation
             try { File(context.cacheDir, "backup_entries.tmp").delete() } catch (_: Exception) {}
+            try { finalFile.delete() } catch (_: Exception) {}
             Result.failure(e)
         }
     }
