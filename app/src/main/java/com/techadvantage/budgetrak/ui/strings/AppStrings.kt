@@ -221,6 +221,7 @@ data class SettingsStrings(
     val confirmDeleteBtn: String,
     val keepFilesBtn: String,
     val noBackupsFound: String,
+    val browseForBackup: String,
     val selectBackupPrompt: String,
     val withPhotos: String,
     val dataOnly: String,

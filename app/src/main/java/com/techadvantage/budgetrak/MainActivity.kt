@@ -4,7 +4,9 @@ import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.compose.material3.OutlinedButton
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -1158,6 +1160,10 @@ class MainActivity : ComponentActivity() {
                                 vm.backupsEnabled = true
                                 vm.backupPrefs.edit().putBoolean("backups_enabled", true).apply()
                                 vm.showBackupPasswordDialog = false
+                                val savedPwd = pwd.toCharArray()
+                                vm.launchIO {
+                                    BackupManager.performBackup(context, savedPwd)
+                                }
                             }
                         }
                     }) { Text(strings.settings.enableBackups) }
@@ -1260,12 +1266,57 @@ class MainActivity : ComponentActivity() {
         // Restore backup dialog
         if (vm.showRestoreDialog) {
             val context = androidx.compose.ui.platform.LocalContext.current
-            val availableBackups = remember { BackupManager.listAvailableBackups() }
+            val autoBackups = remember { BackupManager.listAvailableBackups() }
+            var browsedBackups by remember { mutableStateOf<List<BackupManager.BackupEntry>>(emptyList()) }
             var selectedBackup by remember { mutableStateOf<BackupManager.BackupEntry?>(null) }
             var restorePassword by remember { mutableStateOf("") }
             var restoreError by remember { mutableStateOf<String?>(null) }
             var restoring by remember { mutableStateOf(false) }
             val restoreScrollState = rememberScrollState()
+
+            val dirPickerLauncher = rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+            ) { uri ->
+                if (uri != null) {
+                    try {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (_: Exception) {}
+                    val docDir = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
+                    val allFiles = docDir?.listFiles() ?: emptyArray()
+                    val systemFiles = allFiles.filter {
+                        it.name?.startsWith("backup_") == true && it.name?.endsWith("_system.enc") == true
+                    }
+                    browsedBackups = systemFiles.mapNotNull { sysDoc ->
+                        val name = sysDoc.name ?: return@mapNotNull null
+                        val date = name.removePrefix("backup_").removeSuffix("_system.enc")
+                        val photosDoc = allFiles.firstOrNull { it.name == "backup_${date}_photos.enc" }
+                        try {
+                            val sysCacheFile = java.io.File(context.cacheDir, name)
+                            context.contentResolver.openInputStream(sysDoc.uri)?.use { input ->
+                                sysCacheFile.outputStream().use { output -> input.copyTo(output) }
+                            }
+                            var photosCacheFile: java.io.File? = null
+                            if (photosDoc != null) {
+                                photosCacheFile = java.io.File(context.cacheDir, photosDoc.name!!)
+                                context.contentResolver.openInputStream(photosDoc.uri)?.use { input ->
+                                    photosCacheFile.outputStream().use { output -> input.copyTo(output) }
+                                }
+                            }
+                            BackupManager.BackupEntry(
+                                date = date,
+                                systemFile = sysCacheFile,
+                                photosFile = photosCacheFile,
+                                systemSizeBytes = sysDoc.length(),
+                                photosSizeBytes = photosDoc?.length() ?: 0L
+                            )
+                        } catch (_: Exception) { null }
+                    }.sortedByDescending { it.date }
+                }
+            }
+
+            val availableBackups = if (browsedBackups.isNotEmpty()) browsedBackups else autoBackups
 
             AdAwareDialog(onDismissRequest = { if (!restoring) vm.showRestoreDialog = false }) {
                 Surface(
@@ -1286,6 +1337,17 @@ class MainActivity : ComponentActivity() {
                         ) {
                             if (availableBackups.isEmpty()) {
                                 Text(strings.settings.noBackupsFound)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        val initialUri = android.provider.DocumentsContract.buildDocumentUri(
+                                            "com.android.externalstorage.documents",
+                                            "primary:Download/BudgeTrak/backups"
+                                        )
+                                        dirPickerLauncher.launch(initialUri)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text(strings.settings.browseForBackup) }
                             } else {
                                 Text(strings.settings.selectBackupPrompt, style = MaterialTheme.typography.bodyMedium)
                                 availableBackups.forEach { backup ->

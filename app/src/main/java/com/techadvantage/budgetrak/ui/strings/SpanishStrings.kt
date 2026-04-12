@@ -198,6 +198,7 @@ object SpanishStrings : AppStrings {
         confirmDeleteBtn = "Confirmar Eliminaci\u00f3n",
         keepFilesBtn = "Conservar Archivos",
         noBackupsFound = "No se encontraron archivos de respaldo.\n\nPara restaurar desde un respaldo, coloca tus archivos de respaldo (backup_*_system.enc y backup_*_photos.enc) en:\n\nDownload/BudgeTrak/backups/\n\nSi guardaste respaldos en un servicio en la nube, desc\u00e1rgalos a esta carpeta primero.",
+        browseForBackup = "Buscar carpeta de respaldo",
         selectBackupPrompt = "Selecciona un respaldo para restaurar:",
         withPhotos = "con fotos",
         dataOnly = "solo datos",

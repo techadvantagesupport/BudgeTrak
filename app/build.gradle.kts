@@ -89,4 +89,7 @@ dependencies {
 
     // Encrypted storage for sync keys
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // SAF directory access for backup restore (scoped storage compatibility)
+    implementation("androidx.documentfile:documentfile:1.0.1")
 }

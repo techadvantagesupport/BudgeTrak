@@ -198,6 +198,7 @@ object EnglishStrings : AppStrings {
         confirmDeleteBtn = "Confirm Delete",
         keepFilesBtn = "Keep Files",
         noBackupsFound = "No backup files found.\n\nTo restore from a backup, place your backup files (backup_*_system.enc and backup_*_photos.enc) in:\n\nDownload/BudgeTrak/backups/\n\nIf you saved backups to a cloud service, download them to this folder first.",
+        browseForBackup = "Browse for backup folder",
         selectBackupPrompt = "Select a backup to restore:",
         withPhotos = "with photos",
         dataOnly = "data only",
