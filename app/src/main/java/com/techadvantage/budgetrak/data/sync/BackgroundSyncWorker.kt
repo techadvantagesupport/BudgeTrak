@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -34,6 +35,7 @@ class BackgroundSyncWorker(
     companion object {
         private const val TAG = "BackgroundSyncWorker"
         private const val WORK_NAME = "period_refresh"
+        private const val ONESHOT_WORK_NAME = "period_refresh_oneshot"
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<BackgroundSyncWorker>(
@@ -54,13 +56,20 @@ class BackgroundSyncWorker(
          *
          * Pre-S skips expedited since that would require a foreground-service
          * notification. Older OS versions get the regular one-shot.
+         *
+         * Uses `enqueueUniqueWork(ONESHOT_WORK_NAME, KEEP, …)` so FCM bursts
+         * (e.g. 500 txns imported on another device triggering 500 sync_push
+         * messages) collapse into a single actual sync run. If a one-shot is
+         * already pending or running, subsequent enqueues are dropped.
          */
         fun runOnce(context: Context) {
             val builder = OneTimeWorkRequestBuilder<BackgroundSyncWorker>()
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                 builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             }
-            WorkManager.getInstance(context).enqueue(builder.build())
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                ONESHOT_WORK_NAME, ExistingWorkPolicy.KEEP, builder.build()
+            )
         }
 
         fun cancel(context: Context) {

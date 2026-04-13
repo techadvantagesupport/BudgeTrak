@@ -30,6 +30,16 @@ type: project
 
 9. **Privacy policy** — Play Store requires one. Should cover: anonymous auth UID, encrypted financial data in Firestore, local storage, device-to-device sharing, server cannot read encrypted data.
 
+## FCM sync-push cost optimizations (from 2026-04-12 estimate)
+
+At 40K groups the current design is ~$150/mo. These drop it toward ~$10–15/mo.
+
+14. **Cache FCM tokens in a group-level field** — `onSyncDataWrite` currently reads the entire `groups/{gid}/devices` subcollection on every sync write (~80M Firestore reads/mo at 40K groups, ~$48/mo). Replace with a single `groups/{gid}.fcmTokens: {deviceId: token}` map kept in sync on device add/remove. Saves ~$43/mo.
+
+15. **Server-side debounce on `sync_push`** — fan-out fires once per write; a 500-row CSV import sends 500 FCM per recipient. Add a per-(groupId, targetDeviceId) cooldown in the Cloud Function (Firestore or Redis lock, e.g. 10 s window) so bursts collapse at the server. Clients already dedupe with `enqueueUniqueWork(KEEP)`, but server dedupe also cuts FCM count + invocations.
+
+16. **Smarter `presenceHeartbeat` scan** — currently walks every group's `presence` node every 15 min (~75 GB/mo RTDB download at 40K groups, $75/mo). Replace with an indexed query: maintain `presence_index/{groupId}_{deviceId}` with `lastSeen` value, query `orderByChild('lastSeen').endAt(cutoff)`. Drops the scan from O(all groups) to O(stale devices) — ~95% reduction.
+
 ## Low priority (code quality, no user impact)
 
 11. **Consolidate matching chain** — Triplicated across Dashboard dialogs, TransactionsScreen, and WidgetTransactionActivity. Extract to ViewModel callback-based architecture.
