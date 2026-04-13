@@ -35,7 +35,7 @@ developer. Always verify against the live console after major Firebase changes.
   Display Name        : SecureSync (tagged "Prod")
   Firebase Console    : https://console.firebase.google.com/project/sync-23ce9
   Plan                : Blaze (pay-as-you-go)
-  Android Package     : com.securesync.app (namespace: com.syncbudget.app)
+  Android Package     : com.techadvantage.budgetrak (rebranded 2026-04-11 from com.securesync.app / com.syncbudget.app; legacy entry still in google-services.json for backwards compat)
   google-services.json: app/google-services.json (includes RTDB URL)
   Firestore Database  : (default)
   Realtime Database   : sync-23ce9-default-rtdb (us-central1)
@@ -257,7 +257,7 @@ service firebase.storage {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Provider: Play Integrity
-  Token TTL: 1 hour (default)
+  Token TTL: 4 hours (overridden from 1 h default in Firebase Console)
   Integrity level: MEETS_BASIC_INTEGRITY (development)
 
   ENFORCEMENT STATUS:
@@ -377,61 +377,46 @@ service firebase.storage {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Deployed via: firebase deploy --only functions (from Termux)
-  Runtime: Node.js 20 (1st Gen), us-central1
+  Runtime: Node.js 22 (1st Gen), us-central1 — per functions/package.json engines.node
 
-  ── Function 1: Cascade cleanup on group TTL deletion ────────────────────────
+  All function source lives in functions/index.js (single file). Summaries below;
+  source is the authoritative reference.
+
+  ── Function 1: cleanupGroupData ─────────────────────────────────────────────
   Trigger: Firestore document delete on groups/{groupId}
-  Purpose: Clean up all subcollections, RTDB presence, and Cloud Storage
-           when a group is TTL-deleted (app-initiated dissolution already
-           handles this via deleteGroup() in FirestoreService.kt)
+  Purpose: When a group doc is deleted (TTL or manual), cascade-delete all
+           14 subcollections (transactions, recurringExpenses, incomeSources,
+           savingsGoals, amortizationEntries, categories, periodLedger,
+           sharedSettings, devices, members, imageLedger, adminClaim, plus
+           legacy deltas/snapshots for old groups), RTDB presence under
+           groups/{gid}/, and Cloud Storage files at groups/{gid}/**.
+           Client-side deleteGroup() now only deletes the group doc + own
+           member (per 2026-04-12 dissolve-bug fix); this function does
+           the rest via admin SDK (bypasses security rules).
 
-  // functions/index.js
-  const functions = require('firebase-functions');
-  const admin = require('firebase-admin');
-  admin.initializeApp();
+  ── Function 2: onSyncDataWrite ──────────────────────────────────────────────
+  Trigger: Firestore onWrite on groups/{groupId}/{collection}/{docId}
+  Purpose: When a sync data collection is written (transactions,
+           recurringExpenses, incomeSources, savingsGoals,
+           amortizationEntries, categories, periodLedger, sharedSettings),
+           send a high-priority FCM 'sync_push' to every group device
+           except the writer (filtered via lastEditBy). Wakes recipient
+           devices through Doze / App-Standby so their sync worker fires
+           in ~seconds instead of the next 15-min schedule. Added 2026-04-12.
 
-  exports.cleanupGroupData = functions.firestore
-    .document('groups/{groupId}')
-    .onDelete(async (snap, context) => {
-      const groupId = context.params.groupId;
-      const db = admin.firestore();
-      const groupRef = db.collection('groups').doc(groupId);
+  ── Function 3: presenceHeartbeat ────────────────────────────────────────────
+  Trigger: Pub/Sub cron — every 15 minutes (UTC)
+  Purpose: Walk groups/{*} and, for each device with RTDB presence
+           lastSeen >15 min stale, send FCM 'heartbeat'. Backstop for
+           devices that Android has dropped into the 'rare' or
+           'restricted' App-Standby Bucket so their periodic worker has
+           stopped firing. Requires Cloud Scheduler API; enabled
+           automatically on first deploy. Added 2026-04-12.
 
-      // Delete all Firestore subcollections
-      const subcollections = [
-        'transactions', 'recurringExpenses', 'incomeSources',
-        'savingsGoals', 'amortizationEntries', 'categories',
-        'periodLedger', 'sharedSettings',
-        'devices', 'imageLedger', 'adminClaim',
-        'deltas', 'snapshots'  // Legacy
-      ];
-      for (const sub of subcollections) {
-        const docs = await groupRef.collection(sub).listDocuments();
-        while (docs.length > 0) {
-          const batch = db.batch();
-          const chunk = docs.splice(0, 500);
-          for (const doc of chunk) batch.delete(doc);
-          await batch.commit();
-        }
-      }
-
-      // Delete RTDB presence nodes
-      await admin.database().ref(`groups/${groupId}`).remove();
-
-      // Delete Cloud Storage receipt files + snapshot archive
-      const bucket = admin.storage().bucket();
-      const [files] = await bucket.getFiles({ prefix: `groups/${groupId}/` });
-      for (const file of files) {
-        await file.delete().catch(() => {});
-      }
-    });
-
-  ── Deployment steps ─────────────────────────────────────────────────────────
-  1. npm install -g firebase-tools
-  2. firebase login
-  3. firebase init functions  (select sync-23ce9, choose JavaScript)
-  4. Paste function above into functions/index.js
-  5. firebase deploy --only functions
+  ── Deployment ────────────────────────────────────────────────────────────────
+  firebase deploy --only functions  (from project root in Termux)
+  Initial deployment enables cloudfunctions, cloudbuild, artifactregistry,
+  cloudscheduler APIs automatically.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
