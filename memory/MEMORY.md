@@ -160,6 +160,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [OCR/AI receipt capture plan](project_ocr_receipt_capture.md).
 - [Widget photo support (designed)](project_widget_photos.md).
 - [Pre-launch TODO](project_prelaunch_todo.md) — most done; App Check integrity level deferred.
+- [Play Store launch plan](project_play_store_launch.md) — personal-first then transfer-to-org strategy, address plan, DUNS timeline.
 - [Billing + runaway-bug alerts (configured 2026-04-13)](project_billing_alerts.md) — $1 budget + 4 Monitoring policies + SMS channel. Killswitch still optional.
 
 ## Documentation
