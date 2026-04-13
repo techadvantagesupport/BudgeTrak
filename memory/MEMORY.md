@@ -35,7 +35,7 @@
 - **Cold-start gate** (`initialSyncReceived` / `awaitInitialSync`, up to 30 s) defers migrations + period refresh until all 8 collection listeners deliver.
 - **Persistent listeners** managed by ViewModel lifecycle. On PERMISSION_DENIED → `triggerFullRestart()` (stop all, force-refresh App Check, restart; 30 s debounce).
 - **Integrity check**: startup (after initial sync) + `runPeriodicMaintenance()` (24 h gate). Uses `Source.CACHE` (zero network). Pushes any local-only records, then `recomputeCash()`.
-- **Consistency check (two-layer)**: Layer 1 `countActiveDocs()` vs local `.active.size` — mismatch clears the cursor (full re-read), logs `CONSISTENCY_COUNT_MISMATCH`. Layer 2 `cashHash` (`availableCash.hashCode().toString()` — **decimal, not hex**) in `deviceChecksums` on group doc; 3+ devices → majority vote, 2 → both re-read on confirmed mismatch. 1-hour confirmation gate (`checksumMismatchAt`).
+- **Consistency check (two-layer)**: Layer 1 `countActiveDocs()` vs local `.active.size` — mismatch clears the cursor (full re-read), logs `CONSISTENCY_COUNT_MISMATCH`. Layer 2 `cashHash` = `availableCash.toString().hashCode().toString(16)` (hex digest, `MainViewModel.kt:835`) in `deviceChecksums` on group doc; 3+ devices → majority vote, 2 → both re-read on confirmed mismatch. 1-hour confirmation gate (`checksumMismatchAt`). Separately, the `enc_hash` per-doc cache in `FirestoreDocSync.kt:223` uses `.toString()` (decimal) — different hash, different purpose.
 - **Three-tier threading**: decrypt on Default, UI on Main, JSON saves on IO.
 - **`saveCollection<T>`** generic with optional `hint`. `SyncWriteHelper.pushBatch()` chunks at 500 ops with retry+individual-push fallback.
 - **Receipt sync**: foreground uses **flag-clock polling** on `imageLedgerMeta` (not a listener). On new transaction arrival, 5-concurrent parallel download. Full spec: [`spec_receipt_photos.md`](spec_receipt_photos.md).
@@ -100,7 +100,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 
 ## i18n / Translation
 - [`feedback_translation_context.md`](feedback_translation_context.md) — how to add strings.
-- [`reference_strings_system.md`](reference_strings_system.md) — ~1,226 fields across ~25 data classes; files: AppStrings 1498, English 1896, Spanish 1882, TranslationContext 1477.
+- [`reference_strings_system.md`](reference_strings_system.md) — 1,393 val fields across 22 data classes; files: AppStrings 1498, English 1896, Spanish 1882, TranslationContext 1477.
 
 ## Git Workflow
 - Two branches: `dev` → `main`. Default push: **dev only**.
@@ -165,6 +165,6 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - SSD/LLD v2.5 at `docs/BudgeTrak_SSD_v2.5.html` + `docs/BudgeTrak_LLD_v2.5.html`. Treat as lagging the code — verify against source.
 
 ## Audit Follow-ups
-- **2026-04-12 memory audit** (this one): corrected cashHash digest (decimal), removed `WidgetRefreshWorker` refs, restored auto-categorize scope (CSV import only), updated screen count (11 + 11), deleted obsolete CRDT-era files, added spec_simulation / spec_dashboard / spec_recurring_and_savings / spec_backup / spec_diagnostics.
+- **2026-04-12 memory audit** (this one): clarified the two sync hashes — `cashHash` (Layer 2 consistency) is hex via `.toString(16)`; the `enc_hash` per-doc cache in FirestoreDocSync is decimal. An earlier draft conflated them. Removed `WidgetRefreshWorker` refs, restored auto-categorize scope (CSV import only), updated screen count (10 navigable + 10 help, plus QuickStartGuide overlay), deleted obsolete CRDT-era files, added spec_simulation / spec_dashboard / spec_recurring_and_savings / spec_backup / spec_diagnostics.
 - v2.6 audit (solo-user impact): 3 medium fixed.
 - v2.5 audit: 1 critical + 5 high + 4 medium fixed.

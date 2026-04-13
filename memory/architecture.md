@@ -13,7 +13,7 @@ Total: ~47,000 lines across ~94 Kotlin source files.
 - `MainViewModel.kt` (2650 lines) — `AndroidViewModel` holding ~80 state vars (mutableStateOf / mutableStateListOf / derivedStateOf), save functions, business logic, sync lifecycle, background loops (viewModelScope). `companion object { var instance: WeakReference<MainViewModel> }` lets `BackgroundSyncWorker` check whether the ViewModel is alive.
 - `BudgeTrakApplication.kt` (107 lines) — App-level init: App Check provider (Debug/Play Integrity via `BuildConfig.DEBUG`), Crashlytics opt-out read, debug token capture to `token_log.txt`, `tokenLog()`, `syncEvent()`, `recordNonFatal()`, `updateDiagKeys()`.
 
-## `ui/screens/` (11 main + 11 help + QuickStartGuide)
+## `ui/screens/` (10 navigable + 10 help + QuickStartGuide overlay)
 - `MainScreen.kt` (1303) — dashboard: Solari flip display, spending chart, nav cards, supercharge bolt modal, +/- quick-add.
 - `TransactionsScreen.kt` (5633) — transaction list, search/filter dialogs, selection mode + batch ops, add/edit dialog, CSV import/export, PDF export trigger.
 - `RecurringExpensesScreen.kt` (1097) — RE CRUD, accelerated-mode toggle, set-aside display.
@@ -37,7 +37,7 @@ Total: ~47,000 lines across ~94 Kotlin source files.
 - `Color.kt`, `Type.kt`.
 
 ## `ui/strings/`
-- `AppStrings.kt` (1498, ~1226 val fields), `EnglishStrings.kt` (1896), `SpanishStrings.kt` (1882), `TranslationContext.kt` (1477), `LocalStrings.kt`.
+- `AppStrings.kt` (1498, 1393 val fields in 22 data classes), `EnglishStrings.kt` (1896), `SpanishStrings.kt` (1882), `TranslationContext.kt` (1477), `LocalStrings.kt`.
 
 ## `sound/`
 - `FlipSoundPlayer.kt` (134) — synthesizes "clack" sound (exponential decay + bounce + band-limited noise), encodes WAV, caches, loads into SoundPool (6-stream cap).

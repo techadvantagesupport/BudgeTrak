@@ -14,7 +14,7 @@ type: reference
 - Derived state (`derivedStateOf`) for `activeTransactions`, `safeBudgetAmount`, `budgetAmount`, `simAvailableCash`, etc.
 - `MainViewModel.Companion.instance` is a `WeakReference<MainViewModel>` set in `init`, cleared in `onCleared`; read by `BackgroundSyncWorker` to decide Tier 2 vs Tier 3.
 
-## Screens — 11 main + 11 help (22 total)
+## Screens — 10 navigable + 10 help + QuickStartGuide overlay (21 total)
 
 | Main | Help |
 |---|---|
