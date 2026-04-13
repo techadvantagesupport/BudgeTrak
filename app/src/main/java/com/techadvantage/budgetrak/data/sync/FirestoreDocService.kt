@@ -125,16 +125,22 @@ object FirestoreDocService {
     /**
      * Count active (non-deleted) docs in a collection via server aggregation.
      * Costs 1 read per 1000 docs counted. Returns -1 on failure.
+     *
+     * PeriodLedger docs don't carry a `deleted` field (entries are immutable
+     * and there's no delete path on the client), so applying the usual
+     * `deleted = false` filter returns 0 and fires a false-positive Layer 1
+     * mismatch every maintenance pass. Count all docs for that collection.
      */
     suspend fun countActiveDocs(groupId: String, collection: String): Long {
         return try {
             withTimeout(OP_TIMEOUT_MS) {
-                collectionRef(groupId, collection)
-                    .whereEqualTo("deleted", false)
-                    .count()
-                    .get(com.google.firebase.firestore.AggregateSource.SERVER)
-                    .await()
-                    .count
+                val base = collectionRef(groupId, collection)
+                val query = if (collection == EncryptedDocSerializer.COLLECTION_PERIOD_LEDGER) {
+                    base.count()
+                } else {
+                    base.whereEqualTo("deleted", false).count()
+                }
+                query.get(com.google.firebase.firestore.AggregateSource.SERVER).await().count
             }
         } catch (_: Exception) { -1L }
     }

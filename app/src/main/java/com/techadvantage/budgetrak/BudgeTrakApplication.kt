@@ -31,11 +31,21 @@ class BudgeTrakApplication : Application() {
             crashlytics?.recordException(exception ?: RuntimeException("$tag: $message"))
         }
 
-        /** Log a sync event to Crashlytics custom log (production) + logcat.
-         *  Use for key sync lifecycle events (listener start/stop, recovery, period refresh). */
+        /** Log a sync event to Crashlytics custom log (production) + logcat + token_log.txt (debug).
+         *  Use for key sync lifecycle events (listener start/stop, recovery, period refresh,
+         *  FCM arrivals, RTDB pings, wake events). File output in debug only. */
         fun syncEvent(msg: String) {
             Log.i("SyncEvent", msg)
             crashlytics?.log(msg)
+            if (BuildConfig.DEBUG) {
+                try {
+                    val dir = com.techadvantage.budgetrak.data.BackupManager.getSupportDir()
+                    val file = java.io.File(dir, "token_log.txt")
+                    if (file.exists() && file.length() > 100_000) file.writeText("")
+                    val ts = java.time.LocalDateTime.now().toString()
+                    file.appendText("[$ts] $msg\n")
+                } catch (_: Exception) {}
+            }
         }
 
         /** Update Crashlytics diagnostic keys (attached to every future crash/non-fatal). */
