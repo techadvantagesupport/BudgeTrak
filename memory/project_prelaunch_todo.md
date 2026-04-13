@@ -40,6 +40,8 @@ At 40K groups the current design is ~$150/mo. These drop it toward ~$10–15/mo.
 
 16. **Smarter `presenceHeartbeat` scan** — currently walks every group's `presence` node every 15 min (~75 GB/mo RTDB download at 40K groups, $75/mo). Replace with an indexed query: maintain `presence_index/{groupId}_{deviceId}` with `lastSeen` value, query `orderByChild('lastSeen').endAt(cutoff)`. Drops the scan from O(all groups) to O(stale devices) — ~95% reduction.
 
+17. **Parallelize / shard `presenceHeartbeat`** — sequential `for…await` inside the function means at ~50 ms/group the 60-second default timeout is hit at ~1.2K groups, and the hard 9-min Gen-1 ceiling at ~10K groups. Current implementation will time out past that. Fix options: (a) batch with `Promise.all` in chunks of ~100 groups, (b) shard by group ID hash and run multiple parallel cron functions, or (c) fold into #16 (indexed query eliminates the loop entirely). #16 is the preferred fix.
+
 ## Low priority (code quality, no user impact)
 
 11. **Consolidate matching chain** — Triplicated across Dashboard dialogs, TransactionsScreen, and WidgetTransactionActivity. Extract to ViewModel callback-based architecture.
