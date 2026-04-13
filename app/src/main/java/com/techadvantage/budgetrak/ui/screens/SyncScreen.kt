@@ -641,13 +641,6 @@ fun SyncScreen(
                         }
                     }
                     item {
-                        Text(
-                            text = S.sync.pairingCodeExpiry,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                        )
-                    }
-                    item {
                         OutlinedButton(
                             onClick = { showDissolveConfirm = true },
                             modifier = Modifier.fillMaxWidth()
