@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -43,9 +44,23 @@ class BackgroundSyncWorker(
             )
         }
 
+        /**
+         * Fire a one-shot run immediately. On Android 12+ (API 31+) this uses
+         * an expedited request so it bypasses Doze / App-Standby buckets for
+         * the run's ~10 min window, which is essential on OEMs (Samsung,
+         * Xiaomi, etc.) that aggressively defer regular WorkManager jobs. The
+         * OutOfQuotaPolicy fallback lets it run as a normal OneTimeWorkRequest
+         * if the expedited quota is exhausted.
+         *
+         * Pre-S skips expedited since that would require a foreground-service
+         * notification. Older OS versions get the regular one-shot.
+         */
         fun runOnce(context: Context) {
-            val request = OneTimeWorkRequestBuilder<BackgroundSyncWorker>().build()
-            WorkManager.getInstance(context).enqueue(request)
+            val builder = OneTimeWorkRequestBuilder<BackgroundSyncWorker>()
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            }
+            WorkManager.getInstance(context).enqueue(builder.build())
         }
 
         fun cancel(context: Context) {
@@ -603,8 +618,10 @@ class BackgroundSyncWorker(
             db.reference.child("groups/$groupId/presence/$deviceId/lastSeen")
                 .setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
                 .await()
+            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("RTDB lastSeen pinged")
         } catch (e: Exception) {
             Log.w(TAG, "RTDB lastSeen ping failed: ${e.message}")
+            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("RTDB lastSeen ping failed: ${e.message}")
         }
     }
 }

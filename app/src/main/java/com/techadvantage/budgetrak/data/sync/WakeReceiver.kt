@@ -34,6 +34,8 @@ class WakeReceiver : BroadcastReceiver() {
 
         prefs.edit().putLong(KEY_LAST_WAKE, now).apply()
         Log.i(TAG, "Wake triggered by ${intent.action}")
+        com.techadvantage.budgetrak.BudgeTrakApplication
+            .syncEvent("WakeReceiver fired (${intent.action}), enqueueing runOnce")
         BackgroundSyncWorker.runOnce(context)
     }
 }
