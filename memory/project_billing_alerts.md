@@ -9,14 +9,14 @@ type: project
 
 ## Environment
 - Billing account: `01ADA3-6ACE89-738567` (distinct from the Tech Advantage family-wide account `01907E-A308CF-E3D95D`, which has a pre-existing $15/mo org-wide budget).
-- Project: `sync-23ce9` is listed under "No Organization" in Cloud Console (project predates the `techadvantagesupport-org` organization). Cosmetic — works fine — but notification-channel pickers in budget UI won't show channels scoped to the org. Worked around by using Monitoring Alerting policies directly for SMS instead of relying on budget-alert Monitoring-channel linking.
+- Project: `sync-23ce9` migrated into `techadvantagesupport-org` on 2026-04-13 (was previously under "No Organization" — predated the org). Post-migration, budget-alert Monitoring-channel dropdowns populate correctly.
 
 ## What's deployed
 
 ### Budget alert (billing-pipeline tripwire; email-only)
 - **Budget**: $1/month, scope = single project `sync-23ce9`, all services.
 - Thresholds: 50 %, 90 %, 100 %.
-- Notifications: email to billing admin + users (Monitoring channel dropdown was empty in the budget wizard — a known GCP scoping quirk for "No Organization" projects; SMS is covered by the Monitoring policies below).
+- Notifications: email to billing admin + users. (SMS channel wasn't wired in initially because the project was under "No Organization" and the channel picker was empty; since migrating the project into `techadvantagesupport-org`, the picker works. Optional follow-up: edit the budget to add the SMS channel — Monitoring policies already cover SMS for real-time alerting, so this is cosmetic.)
 - Fires 6-24 h after the fact; useful as a floor / catch-all for any paid service including ones we don't have explicit Monitoring alerts on (RTDB bandwidth, BigQuery scans, outbound networking, etc.).
 
 ### Cloud Monitoring alert policies (real-time; SMS + email via channel)
