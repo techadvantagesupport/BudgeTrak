@@ -6,7 +6,7 @@ type: project
 
 ## Pre-launch
 
-1. **Thumbnail loading on IO thread** — Synchronous `BitmapFactory.decodeFile` inside `LazyColumn` composition at `TransactionsScreen.kt:1113` causes scroll jank when many photos are present. Switch to `LaunchedEffect(receiptId) { withContext(Dispatchers.IO) { loadThumb() } }` with a remember-cache.
+*(No pre-launch items remaining as of 2026-04-13 — thumbnail-IO-thread item retired; it was already implemented at `TransactionsScreen.kt:1123-1127` with `LaunchedEffect` + `withContext(Dispatchers.IO)`. The todo's `:1113` line pointer was stale.)*
 
 ## Post-launch (data-driven)
 
@@ -56,3 +56,4 @@ At 40K groups the current design is ~$150/mo. These drop it toward ~$10-15/mo. N
 - Consolidated 7 save functions into generic `saveCollection<T>` → MEMORY.md "Save functions".
 - Parallel pending receipt uploads — already done: `ReceiptSyncManager.processPendingUploads` uses `chunked(5)` with `async` + `await` in a `coroutineScope` (`ReceiptSyncManager.kt:95-135`), mirroring the download path at line 340.
 - Consolidate matching chain — retired 2026-04-13 after analysis. The deterministic match-finders (`findDuplicates`, `findRecurringExpenseMatches`, etc. in `DuplicateDetector.kt`) are already shared. The April 3 commit `a394a3a` made all 5 entry points (dashboard, screen add, screen edit, screen CSV import, widget) agree on the same type-based order. Further consolidation of the **orchestration** was considered but rejected: each entry point has different post-match side effects (addAndScroll / importIndex / addTransactionWithBudgetEffect / separate-Activity repo loads / free-tier 1/day widget cap) that can't share a single call signature without VM becoming aware of screen-local state. Design note added above `runLinkingChain` in `MainViewModel.kt` so this doesn't get re-proposed.
+- Thumbnail loading on IO thread — retired 2026-04-13. Already implemented at `TransactionsScreen.kt:1123-1127` inside `LaunchedEffect` with `withContext(Dispatchers.IO)`, keyed on the 5 `receiptId*` fields + `photoThumbRefreshKey`. The original todo's line pointer `:1113` was stale. A follow-up LRU-cache polish was considered and rejected: the current sub-millisecond re-decode cost already happens off the main thread, and any cache adds invalidation complexity (rotation save, delete, cloud-received updates) without meaningful UX benefit. Revisit only if scroll-jank reports appear and profile to photos.
