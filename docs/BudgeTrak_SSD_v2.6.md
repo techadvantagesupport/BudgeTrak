@@ -879,7 +879,11 @@ Firestore-native code. v2.4 added per-collection `updatedAt` cursors
 (~300x read-cost drop) and RTDB presence. v2.5 moved startup to async
 IO with EMA progress gate, made `recomputeCash()` synchronous, split
 `BackgroundSyncWorker` into three tiers, and consolidated checks into
-24-h-gated `runPeriodicMaintenance()`.
+24-h-gated `runPeriodicMaintenance()`. **v2.6** added server-side
+FCM fan-out (`onSyncDataWrite`) and a 15-minute heartbeat
+(`presenceHeartbeat`) to wake devices Android has put in aggressive
+App-Standby Buckets, closing the "widget stale for hours" gap on
+Samsung and similar OEMs.
 
 ### 16.2 Per-Field Encryption
 
@@ -1020,6 +1024,13 @@ push anything local-only; `recomputeCash()`.
 Layer-2 digest is hex (`toString(16)`), safe to log. No peer
 fingerprint polling; no 5-min health loop.
 
+**Layer-1 periodLedger special-case (v2.6):** `periodLedger` docs
+don't carry a `deleted` field (entries are immutable, no client
+delete path). `countActiveDocs` skips the `deleted = false` filter
+for this collection so the count matches local `.size`. Before the
+fix it always returned 0, firing a false mismatch on every
+maintenance pass.
+
 ### 16.11 Period Ledger Sync
 
 - **Create-if-absent**: `FirestoreDocService.createDocIfAbsent` ensures
@@ -1074,8 +1085,41 @@ skip Auth / App Check / RTDB / Firestore entirely.
 Manifest-registered for `ACTION_POWER_CONNECTED` and
 `ACTION_POWER_DISCONNECTED` (the only user-interaction proxies Android
 allows static-registered). 5-min rate limit in SharedPrefs, fires
-`BackgroundSyncWorker.runOnce()`. Mitigates aggressive process kills
-on Samsung One UI.
+`BackgroundSyncWorker.runOnce()` and logs via `syncEvent()`.
+Mitigates aggressive process kills on Samsung One UI.
+
+### 16.15 FCM Wake Architecture (v2.6)
+
+Purely-periodic `WorkManager` work stops firing when Android drops
+the app into `rare` / `restricted` App-Standby Buckets — one
+2026-04-12 dump showed a 4h46m silence on Kim's device with no
+worker activity at all. FCM-triggered wakes bypass this because
+high-priority data FCM goes through the same channel that delivered
+our `debug_request` even in Doze.
+
+**Server-side Cloud Functions** (v1 API, Node.js 22, `functions/index.js`):
+
+| Function | Trigger | Purpose |
+|---|---|---|
+| `onSyncDataWrite` | Firestore `onWrite` on `groups/{gid}/{collection}/{id}` for the 8 sync collections | Fan-out high-priority FCM `sync_push` to every group device where `deviceId != lastEditBy`. Writer device is excluded. |
+| `presenceHeartbeat` | Pub/Sub `every 15 minutes` | Scan RTDB `groups/*/presence`. For any device with `lastSeen > 15 min` stale, send FCM `heartbeat`. Catches devices whose periodic worker has stopped. |
+| `cleanupGroupData` | Firestore `onDelete` on `groups/{gid}` | Cascade-delete subcollections + RTDB + Cloud Storage (unchanged from v2.5). |
+
+**Client-side `FcmService.onMessageReceived`**:
+
+- `type = "sync_push"` or `"heartbeat"` → `BackgroundSyncWorker.runOnce(applicationContext)`, which uses `enqueueUniqueWork(KEEP)` to collapse bursts (a CSV import producing 500 writes fan-outs to 500 FCMs but runs one worker per recipient) and `setExpedited(RUN_AS_NON_EXPEDITED_WORK_REQUEST)` on Android 12+ (pre-S skips expedited to avoid the foreground-service notification requirement).
+- `type = "debug_request"` → one-shot `DebugDumpWorker` (debug builds only).
+- Each FCM arrival is logged via `syncEvent("FCM received: type=$type")` — visible in `token_log.txt` for dump-based diagnostics.
+
+`pingRtdbLastSeen` in `BackgroundSyncWorker` logs both success
+(`"RTDB lastSeen pinged"`) and failure via `syncEvent()`, giving us
+the worker heartbeat in dumps.
+
+Cost estimate at 40K groups × 2.2 devices × 12 txns/day: ~$150/mo,
+dominated by per-write Firestore `devices` subcollection reads + RTDB
+heartbeat scan. Optimizations queued in `memory/project_prelaunch_todo.md`
+(cache tokens in group doc; server-side debounce; indexed presence
+query) drop it toward ~$10-15/mo.
 
 ### 16.15 Tombstones
 
@@ -1808,6 +1852,7 @@ Do NOT upgrade `core-ktx` past 1.13.1 or Compose BOM past 2024.09.03 — newer v
 | 2.5 | Apr 2026 | BudgeTrak Dev Team | Async IO-thread load with LoadingScreen gate, EMA segment timings. Back = Home. Synchronous `recomputeCash()`. Consolidated `runPeriodicMaintenance()` (24h gate). Three-tier `BackgroundSyncWorker`. Calculated-period sleep. Transaction archiving (threshold default 10,000; `archived_transactions.json`; carry-forward). `BudgeTrakApplication` class for App Check. 93 files / 45,095 lines. |
 | 2.5.x | Apr 2026 | BudgeTrak Dev Team | SYNC rebrand; two-layer consistency check; echo suppression; App Check proactive refresh; Crashlytics observability; real-time SYNC eviction popup; admin-claim voting; TTL via `expiresAt`; subscription-expiry popup; ranked match dialogs; Auto-Capitalize; solo-user gating; help refresh; Crashlytics opt-out; SAF backup directory picker; immediate-backup-on-enable + same-day letter suffixes. Namespace/applicationId rebranded to `com.techadvantage.budgetrak`. |
 | 2.6 | 2026-04-12 | BudgeTrak Dev Team | **SSD/LLD audit against code + conversion to Markdown (2026-04-12).** Rebranded to `com.techadvantage.budgetrak` under Tech Advantage LLC (Apr 11). Full memory audit: clarified the two sync hashes (`cashHash` Layer 2 = hex via `.toString(16)` at MainViewModel.kt:835; `enc_hash` per-doc cache in FirestoreDocSync uses decimal); auto-categorize scope (CSV only, not manual entry); dropped stale `WidgetRefreshWorker` references; aligned Transaction model (no clock fields); corrected screen count (10 navigable + 10 help + QuickStartGuide overlay = 21 total); App Check TTL 4h (Console-set); Cloud Functions Node.js 22. Backup retention default 1 -> 10. Added `autoCapitalize, showWidgetLogo, incomeMode` to backup `localPrefs`. Shipped orphan-no-possession (`markNonPossession` + `checkPhotoLost`). Verified against source: 94 files / 47,192 lines; archive file is `archived_transactions.json`; manifest declares only `INTERNET` (camera/media via runtime request + pickers); `BankFormat` is `{GENERIC_CSV, US_BANK, SECURESYNC_CSV}`. |
+| 2.6.1 | 2026-04-13 | BudgeTrak Dev Team | **FCM wake architecture.** Added two Cloud Functions: `onSyncDataWrite` (Firestore-triggered, fans out high-priority `sync_push` FCM to every group device except the writer — via `lastEditBy` filter) and `presenceHeartbeat` (15-min Pub/Sub cron, wakes devices whose RTDB `lastSeen` is >15 min stale). Closes the 4h46m silent-worker gap observed on Kim's Samsung device (App-Standby Bucket restrictions). Client: `FcmService` now handles `sync_push` + `heartbeat` by enqueueing `BackgroundSyncWorker.runOnce` — now `enqueueUniqueWork(ONESHOT_WORK_NAME, KEEP)` with `setExpedited(RUN_AS_NON_EXPEDITED_WORK_REQUEST)` on API 31+. `pingRtdbLastSeen` + `WakeReceiver` + FCM arrivals all log via `syncEvent()` which now writes to `token_log.txt` in debug builds (was Crashlytics + logcat only). Fixed Layer-1 consistency false-positive on `periodLedger`: `countActiveDocs` skips `deleted=false` filter for that collection since entries don't carry a `deleted` field. SYNC page UI: duplicate "Code expires in 10 minutes" label removed (dialog still shows it); group-ID row gated to debug builds only. Operations: $1 budget alert + 4 Cloud Monitoring policies (function + Firestore rate) configured on billing account `01ADA3-6ACE89-738567`; `sync-23ce9` project migrated into `techadvantagesupport-org`. |
 
 ---
 
