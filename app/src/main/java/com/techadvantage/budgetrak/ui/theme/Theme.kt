@@ -507,14 +507,16 @@ fun PulsingScrollArrow(scrollState: ScrollState, modifier: Modifier = Modifier) 
  * enlarged system font — content that fit in one screen at default font
  * size now scrolls, and users need both directions indicated.
  *
- * Standard paddings: top `12.dp` / bottom `50.dp` leave room for the
- * ad banner at the top and the footer buttons at the bottom of a dialog.
- * Override only if the containing layout has different safe areas.
+ * Standard paddings: top `60.dp` clears the DialogHeader (which is
+ * `padding(horizontal = 20.dp, vertical = 14.dp)` around a title text —
+ * roughly 56dp tall); bottom `50.dp` leaves room for the footer buttons.
+ * Override only if the containing layout has a different header height
+ * or footer safe area.
  */
 @Composable
 fun BoxScope.PulsingScrollArrows(
     scrollState: ScrollState,
-    topPadding: androidx.compose.ui.unit.Dp = 12.dp,
+    topPadding: androidx.compose.ui.unit.Dp = 60.dp,
     bottomPadding: androidx.compose.ui.unit.Dp = 50.dp,
 ) {
     val canScrollUp by remember { derivedStateOf { scrollState.canScrollBackward } }
