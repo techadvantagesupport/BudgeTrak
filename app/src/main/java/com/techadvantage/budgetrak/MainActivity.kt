@@ -153,6 +153,28 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** True when the app is visible to the user. Background workers check this to skip. */
         @Volatile var isAppActive = false
+
+        /** Extracts an image URI from an ACTION_SEND intent, or null if none. */
+        internal fun extractSharedImageUri(intent: android.content.Intent?): android.net.Uri? {
+            if (intent == null) return null
+            if (intent.action != android.content.Intent.ACTION_SEND) return null
+            val type = intent.type ?: return null
+            if (!type.startsWith("image/")) return null
+            return if (android.os.Build.VERSION.SDK_INT >= 33) {
+                intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM) as? android.net.Uri
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val uri = extractSharedImageUri(intent) ?: return
+        val vm = androidx.lifecycle.ViewModelProvider(this)[MainViewModel::class.java]
+        vm.handleSharedImage(uri)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -196,9 +218,10 @@ class MainActivity : ComponentActivity() {
                 onDispose { soundPlayer.release() }
             }
 
-            // Widget intent (check once, forward to VM)
+            // Widget intent + share-intent (check once, forward to VM)
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 vm.handleWidgetIntent(intent?.action)
+                vm.handleSharedImage(extractSharedImageUri(intent))
             }
 
             // ── Loading gate: block all UI until data is ready ──
@@ -229,6 +252,21 @@ class MainActivity : ComponentActivity() {
                   vm.archiveToastMessage?.let { msg ->
                       toastState.show(msg)
                       vm.archiveToastMessage = null
+                  }
+              }
+              // Consume shared-image intent once data is loaded. Keyed on the Uri so
+              // subsequent shares (non-null → processed → null → non-null) retrigger.
+              val pendingShare = vm.pendingSharedImageUri
+              LaunchedEffect(pendingShare) {
+                  if (pendingShare != null) {
+                      vm.consumePendingSharedImage(canAttachPhotos = vm.isPaidUser || vm.isSubscriber)
+                  }
+              }
+              // Free-user gate: when a shared image is discarded, show a 5s upgrade toast.
+              LaunchedEffect(vm.sharedPhotoBlockedToastPending) {
+                  if (vm.sharedPhotoBlockedToastPending) {
+                      toastState.show(vm.strings.settings.sharedPhotoNeedsUpgrade, durationMs = 5000L)
+                      vm.sharedPhotoBlockedToastPending = false
                   }
               }
               Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
@@ -852,6 +890,7 @@ class MainActivity : ComponentActivity() {
                 matchChars = vm.matchChars,
                 budgetPeriod = vm.budgetPeriod,
                 isPaidUser = vm.isPaidUser || vm.isSubscriber,
+                isSubscriber = vm.isSubscriber,
                 onDismiss = { vm.dashboardShowAddIncome = false },
                 onSave = { txn ->
                     vm.runMatchingChain(txn)
@@ -892,10 +931,16 @@ class MainActivity : ComponentActivity() {
                 matchChars = vm.matchChars,
                 budgetPeriod = vm.budgetPeriod,
                 isPaidUser = vm.isPaidUser || vm.isSubscriber,
-                onDismiss = { vm.dashboardShowAddExpense = false },
+                isSubscriber = vm.isSubscriber,
+                initialReceiptId1 = vm.pendingSharedReceiptId,
+                onDismiss = {
+                    vm.dashboardShowAddExpense = false
+                    vm.pendingSharedReceiptId = null
+                },
                 onSave = { txn ->
                     vm.runMatchingChain(txn)
                     vm.dashboardShowAddExpense = false
+                    vm.pendingSharedReceiptId = null
                 },
                 onAddAmortization = { entry ->
                     val added = entry.copy(deviceId = vm.localDeviceId)

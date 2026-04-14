@@ -227,7 +227,13 @@ object TranslationContext {
         "photoGallery" to "Menu item label to pick a photo from the device gallery.",
         "deletePhotoTitle" to "Dialog title for confirming receipt photo deletion.",
         "deletePhotoConfirm" to "Dialog body asking if user wants to remove the receipt photo.",
-        "upgradeForPhotos" to "Toast message shown to free users explaining photos require paid upgrade."
+        "upgradeForPhotos" to "Toast message shown to free users explaining photos require paid upgrade.",
+        "sharedPhotoNeedsUpgrade" to "5-second toast shown when a free user shares an image to BudgeTrak: the Add Expense dialog still opens but the photo is discarded because photos are a paid/subscriber feature.",
+        // AI OCR placeholder (feature not yet implemented)
+        "aiOcrIconDesc" to "Accessibility content description for the AI receipt scanner icon in the add-transaction dialog header.",
+        "aiOcrComingSoon" to "Toast shown to subscribers who tap the placeholder AI icon while the real OCR extractor is not yet wired up.",
+        "upgradeForAiOcr" to "Toast shown to non-subscribers (Free and Paid tiers) when they tap the AI icon, encouraging them to upgrade to the Subscriber tier.",
+        "sharedImageProcessFailed" to "Toast shown when an image shared from another app fails to process into a receipt photo."
     )
 
     // ── Budget Configuration Strings ──

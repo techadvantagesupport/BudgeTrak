@@ -1,6 +1,6 @@
 ---
 name: OCR / AI Receipt Capture plan
-description: Subscriber feature plan for snap-or-share receipt and screenshot capture using a multimodal LLM. Covers architecture, costs, Android share-intent integration, the user-decided privacy model (opt-in, per-receipt exception to E2E encryption, manual entry encouraged for sensitive transactions), and dedupe concerns.
+description: Subscriber feature plan for snap-or-share receipt and screenshot capture using a multimodal LLM. Primary provider Firebase AI Logic → Gemini 2.5 Flash (Anthropic Claude Haiku 4.5 as alternate). Covers architecture, costs, Android share-intent integration, the user-decided privacy model (opt-in, per-receipt exception to E2E encryption, manual entry encouraged for sensitive transactions), help/privacy-policy copy, accuracy research, and dedupe concerns.
 type: project
 originSessionId: e62277a3-386c-4af8-8747-78a2f79a4bee
 ---
@@ -13,7 +13,36 @@ Screenshots are *easier* than physical receipts for OCR because they're crisp, w
 1. **Classic OCR + per-source regex parser.** Falls apart fast — every popular app needs its own parser, parsers break when those apps change layout, maintenance is forever. Skip.
 2. **Multimodal LLM directly on the image.** Hand the image to a vision-capable model with a short prompt asking for `{merchant, amount, date, category_hint, confidence}` JSON. Robust across layouts the model has never seen. This is the right answer.
 
-Recommended model: Claude Haiku 4.5 vision (or whatever the cheapest current vision model is when implementation starts). Per-call cost is roughly $0.002–0.005 — image input is ~1000–2000 tokens depending on resolution, output is a couple hundred tokens. A user doing 50 captures/month costs ~$0.10–0.25; 200/month is still under $1. Easily covered by a $3–5/month subscription.
+**Primary provider (decided 2026-04-13): Firebase AI Logic → Gemini 2.5 Flash.** Alternate: Anthropic Claude Haiku 4.5 (kept as fallback; see "Provider decision" section below).
+
+Per-call cost on Gemini 2.5 Flash is roughly **$0.001** (input $0.30/1M, output $2.50/1M; ~1600 input tokens for image+category list, ~200 output tokens). A user doing 50 captures/month ≈ $0.05; 200/month ≈ $0.20. Flash-Lite is ~5× cheaper again at ~$0.0002/call but has documented accuracy concerns for receipts — see below. Anthropic Haiku 4.5 would be ~$0.002–0.005/call (3–5× more). All three are easily covered by a $3–5/month subscription.
+
+## Provider decision (2026-04-13)
+
+Default to **Firebase AI Logic with Gemini 2.5 Flash** for v1. Reasons:
+
+1. **Firebase AI Logic is a managed proxy** — it replaces the Cloud Function proxy we were going to build. API key stays server-side by design, no proxy code to maintain.
+2. **App Check and Firebase Auth are built in** — same enforcement model we already use for Firestore/RTDB/Storage. Free abuse protection.
+3. **Native Kotlin SDK** — no raw HTTP plumbing.
+4. **Already on Blaze**, which is a hard requirement: on the free Spark tier Google reserves the right to use prompts/responses for training. Blaze (paid Gemini Developer API) has **no training use** and only brief abuse-detection logging.
+5. **Zero Data Retention available on request** for both the Gemini Developer API and Vertex AI paths — parity with Anthropic's ZDR tier. We should request ZDR once usage justifies it.
+6. **Cost is ~3× cheaper than Haiku** on 2.5 Flash, ~15× cheaper on Flash-Lite.
+7. **Eliminates ~1 day** off the one-week build estimate (no Cloud Function proxy to write, deploy, or maintain).
+
+Keep `ReceiptExtractionService` behind an interface so the Anthropic path remains swappable. If the Gemini bake-off disappoints or we hit policy friction, we can switch providers without rewriting the app-side flow.
+
+**Why Flash and not Flash-Lite for v1:** a user on the Google AI Developers forum reported a regression in 2.5 Flash-Lite vs 2.0 — character confusion ("e" → "ë"/"è") and worse instruction-following on tabular data. Anecdotal and unreproduced, but receipts are exactly where that bites (merchant names and line-item tables). Flash is still 3× cheaper than Haiku — not worth saving another $0.0008/call for a known accuracy risk on the one feature we're selling.
+
+### Receipt OCR accuracy research (2026-04-13)
+
+Light public data on Flash-class models specifically for receipts:
+
+- **Gemini 2.5 Pro on Scanned Receipts: 87.46% accuracy** (arxiv 2509.04469 — the only published receipt-specific benchmark found). Flash is below Pro, so expect 80–85% range for receipts; Flash-Lite lower still.
+- Gemini Flash-class on scanned documents generally: 88–94% across public benchmarks, matches or beats specialized OCR.
+- Medium tutorials using `gemini-2.0-flash` for structured receipt extraction (Pydantic schema for merchant/amount/date/category) report qualitative success on MVP samples but no accuracy numbers.
+- **No rigorous public benchmark for 2.5 Flash-Lite on receipts.**
+
+**Bake-off is essential before shipping.** Assemble ~30 sample receipts across thermal paper, crumpled, faded, non-English, and screenshot sources. Run through 2.5 Flash and Haiku 4.5 side-by-side. Measure field-level accuracy (merchant exact-match lenient, amount ±$0.01 exact, date exact, category top-1). Ship whichever wins; keep the loser wired as the swap-in alternate.
 
 ## Privacy model (decided 2026-04-11)
 
@@ -22,7 +51,7 @@ User's framing, which we should follow:
 - **Opt-in only.** A clear toggle in Settings (default off) and a first-run consent dialog the very first time the user tries to use the feature. The dialog must explicitly say: "The image you're about to capture will leave your device and be sent to a third-party AI service for processing. Your other transaction data is unaffected and remains end-to-end encrypted."
 - **Per-receipt exception, not a blanket reduction.** This is the key framing. BudgeTrak's overall privacy story is unchanged — SYNC is still end-to-end encrypted, the cloud server still cannot read your transaction data, your bank balances and merchant names are still encrypted at rest and in transit. The OCR feature is a deliberate, scoped exception: *individual images you choose to send* go to the AI service. Nothing else changes.
 - **Encourage manual entry for sensitive transactions.** The consent dialog and the Settings page should both gently suggest: "For purchases you'd rather not send to a third party — medical, legal, personal — just enter them manually as you do today. The OCR feature is here to save you time on everyday receipts, not to handle every transaction."
-- **Anthropic API does not train on customer data by default**, which is the right thing to put in the privacy policy. We should still be explicit that the image is processed by a third-party AI and not stored long-term by us beyond the local receipt photo attachment.
+- **The paid Gemini Developer API (Blaze plan) does not train on customer data** and logs prompts only briefly for abuse detection — this is the right thing to put in the privacy policy. Zero Data Retention can be requested once usage justifies it. If we ever swap to the Anthropic alternate, equivalent guarantees apply (no training by default; ZDR tier available). We should still be explicit that the image is processed by a third-party AI and not stored long-term by us beyond the local receipt photo attachment.
 - The image itself stays attached locally (and optionally syncs via the existing encrypted receipt-photo pipeline). Only the *processing call* leaves the device — the persistent photo attachment is still on the encrypted side of the line.
 
 ## Android implementation outline
@@ -39,8 +68,9 @@ User's framing, which we should follow:
 **Extraction pipeline (`ReceiptExtractionService`).**
 - Persist the image to a new `ReceiptManager` slot first: `val receiptId = ReceiptManager.generateReceiptId(); val file = ReceiptManager.getReceiptFile(context, receiptId); copy URI bytes to file`. This means the photo is preserved on disk regardless of whether the API call succeeds — if the user cancels mid-flow, the orphan-receipt cleanup will sweep it later.
 - Strip EXIF metadata before sending (no GPS, no device info, no timestamps). Re-encode as JPEG at quality 85 if the source is much larger than ~1.5MB to keep API costs and latency down.
-- Call the LLM API. **Strongly prefer routing through a thin Cloud Function proxy** over direct-to-Anthropic from the client: keeps the API key server-side, lets us enforce the per-user free-tier quota at a single chokepoint, gives us a place to add abuse rate limiting (e.g. 100/day hard cap per user), and means we can change models without an app update.
-- The proxy authenticates the caller via Firebase Auth (we already require Auth for SYNC users — solo users would either get a separate App Check-only path or be ineligible for OCR). The proxy increments the user's monthly counter atomically before calling Anthropic, decrements on API failure.
+- Call the model via the **Firebase AI Logic Kotlin SDK** (`com.google.firebase:firebase-ai`). Firebase AI Logic is itself a managed proxy: the API key stays on Google's side, App Check is enforced at the edge, and Firebase Auth identity is attached automatically. No self-hosted Cloud Function needed for the call itself.
+- **Quota enforcement stays ours.** Firebase AI Logic does not enforce app-level per-user monthly caps. We implement the counter in Firestore (`users/{uid}/ocrUsage/{YYYYMM}` or on the group doc for SYNC) with an atomic increment *before* the model call; decrement on API failure. For solo users (who currently have no Firebase Auth session), we gate OCR behind anonymous Auth + App Check — the SDK requires Auth anyway.
+- **Alternate provider path (Anthropic Claude Haiku 4.5)**: if the bake-off favors Anthropic, route through a thin Cloud Function proxy instead. `ReceiptExtractionService` should be an interface with `GeminiExtractor` and `AnthropicExtractor` implementations so the swap is a one-line change at the injection site.
 - Parse the structured JSON response. Sanity checks: amount must be positive; date must be within ±60 days of today; if `categoryAmounts` is returned, the sum must equal `amount` within $0.01 tolerance.
 - On parse success, build a `Transaction` object with `receiptId1 = receiptId`, the extracted fields populated, `isUserCategorized = false` (so it shows as unverified until the user confirms), and call into the existing transaction-add pipeline.
 
@@ -74,7 +104,9 @@ The **category list** for the prompt comes straight from `vm.categories` (`MainV
 | `ui/screens/SettingsScreen.kt` | Edit | Add OCR opt-in toggle; add free-tier counter display ("3 of 5 captures used this month") |
 | `ui/screens/TransactionsScreen.kt` | Edit | Add an "OCR Capture" button next to the existing receipt-photo entry point in the add-transaction flow |
 | First-run consent dialog | New | Composable shown the first time the user enables OCR; explains the privacy exception |
-| `functions/ocr-extract.js` (or similar) | New | Cloud Function proxy: auth check, quota check, Anthropic API call, response forwarding |
+| `build.gradle` (app) | Edit | Add `com.google.firebase:firebase-ai` SDK dependency |
+| Firestore rules | Edit | `users/{uid}/ocrUsage/{YYYYMM}` — user can read own counter, only callable update path (or Cloud Function) can increment |
+| `functions/ocr-quota.js` (optional) | New | Only if we want server-enforced counter increments instead of rules-gated client writes. Required if we switch to the Anthropic alternate — that path still needs a full proxy (auth, quota, Anthropic API call, response forwarding) |
 | `EnglishStrings.kt`, `SpanishStrings.kt`, `TranslationContext.kt`, `AppStrings.kt` | Edit | All the new user-facing strings (consent dialog, settings toggle, counter labels, error messages, paywall message) |
 
 ## Dedupe concerns
@@ -126,9 +158,210 @@ The confirmation flow uses the existing transaction edit dialog and the existing
 
 Cost impact of multi-category: slightly larger output (an array instead of a single field), and possibly a slightly more detailed prompt. Per-call cost stays roughly $0.003–0.008. Still cheap, still well within subscription economics.
 
+## Implementation status (2026-04-14)
+
+v0 skeleton merged on `dev`: share-intent routing + placeholder AI icon. No AI extractor wired yet; the icon is cosmetic.
+
+**Landed:**
+- `AndroidManifest.xml` — ACTION_SEND `image/*` intent-filter on MainActivity.
+- `MainActivity.onNewIntent` + cold-start extractor `extractSharedImageUri()`; gated `LaunchedEffect` consumes `pendingSharedImageUri` once `dataLoaded` is true.
+- `MainViewModel.consumePendingSharedImage(canAttachPhotos)` — runs in `viewModelScope` (not the caller's LaunchedEffect, which would cancel on state write). Free users: dialog still opens, photo discarded, 5-second upgrade toast via `sharedPhotoBlockedToastPending` flag. Paid/Subscriber: `ReceiptManager.processAndSavePhoto` on IO, then `pendingSharedReceiptId = rid`, then `dashboardShowAddExpense = true` (order matters — see feedback memory).
+- `TransactionDialog` signature gained `isSubscriber` and `initialReceiptId1`. `addModeReceiptId1` is seeded from the latter on first composition; the id is also added to `addedPhotoIds` so a dismiss-without-save cleans up the orphan.
+- `AutoAwesome` placeholder icon in the dialog header, in a Row alongside the existing camera icon. Subscribers → full color + "coming soon" toast. Non-subscribers (Free AND Paid) → greyed + upgrade toast. Gated on `vm.isSubscriber` only.
+- Strings added (EN/ES/AppStrings/TranslationContext): `aiOcrIconDesc`, `aiOcrComingSoon`, `upgradeForAiOcr`, `sharedImageProcessFailed`, `sharedPhotoNeedsUpgrade` (5-second free-user toast).
+
+**Not yet built (next up):**
+- `ReceiptExtractionService` (Firebase AI Logic → Gemini 2.5 Flash).
+- `responseSchema` definition + prompt in Remote Config with `promptVersion` stamp.
+- Schema-gap re-ask with partial-success context.
+- Firestore quota counter for per-user monthly caps.
+- Synthetic regression test set (SROIE + CORD + internal screenshots).
+- Gemini ↔ Anthropic bake-off.
+- Subscriber path replacing the "coming soon" placeholder with the real extraction call.
+
+**Design decisions baked in (not to revisit without reason):**
+- Icon scope: Transaction add/edit dialog only (4 callsites — Dashboard Add Income + Add Expense, Transactions screen Add Income + Add Expense, plus the Edit variant). Not added to Recurring Expense, Savings Goal, Amortization, or Category dialogs.
+- Share-intent only lands in Add Expense (not Add Income). User confirmed 2026-04-13.
+- Subscriber gate uses `isSubscriber` only (Paid tier sees the upgrade toast too). User confirmed 2026-04-13.
+- Free users always see the Add Expense dialog on share, even though they can't attach the photo — keeps the flow consistent and gives them a path to record the transaction manually.
+
+## Prompt iteration strategy (2026-04-14)
+
+The prompt is the highest-leverage lever in this whole feature. Design so it can be iterated without app updates, measured against a real test set, and improved from user-observed failures.
+
+### Required from v1
+
+**1. Structured output via `responseSchema`.** Gemini (via Firebase AI Logic) supports constrained JSON output — pass a schema and the model is forced to match. Eliminates ~90% of parse failures (no missing fields, no stray markdown fences). Define the schema alongside the data class:
+
+```
+{
+  merchant: string,
+  date: string (YYYY-MM-DD),
+  amount: number,
+  categoryAmounts: [{categoryId: int, amount: number}],
+  lineItems: [string]?,
+  confidence: { merchant: number, date: number, amount: number, category: number },
+  notes: string?
+}
+```
+
+**2. Prompt lives in Firebase Remote Config, not hardcoded.** Key: `ocr_receipt_prompt_v{N}`. The app fetches on launch and caches. Pushing a new prompt is a console change, not an app release. Stamp `promptVersion` into every call and log it alongside outcomes so regressions are traceable.
+
+**3. Category list passed per call.** Send `[{id, name, tag, description?}]` filtered to non-deleted categories. Gemini picks IDs directly — no post-processing translation. ~200–400 tokens, negligible cost.
+
+**4. Provider stamp.** Each extraction result carries `{provider: "gemini-2.5-flash" | "haiku-4.5", promptVersion: "v3"}` so we can A/B across provider *and* prompt dimensions.
+
+### Prompt content levers (iterate over time)
+
+- **Per-layout directives** — "If this looks like a food-delivery receipt (DoorDash, Uber Eats, Grubhub), the merchant is the restaurant, not the delivery app; put the delivery app in `notes`."
+- **Edge-case coaching** — "Receipts often print the total twice; use the final printed total, not the subtotal. Ignore tip suggestion lines unless a tip was written in."
+- **Few-shot examples** for recurring problem categories — one each for a split-category Target run, a Costco warehouse receipt, a restaurant with tip line, a refund / return (negative amount).
+- **Language hints** — "If the receipt is in Spanish, extract fields in their original form; do not translate merchant names."
+- **Amount reconciliation** — "If `categoryAmounts` is populated, its sum must equal `amount` to the cent. If you can't make them balance, return a single category instead."
+
+### Schema-gap re-ask (primary re-ask mechanism)
+
+The most reliable re-ask trigger is **objective schema validation**, not self-reported confidence. Self-reported `confidence` numbers are unreliable — the model will happily say `0.95` on a hallucinated date. "Field came back null or failed a sanity check" is a signal we can trust.
+
+**Schema design.** Mark only the fields we absolutely need as required — `merchant`, `date`, `amount`. Make everything else optional (`categoryAmounts`, `lineItems`, `notes`, `confidence`). Optional fields let the model *omit* rather than guess, which is exactly what we want.
+
+**Gap detection after first call.** A field is considered "missing" if it is:
+- Absent / null / empty string (merchant, date, notes).
+- Zero, negative, or non-finite (amount).
+- Date outside ±60 days of today.
+- `categoryAmounts` present but sum ≠ `amount` within $0.01 (treat as gap on categoryAmounts only; keep the top-level amount).
+- `categoryAmounts` references a `categoryId` not in the user's list.
+
+**Re-ask with context.** Second call is focused and includes what was extracted successfully. Example:
+
+> "Earlier you extracted from this image: merchant='Chipotle', amount=24.50, but you did not return a date. Look at the image again and return **only** the transaction date as YYYY-MM-DD. Dates on US receipts commonly appear at the top of the header or above the total line; formats include MM/DD/YYYY, MM-DD-YY, or 'Mar 14, 2026'. If the date is genuinely not visible, return null."
+
+Second-call response is merged into the first-call result: fields from the focused response replace the missing fields only; fields from the first call are preserved. This avoids drift on the things we already got right.
+
+**Caps.** One re-ask per extraction (two total calls). If the re-ask still leaves a required field missing, drop the user into TransactionDialog with whatever *was* extracted prefilled and the photo attached — fallback to manual entry with the photo as context. Never loop indefinitely.
+
+**Cost.** On Gemini 2.5 Flash the re-ask is ~$0.0005 extra (smaller prompt than the first call), so a 15% re-ask rate adds ~$0.00008 to the average call — negligible. On the Anthropic alternate path it's ~$0.002 extra per re-ask, still acceptable but trim the re-ask frequency by making `confidence` optional and skipping the confidence-gate path (below).
+
+### Confidence-gated re-ask (secondary, Gemini only)
+
+As a belt-and-suspenders second signal, ask the model to include optional per-field `confidence` values in the schema. If the schema-gap check passes but any `confidence.*` is below 0.6, run the same focused re-ask path. Keep this path **off on the Anthropic alternate** to control costs. Skip entirely if we observe in the bake-off that confidence scores correlate poorly with actual accuracy.
+
+### UPC codes and line items — honest framing
+
+- Most US paper receipts don't print full UPCs — they print internal SKUs and truncated names ("GV MILK 1GAL"). That text is what Gemini actually reads.
+- Where UPCs do appear (receipts with barcodes, product-page screenshots), Gemini reads the digits fine.
+- **But Gemini has no live product database** — asking "categorize UPC 012000161155" yields trained-memory guesses and occasional confident hallucinations. Don't make UPCs a primary categorization signal.
+- v1 directive: *"Use any visible line-item text — product names, category codes, SKU descriptions — to inform categorization. UPCs are fine to include in `lineItems` if legible but do not guess products from a UPC alone."*
+- v2 option: external UPC → product lookup (Open Food Facts, UPCitemdb) as a Cloud Function post-process. Out of scope for launch.
+
+### Measurement — synthetic test set (build day 1)
+
+- Assemble 50–100 manually-labeled receipts covering: clean thermal, crumpled, faded, non-English, screenshots (DoorDash / Amazon / Uber Eats / bank app), multi-category big-box, refund, tip-line restaurant, gift card purchase.
+- Ground truth for each: merchant, date, amount, correct category (mapped to our category list), split categories where applicable.
+- Regression harness runs the current prompt + candidate prompt against the full set, reports per-field accuracy (merchant fuzzy-match, amount ±$0.01, date exact, category top-1). No prompt ships without passing the harness.
+- This is also the bake-off mechanism for Gemini vs Anthropic.
+
+### Test data sources
+
+Don't build the full test set by hand — borrow established public receipt datasets for the scanned-paper half, and build the screenshot half ourselves.
+
+**Public datasets (use for scanned-paper coverage):**
+
+| Dataset | Size | Labels | License | Fit |
+|---|---|---|---|---|
+| [SROIE (ICDAR 2019)](https://huggingface.co/datasets/priyank-m/SROIE_2019_text_recognition) | ~1,000 English receipts | company, date, address, total | Research use — verify before shipping, fine for internal benchmark | **Primary.** Fields map cleanly to our merchant/date/amount. Standard OCR benchmark. |
+| [CORD](https://github.com/clovaai/cord) | 11,000+ Indonesian receipts | bounding boxes + per-line-item semantic labels | CC BY 4.0 | **Best for multi-category testing** — line-item labels stress `categoryAmounts`. Language mismatch for v1 launch but valuable for future Spanish / multilingual. |
+| [ReceiptSense (2024)](https://arxiv.org/html/2406.04493v2) | 20,000 receipts + 10,000 item-level annotations | item-level + QA pairs | Check paper | Newest/largest. Skim the paper to confirm annotation alignment before pulling. |
+| [Voxel51/consolidated_receipt_dataset](https://huggingface.co/datasets/Voxel51/consolidated_receipt_dataset) | Aggregates multiple above | varies | Per-source | Easier single-download starting point if we want one blob. |
+
+**Internal dataset (must build ourselves — ~30 items):** app screenshots. No public dataset covers DoorDash, Uber Eats, Amazon order pages, Instacart, bank-notification emails — exactly the "share a screenshot" half of BudgeTrak's pitch. Easy to collect on our own devices and quick to label since the source apps render the values clearly. Store in repo under `tools/ocr-test-data/screenshots/` with a `labels.json` sibling.
+
+**Harness format:** normalize public + internal into one schema — `{image_path, merchant, date (YYYY-MM-DD), amount, categoryAmounts?, notes}` — so the regression runner treats them identically. Write a one-off converter per public source; check in the converted labels, not the original dataset (keep public data as a pinned HF dependency or download script).
+
+**Handling rules:**
+- Test data never leaves our controlled environment. Public datasets are already public; internal screenshots stay in the repo (or a private GCS bucket if we decide not to commit them).
+- Never use real user receipts as test data, even with consent, unless the opt-in "Help improve Receipt AI" feedback loop is shipped and the user has explicitly agreed.
+- Tag each test item with `{source: "SROIE" | "CORD" | "internal-screenshots", difficulty: "easy|medium|hard"}` so we can track per-segment accuracy separately — Flash may crush thermal paper but stumble on screenshots, or vice versa.
+
+### Measurement — live feedback loop
+
+- **Debug builds (day 1):** dump `{image, prompt, response, user-edited final transaction}` tuples to the existing diagnostics pipeline. Zero user-privacy surface. Use for our own dogfooding.
+- **Release builds (v1.5):** opt-in "Help improve Receipt AI" toggle, off by default. When on, if the user edits an AI-prefilled transaction before saving, offer to send the image + diff (AI's answer vs user's correction) to us. Requires a second consent surface — explicit "this specific image + your correction will be sent to help us train prompts. The image is not sent to the AI provider again." Budget as a follow-up release, not launch.
+- **Success metric:** per-field edit rate. If the user accepts merchant unedited 85% of the time, merchant prompt is good. If date edits spike after a prompt change, roll back in Remote Config.
+
+### A/B testing via Remote Config
+
+Remote Config experiments support variant assignment. Run prompt v3 vs v4 at 50/50, stamp `promptVersion` on each transaction, compare edit rates over a 7-day window. Low-risk, fast-feedback — the reason we put the prompt in Remote Config in the first place.
+
+### What NOT to tune in the prompt
+
+- Don't put privacy or legal language in the prompt — the model can ignore it and it's not a legal shield anyway. Privacy lives in the consent dialog and policy.
+- Don't put the user's identity, email, or other transaction data into the prompt for "context." The whole privacy pitch is that we send only the image + category list.
+- Don't ask the model to "be creative" or "make a best guess" on low-confidence fields in the primary prompt — that's what the re-ask path is for, with a targeted follow-up.
+
+## Post-implementation copy (help file + privacy policy)
+
+Draft language to drop into the help file and privacy policy once the feature ships. Written to be truthful, plain-English, and defensible — we can advertise encrypted transit (TLS 1.3) and no-retention processing without overclaiming E2E.
+
+### Help file section — "How Receipt AI keeps your data private"
+
+> **Receipt AI** lets you snap a photo of a receipt or share a screenshot from another app, and BudgeTrak fills in the merchant, amount, date, and category for you. Here's exactly what happens to that image:
+>
+> **On your phone, before sending.** BudgeTrak strips location data and device metadata (EXIF) from the image so none of it leaves your device. The image is then encrypted using the same standard your bank uses — TLS 1.3 with forward secrecy — before a single byte leaves your phone.
+>
+> **In transit.** Even on an open or public wifi network, no one on that network can read the image. They can only see that your phone contacted our server. The encryption happens on your device and is only unwrapped at the destination.
+>
+> **At the AI service.** The image is processed by Google's Gemini AI (via Firebase AI Logic) to extract the receipt details. Under Google's paid API terms, the image is **not used to train AI models** and is **only briefly logged for abuse detection** before being discarded. Google does not receive your identity, account name, or any other transaction data — only the single image and the list of your categories so it can pick the right one.
+>
+> **After processing.** The extracted details are sent back to your phone (again over encrypted TLS). The receipt photo itself stays on your device as an attachment to the transaction, protected by BudgeTrak's normal encrypted receipt pipeline if you use SYNC.
+>
+> **What's opt-in and what isn't.** Receipt AI is off by default. The rest of BudgeTrak SYNC is unchanged — your transactions, balances, and merchant names remain end-to-end encrypted and unreadable to us or anyone else. For purchases you'd rather not send to a third-party AI — medical, legal, or personal — just enter them manually the way you always have. Receipt AI is here to save you time, not to handle every transaction.
+
+### Privacy policy section — "Receipt AI (optional feature)"
+
+> **What it does.** If you enable Receipt AI (off by default), BudgeTrak can send a receipt image you capture or share to Google's Gemini AI, accessed through Firebase AI Logic, for the sole purpose of extracting merchant, amount, date, and category. You will be asked to confirm the first time you use the feature.
+>
+> **What we send.** The receipt image only, with EXIF metadata (GPS, device, timestamps) removed before sending, along with a list of your category names so the AI can assign the transaction correctly. We do **not** send your name, email, account ID, device identifiers, location, or any other transaction data.
+>
+> **How it's transmitted.** All traffic uses TLS 1.3 encryption with forward secrecy and certificate pinning. The image is encrypted on your device before leaving it and cannot be read by anyone intercepting network traffic, including on public wifi.
+>
+> **Who processes it.** Google LLC, via the Gemini API accessed through Firebase AI Logic. Because BudgeTrak uses Google's paid API tier, your image is **not used to train AI models** and is logged only briefly for abuse detection before being discarded. See Google's Gemini API terms at https://ai.google.dev/gemini-api/terms and Firebase AI Logic data governance at https://firebase.google.com/docs/ai-logic/data-governance for details.
+>
+> **What we retain.** We do not store the receipt image on our servers. The extracted text fields are returned to your device and stored as part of the transaction, subject to your existing SYNC encryption settings. If you use SYNC, the receipt photo itself is stored end-to-end encrypted; we cannot read it.
+>
+> **Your controls.** You can disable Receipt AI at any time in Settings → Privacy. Disabling it stops all future image sends but does not affect transactions you've already created.
+>
+> **Free-tier limits.** Free and paid (non-subscriber) users receive 5 Receipt AI captures per month as a trial. Subscribers have no monthly limit (subject to a daily anti-abuse cap). Counters reset on the first of each month.
+
+### First-run consent dialog (short-form version)
+
+> **Turn on Receipt AI?**
+>
+> To read the receipt, BudgeTrak will send this one image to Google's Gemini AI (via Firebase AI Logic). Here's what that means:
+>
+> - Encrypted in transit (TLS 1.3) — safe on public wifi
+> - Location and device metadata stripped before sending
+> - Not used to train AI, not retained by Google beyond brief abuse logging
+> - Your identity and other transactions are never shared
+> - Rest of BudgeTrak stays end-to-end encrypted
+>
+> For purchases you'd rather not send to an AI, keep entering them manually.
+>
+> [ Turn on Receipt AI ]  [ Not now ]
+
+### Copy rules
+
+- **Never say "end-to-end encrypted"** about the OCR path specifically — it isn't, because the AI service is an endpoint. Reserve that phrase for the rest of SYNC.
+- **Always pair "encrypted in transit" with "not retained"** — the two together are the real story. One without the other invites the obvious follow-up.
+- **Name the provider** ("Google Gemini via Firebase AI Logic", or "Anthropic Claude" if we ever swap). Vague "third-party AI service" reads as evasive; naming the provider reads as confident.
+- **Lead with what *doesn't* leave the device** (identity, other transactions, location) before listing what does. Users remember the first item.
+- **If we ever swap providers, update copy everywhere in the same release.** Help file, privacy policy, consent dialog, and Settings subtitle must all name the same provider.
+
 ## Open questions to resolve before building
 
-- Direct-to-Anthropic from the client, or proxy through a Cloud Function to keep the API key server-side? Proxy is safer and lets us add rate limiting per user, but adds latency and a server-side cost.
+- ~~Direct-to-Anthropic vs Cloud Function proxy~~ — **resolved 2026-04-13**: Firebase AI Logic *is* the proxy; no self-hosted Function needed on the Gemini path.
+- **Run the bake-off** (≥30 diverse receipts) before the feature ships to confirm Gemini 2.5 Flash hits acceptable field-level accuracy. Swap to Anthropic Haiku 4.5 if it loses.
+- **Request Zero Data Retention** from Google once we have a case to justify it (user count, compliance need). Not required for launch but strengthens the privacy pitch.
 - Do we strip EXIF / GPS / device metadata from the image before sending? Probably yes — there's no reason to send location data along with a receipt.
 - How do we surface errors gracefully? "AI couldn't read this receipt" needs to drop the user into the manual entry dialog with the photo still attached, not feel like a failure.
 - Multi-language receipts: does Haiku handle them out of the box? (Almost certainly yes for major languages, but worth verifying with a test set.)

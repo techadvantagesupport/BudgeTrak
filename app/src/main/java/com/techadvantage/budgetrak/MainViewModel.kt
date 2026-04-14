@@ -102,6 +102,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var dashboardShowAddIncome by mutableStateOf(false)
     var dashboardShowAddExpense by mutableStateOf(false)
 
+    // ── Share-intent image (receipt shared from another app) ──
+    // Set by MainActivity on ACTION_SEND; consumed by a LaunchedEffect gated on dataLoaded.
+    var pendingSharedImageUri by mutableStateOf<android.net.Uri?>(null)
+    // After processing, holds the receiptId so TransactionDialog can seed it into slot 1.
+    var pendingSharedReceiptId by mutableStateOf<String?>(null)
+    // Signals MainActivity to show a 5s "photos require paid/subscriber" toast when a
+    // free user shares an image (dialog still opens, but the photo is discarded).
+    var sharedPhotoBlockedToastPending by mutableStateOf(false)
+
     // Dashboard matching state
     var dashPendingManualSave by mutableStateOf<Transaction?>(null)
     var dashManualDuplicateMatches by mutableStateOf<List<Transaction>>(emptyList())
@@ -2143,6 +2152,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         when (action) {
             com.techadvantage.budgetrak.widget.BudgetWidgetProvider.ACTION_ADD_INCOME -> dashboardShowAddIncome = true
             com.techadvantage.budgetrak.widget.BudgetWidgetProvider.ACTION_ADD_EXPENSE -> dashboardShowAddExpense = true
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SHARE-INTENT (ACTION_SEND image) HANDLER
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Called by MainActivity when the app receives a shared image via ACTION_SEND.
+     * Stashes the URI; the LaunchedEffect in MainActivity consumes it once dataLoaded is true.
+     */
+    fun handleSharedImage(uri: android.net.Uri?) {
+        if (uri == null) return
+        pendingSharedImageUri = uri
+    }
+
+    /**
+     * Processes a queued shared image: persists to the receipt store, queues for sync,
+     * then routes to Dashboard and opens the Add Expense dialog with the receipt pre-seeded.
+     *
+     * Free users: dialog still opens (so they can record the transaction), but the photo
+     * is discarded and a 5s upgrade toast is shown. Receipt photos require Paid or Subscriber.
+     *
+     * Runs in viewModelScope so that state writes triggering recomposition (which cancel
+     * the caller's LaunchedEffect) do not cancel the photo-processing work.
+     *
+     * For paid/subscriber users, pendingSharedReceiptId is set *before* the dialog is
+     * opened so that TransactionDialog's `remember { mutableStateOf(initialReceiptId1) }`
+     * captures the receipt id on first composition.
+     */
+    fun consumePendingSharedImage(canAttachPhotos: Boolean) {
+        val uri = pendingSharedImageUri ?: return
+        pendingSharedImageUri = null
+        viewModelScope.launch {
+            currentScreen = "main"
+            if (!canAttachPhotos) {
+                dashboardShowAddExpense = true
+                sharedPhotoBlockedToastPending = true
+                return@launch
+            }
+            val receiptId = withContext(Dispatchers.IO) {
+                com.techadvantage.budgetrak.data.sync.ReceiptManager.processAndSavePhoto(context, uri)
+            }
+            if (receiptId != null) {
+                com.techadvantage.budgetrak.data.sync.ReceiptManager.addToPendingQueue(context, receiptId)
+                pendingSharedReceiptId = receiptId
+            }
+            dashboardShowAddExpense = true
         }
     }
 

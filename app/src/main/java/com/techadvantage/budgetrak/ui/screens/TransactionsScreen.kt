@@ -48,6 +48,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -1263,6 +1264,7 @@ fun TransactionsScreen(
             matchChars = matchChars,
             budgetPeriod = budgetPeriod,
             isPaidUser = isPaidUser,
+            isSubscriber = isSubscriber,
             onDismiss = { showAddIncome = false },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
@@ -1314,6 +1316,7 @@ fun TransactionsScreen(
             matchChars = matchChars,
             budgetPeriod = budgetPeriod,
             isPaidUser = isPaidUser,
+            isSubscriber = isSubscriber,
             onDismiss = { showAddExpense = false },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
@@ -1373,6 +1376,7 @@ fun TransactionsScreen(
             matchChars = matchChars,
             budgetPeriod = budgetPeriod,
             isPaidUser = isPaidUser,
+            isSubscriber = isSubscriber,
             onDismiss = { editingTransaction = null },
             onUpdatePhoto = { updated ->
                 // Update transaction (photo add/delete) without closing dialog
@@ -2953,6 +2957,8 @@ fun TransactionDialog(
     matchChars: Int = 5,
     budgetPeriod: BudgetPeriod = BudgetPeriod.DAILY,
     isPaidUser: Boolean = false,
+    isSubscriber: Boolean = false,
+    initialReceiptId1: String? = null,
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
     onUpdatePhoto: ((Transaction) -> Unit)? = null,  // update transaction without closing dialog
@@ -2994,9 +3000,14 @@ fun TransactionDialog(
     var showCreateAmortizationDialog by remember { mutableStateOf(false) }
     var provisionalAmortizationEntry by remember { mutableStateOf<AmortizationEntry?>(null) }
 
-    // Track photos added during this dialog session (for add mode orphan cleanup)
-    val addedPhotoIds = remember { mutableStateListOf<String>() }
-    var addModeReceiptId1 by remember { mutableStateOf<String?>(null) }
+    // Track photos added during this dialog session (for add mode orphan cleanup).
+    // A shared-intent pre-seeded photo is tracked here too, so a dismiss without save cleans it up.
+    val addedPhotoIds = remember {
+        mutableStateListOf<String>().apply {
+            if (initialReceiptId1 != null) add(initialReceiptId1)
+        }
+    }
+    var addModeReceiptId1 by remember { mutableStateOf<String?>(initialReceiptId1) }
     var addModeReceiptId2 by remember { mutableStateOf<String?>(null) }
     var addModeReceiptId3 by remember { mutableStateOf<String?>(null) }
     var addModeReceiptId4 by remember { mutableStateOf<String?>(null) }
@@ -3309,50 +3320,70 @@ fun TransactionDialog(
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
                     Text(title, style = MaterialTheme.typography.titleMedium, color = headerTxt)
-                    if (!isPaidUser) {
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Placeholder AI OCR icon — same greyed-icon-with-toast pattern as camera.
+                        // Gated on isSubscriber only (Free AND Paid tiers see the upgrade toast).
                         Icon(
-                            imageVector = Icons.Filled.CameraAlt,
-                            contentDescription = "Photos (paid feature)",
-                            tint = headerTxt.copy(alpha = 0.3f),
-                            modifier = Modifier.align(Alignment.CenterEnd).size(20.dp)
-                                .clickable { toastState.show(S.settings.upgradeForPhotos) }
+                            imageVector = Icons.Filled.AutoAwesome,
+                            contentDescription = S.settings.aiOcrIconDesc,
+                            tint = if (isSubscriber) headerTxt else headerTxt.copy(alpha = 0.3f),
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clickable {
+                                    toastState.show(
+                                        if (isSubscriber) S.settings.aiOcrComingSoon
+                                        else S.settings.upgradeForAiOcr
+                                    )
+                                }
                         )
-                    }
-                    if (isPaidUser) {
-                        Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                        Spacer(Modifier.width(12.dp))
+                        if (!isPaidUser) {
                             Icon(
                                 imageVector = Icons.Filled.CameraAlt,
-                                contentDescription = "Add photo",
-                                tint = headerTxt,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clickable { showDialogCameraPicker = true }
+                                contentDescription = "Photos (paid feature)",
+                                tint = headerTxt.copy(alpha = 0.3f),
+                                modifier = Modifier.size(20.dp)
+                                    .clickable { toastState.show(S.settings.upgradeForPhotos) }
                             )
-                            DropdownMenu(
-                                expanded = showDialogCameraPicker,
-                                onDismissRequest = { showDialogCameraPicker = false }
-                            ) {
-                                ScrollableDropdownContent {
-                                    DropdownMenuItem(
-                                        text = { Text("Camera") },
-                                        leadingIcon = { Icon(Icons.Filled.PhotoCamera, null) },
-                                        onClick = {
-                                            showDialogCameraPicker = false
-                                            val file = java.io.File(context.cacheDir, "receipt_dialog_${java.util.UUID.randomUUID()}.jpg")
-                                            dialogTempPhotoUri = androidx.core.content.FileProvider.getUriForFile(
-                                                context, "${context.packageName}.fileprovider", file
-                                            )
-                                            dialogCameraLauncher.launch(dialogTempPhotoUri!!)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Gallery") },
-                                        leadingIcon = { Icon(Icons.Filled.Collections, null) },
-                                        onClick = {
-                                            showDialogCameraPicker = false
-                                            dialogGalleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                        }
-                                    )
+                        } else {
+                            Box {
+                                Icon(
+                                    imageVector = Icons.Filled.CameraAlt,
+                                    contentDescription = "Add photo",
+                                    tint = headerTxt,
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clickable { showDialogCameraPicker = true }
+                                )
+                                DropdownMenu(
+                                    expanded = showDialogCameraPicker,
+                                    onDismissRequest = { showDialogCameraPicker = false }
+                                ) {
+                                    ScrollableDropdownContent {
+                                        DropdownMenuItem(
+                                            text = { Text("Camera") },
+                                            leadingIcon = { Icon(Icons.Filled.PhotoCamera, null) },
+                                            onClick = {
+                                                showDialogCameraPicker = false
+                                                val file = java.io.File(context.cacheDir, "receipt_dialog_${java.util.UUID.randomUUID()}.jpg")
+                                                dialogTempPhotoUri = androidx.core.content.FileProvider.getUriForFile(
+                                                    context, "${context.packageName}.fileprovider", file
+                                                )
+                                                dialogCameraLauncher.launch(dialogTempPhotoUri!!)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Gallery") },
+                                            leadingIcon = { Icon(Icons.Filled.Collections, null) },
+                                            onClick = {
+                                                showDialogCameraPicker = false
+                                                dialogGalleryLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }

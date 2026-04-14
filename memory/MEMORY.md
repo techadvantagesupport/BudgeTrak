@@ -131,6 +131,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [Keep firebase-config-reference.txt updated](feedback_update_firebase_config.md).
 - [Ad banner implementation](project_ad_implementation.md).
 - [JIT extraction lambda overhead](feedback_jit_extraction.md).
+- [Compose state-seed order + LaunchedEffect cancellation](feedback_compose_state_seed_order.md) — seed VM fields before the visibility flag; hoist long work to viewModelScope.
 - [Receipt pruning design](feedback_receipt_pruning_design.md) — cloud 14-day and local prune age are independent.
 
 ## Firebase Backend
