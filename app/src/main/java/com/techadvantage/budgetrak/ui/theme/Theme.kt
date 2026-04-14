@@ -517,11 +517,20 @@ fun PulsingScrollArrow(scrollState: ScrollState, modifier: Modifier = Modifier) 
 @Composable
 fun ScrollableDropdownContent(
     maxHeight: androidx.compose.ui.unit.Dp = 280.dp,
+    contentStartPadding: androidx.compose.ui.unit.Dp = 32.dp,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val scrollState = rememberScrollState()
     Box(modifier = Modifier.heightIn(max = maxHeight)) {
-        Column(modifier = Modifier.verticalScroll(scrollState)) {
+        // Indent content start so it clears the scroll-arrow column on the
+        // left (arrow icon is 24dp wide at start=12dp → ends at x≈36dp;
+        // 32dp content padding + DropdownMenuItem's own ~16dp internal
+        // padding puts text at ~48dp, leaving a visual gap).
+        Column(
+            modifier = Modifier
+                .verticalScroll(scrollState)
+                .padding(start = contentStartPadding)
+        ) {
             content()
         }
         PulsingScrollArrows(
