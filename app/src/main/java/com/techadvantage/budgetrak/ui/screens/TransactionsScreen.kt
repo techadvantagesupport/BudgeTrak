@@ -134,6 +134,7 @@ import com.techadvantage.budgetrak.ui.theme.dialogFooterColor
 import com.techadvantage.budgetrak.ui.theme.dialogSectionLabelColor
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
+import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -4332,12 +4333,7 @@ fun TransactionDialog(
                     }
                 }
             }
-            PulsingScrollArrow(
-                scrollState = scrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 50.dp)
-            )
+            PulsingScrollArrows(scrollState = scrollState)
             }
         }
     }
@@ -5291,12 +5287,7 @@ private fun SaveFormatDialog(
                     }
                 }
             }
-            PulsingScrollArrow(
-                scrollState = saveScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 50.dp)
-            )
+            PulsingScrollArrows(scrollState = saveScrollState)
             }
         }
     }
@@ -5442,12 +5433,7 @@ private fun ImportFormatSelectionDialog(
                     }
                 }
             }
-            PulsingScrollArrow(
-                scrollState = loadScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 50.dp)
-            )
+            PulsingScrollArrows(scrollState = loadScrollState)
             }
         }
     }

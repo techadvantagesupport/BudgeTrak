@@ -69,6 +69,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
+import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -607,12 +608,7 @@ internal fun AddEditAmortizationDialog(
                 }
                 }
             }
-            PulsingScrollArrow(
-                scrollState = dialogScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 50.dp)
-            )
+            PulsingScrollArrows(scrollState = dialogScrollState)
             }
         }
     }

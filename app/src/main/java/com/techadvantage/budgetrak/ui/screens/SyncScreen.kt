@@ -87,6 +87,7 @@ import com.techadvantage.budgetrak.ui.strings.LocalStrings
 import com.techadvantage.budgetrak.ui.theme.LocalAppToast
 import com.techadvantage.budgetrak.ui.theme.LocalSyncBudgetColors
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
+import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 
 private val COMMON_TIMEZONES = listOf(
     "America/New_York",
@@ -1158,12 +1159,7 @@ fun SyncScreen(
                             }
                         }
                     }
-                    PulsingScrollArrow(
-                        scrollState = scrollState,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 12.dp, bottom = 50.dp)
-                    )
+                    PulsingScrollArrows(scrollState = scrollState)
                     }
                 }
             }

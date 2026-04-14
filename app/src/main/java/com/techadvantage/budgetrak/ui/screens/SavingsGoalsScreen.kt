@@ -69,6 +69,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
+import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.techadvantage.budgetrak.data.AmortizationEntry
@@ -757,12 +758,7 @@ private fun AddEditSavingsGoalDialog(
                 }
                 }
             }
-            PulsingScrollArrow(
-                scrollState = dialogScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 50.dp)
-            )
+            PulsingScrollArrows(scrollState = dialogScrollState)
             }
         }
     }

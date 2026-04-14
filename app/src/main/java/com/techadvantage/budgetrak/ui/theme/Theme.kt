@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -495,6 +497,70 @@ fun PulsingScrollArrow(scrollState: ScrollState, modifier: Modifier = Modifier) 
 }
 
 /**
+ * Bidirectional scroll affordance: pulsing up-arrow at top-start when
+ * content can scroll up, pulsing down-arrow at bottom-start when content
+ * can scroll down. Drop into any `Box` that contains the scrollable body
+ * (no modifier needed — alignments and paddings are managed internally).
+ *
+ * Prefer this over `PulsingScrollArrow` for any new scrollable dialog or
+ * popup. The up-arrow is the key accessibility win for users with
+ * enlarged system font — content that fit in one screen at default font
+ * size now scrolls, and users need both directions indicated.
+ *
+ * Standard paddings: top `12.dp` / bottom `50.dp` leave room for the
+ * ad banner at the top and the footer buttons at the bottom of a dialog.
+ * Override only if the containing layout has different safe areas.
+ */
+@Composable
+fun BoxScope.PulsingScrollArrows(
+    scrollState: ScrollState,
+    topPadding: androidx.compose.ui.unit.Dp = 12.dp,
+    bottomPadding: androidx.compose.ui.unit.Dp = 50.dp,
+) {
+    val canScrollUp by remember { derivedStateOf { scrollState.canScrollBackward } }
+    val canScrollDown by remember { derivedStateOf { scrollState.canScrollForward } }
+
+    if (canScrollUp) {
+        val transition = rememberInfiniteTransition(label = "arrowsUp")
+        val offsetY by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = -6f,
+            animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
+            label = "upBounce"
+        )
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowUp,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 12.dp, top = topPadding)
+                .size(24.dp)
+                .offset(y = offsetY.dp)
+        )
+    }
+    if (canScrollDown) {
+        val transition = rememberInfiniteTransition(label = "arrowsDown")
+        val offsetY by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 6f,
+            animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
+            label = "downBounce"
+        )
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 12.dp, bottom = bottomPadding)
+                .size(24.dp)
+                .offset(y = offsetY.dp)
+        )
+    }
+}
+
+/**
  * Drop-in replacement for AlertDialog that avoids overlapping the ad banner.
  * Uses AdAwareDialog internally so the content is positioned below the ad,
  * scrolls when content is tall, and shows a pulsing arrow when scrollable.
@@ -580,12 +646,7 @@ fun AdAwareAlertDialog(
                     }
                 }
                 if (arrowScrollState != null) {
-                    PulsingScrollArrow(
-                        scrollState = arrowScrollState,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 12.dp, bottom = 50.dp)
-                    )
+                    PulsingScrollArrows(scrollState = arrowScrollState)
                 }
             }
         }

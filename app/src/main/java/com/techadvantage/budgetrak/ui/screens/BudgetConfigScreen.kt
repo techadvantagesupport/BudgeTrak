@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
+import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 import com.techadvantage.budgetrak.data.BudgetPeriod
 import com.techadvantage.budgetrak.data.IncomeSource
 import com.techadvantage.budgetrak.data.RepeatType
@@ -1022,12 +1023,7 @@ private fun AddEditIncomeDialog(
                 }
                 }
             }
-            PulsingScrollArrow(
-                scrollState = dialogScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 50.dp)
-            )
+            PulsingScrollArrows(scrollState = dialogScrollState)
             }
         }
     }
@@ -1231,12 +1227,7 @@ private fun BudgetResetDialog(
                 }
                 }
             }
-            PulsingScrollArrow(
-                scrollState = resetScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 50.dp)
-            )
+            PulsingScrollArrows(scrollState = resetScrollState)
             }
         }
     }

@@ -73,6 +73,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.techadvantage.budgetrak.ui.theme.AdAwareDialog
 import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrow
+import com.techadvantage.budgetrak.ui.theme.PulsingScrollArrows
 import com.techadvantage.budgetrak.data.Category
 import com.techadvantage.budgetrak.data.CATEGORY_ICON_MAP
 import com.techadvantage.budgetrak.data.Transaction
@@ -1406,12 +1407,7 @@ private fun AddCategoryDialog(
                     }
                 }
             }
-            PulsingScrollArrow(
-                scrollState = dialogScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 50.dp)
-            )
+            PulsingScrollArrows(scrollState = dialogScrollState)
             }
         }
     }
@@ -1570,12 +1566,7 @@ private fun EditCategoryDialog(
                     }
                 }
             }
-            PulsingScrollArrow(
-                scrollState = editScrollState,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 50.dp)
-            )
+            PulsingScrollArrows(scrollState = editScrollState)
             }
         }
     }
