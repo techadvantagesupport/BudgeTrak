@@ -3,3 +3,9 @@ node_modules/
 results/*.json
 results/*.csv
 !results/.gitkeep
+
+# Receipt images may contain PII (card last-4s, auth codes, loyalty ids, etc).
+# Keep them local only; labels.json is fine to commit since it carries only
+# amount/date/merchant ground truth.
+test-data/images/*
+!test-data/images/.gitkeep

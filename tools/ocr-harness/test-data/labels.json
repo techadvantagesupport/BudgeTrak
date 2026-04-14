@@ -1,12 +1,32 @@
 [
   {
-    "file": "example_001.jpg",
+    "file": "sams_club.png",
+    "source": "internal-screenshots",
+    "difficulty": "medium",
+    "merchant": "Sam's Club",
+    "date": "2026-04-13",
+    "amount": 366.88,
+    "categoryId": 22695,
+    "notes": "Warehouse store, primarily groceries. Best single-bucket fit is Groceries. Mixed items include home/pet (Dove, pet food) so a legitimate split into Home Supplies is also acceptable."
+  },
+  {
+    "file": "target.png",
     "source": "internal-screenshots",
     "difficulty": "easy",
-    "merchant": "Chipotle",
-    "date": "2026-04-14",
-    "amount": 13.47,
-    "categoryId": 2,
-    "notes": "Replace with a real receipt + filename. Delete this example when you add your own."
+    "merchant": "Target",
+    "date": "2026-04-07",
+    "amount": 43.45,
+    "categoryId": 30186,
+    "notes": "Mixed grocery + home items. Home Supplies is the best single bucket; a split to Groceries is also correct."
+  },
+  {
+    "file": "wendys.jpg",
+    "source": "internal-screenshots",
+    "difficulty": "hard",
+    "merchant": "Wendy's",
+    "date": "2025-12-19",
+    "amount": 12.76,
+    "categoryId": 21716,
+    "notes": "Crumpled thermal paper with staining. Fast food → Restaurants/Prepared Food."
   }
 ]

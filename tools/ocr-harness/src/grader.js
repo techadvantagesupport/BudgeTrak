@@ -30,14 +30,17 @@ export function gradeResult(expected, actual) {
     result.amount.pass = Math.abs(expected.amount - actual.amount) <= 0.01;
   }
 
-  // Category: top-1 match against the first categoryAmounts entry.
-  // If expected has no categoryId label, skip (don't count against accuracy).
+  // Category: accept if ANY entry in a multi-category split matches the expected id.
+  // Rationale: when Gemini legitimately splits a mixed-purchase receipt (Target:
+  // some grocery, some home) it's more accurate than a single-bucket label, so we
+  // shouldn't mark it wrong. We do report which ids were returned so a reviewer
+  // can spot the difference.
   if (expected.categoryId == null) {
     result.category.skipped = true;
   } else {
-    const firstId = actual?.categoryAmounts?.[0]?.categoryId;
-    result.category.actual = firstId;
-    result.category.pass = firstId === expected.categoryId;
+    const ids = (actual?.categoryAmounts ?? []).map(c => c.categoryId);
+    result.category.actual = ids.length === 1 ? ids[0] : ids;
+    result.category.pass = ids.includes(expected.categoryId);
   }
 
   return result;
