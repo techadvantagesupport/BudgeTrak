@@ -1014,6 +1014,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ── Matching + linking chain design note ──────────────────────────────
+    //
+    // The deterministic match-FINDERS (findDuplicates, findRecurringExpenseMatches,
+    // findAmortizationMatches, findBudgetIncomeMatches) live in DuplicateDetector.kt
+    // and are shared across all entry points — that's the layer of consolidation that
+    // makes sense.
+    //
+    // What is intentionally NOT consolidated: the orchestration (this function +
+    // runMatchingChain) is the dashboard's wiring. TransactionsScreen, CSV-import,
+    // edit dialogs, and WidgetTransactionActivity each have their own parallel
+    // orchestration because each has different post-match side effects:
+    //   - dashboard  → uses VM's dashPending* state + addTransactionWithBudgetEffect
+    //   - screen add/edit → uses local pendingManual* + addAndScroll + isEdit flag
+    //   - screen CSV import → sequential flow, importIndex / importApproved
+    //   - widget → runs in a separate Activity, no VM, reads from *Repository.active
+    //
+    // A 2026-04-03 cleanup (commit a394a3a) made all 5 entry points agree on the
+    // same TYPE-based order (income → budget income; expense → RE → amortization).
+    // A 2026-04-13 analysis considered extracting a single shared chain function
+    // with callbacks and concluded it would require VM to know about screen-local
+    // state, which is architecturally worse. See
+    // memory/project_prelaunch_todo.md "Completed + documented elsewhere".
+    //
+    // If you change the type-based order or add a new match type, update all 5
+    // entry points to match. Grep for findDuplicates / findRecurringExpenseMatches
+    // to find them.
+
     // Linking chain: recurring/amortization/income match (no duplicate check).
     // Runs search on background thread to avoid blocking UI.
     fun runLinkingChain(txn: Transaction) {
