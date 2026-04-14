@@ -28,5 +28,960 @@
     "amount": 12.76,
     "categoryId": 21716,
     "notes": "Crumpled thermal paper with staining. Fast food → Restaurants/Prepared Food."
+  },
+  {
+    "file": "sroie_0004.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "OJC MARKETING SDN BHD",
+    "date": "2019-01-15",
+    "amount": 193,
+    "categoryId": 47837,
+    "notes": "cat: Kings Safety Shoes - work safety footwear"
+  },
+  {
+    "file": "sroie_0006.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "OJC MARKETING SDN BHD",
+    "date": "2019-01-02",
+    "amount": 170,
+    "categoryId": 47837,
+    "notes": "cat: Kings Safety Shoes - work safety footwear"
+  },
+  {
+    "file": "sroie_0008.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "PERNIAGAAN ZHENG HUI",
+    "date": "2018-02-09",
+    "amount": 436.2,
+    "categoryId": 30186,
+    "notes": "cat: hardware: welding rods, cutting discs, gloves, pipe fittings"
+  },
+  {
+    "file": "sroie_0010.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "PETRON BKT LANJAN SB",
+    "date": "2018-02-01",
+    "amount": 4.9,
+    "categoryId": 21716,
+    "notes": "cat: Petron station kiosk but only drinks/sandwich purchased, no fuel"
+  },
+  {
+    "file": "sroie_0012.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "McDonald's",
+    "date": "2018-01-18",
+    "amount": 38.9,
+    "categoryId": 21716,
+    "notes": "consumer name (operator: GERBANG ALAF RESTAURANTS SDN BHD)"
+  },
+  {
+    "file": "sroie_0014.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "SIN LIANHAP SDN BHD",
+    "date": "2018-02-05",
+    "amount": 7.3,
+    "categoryId": 30186,
+    "notes": "cat: building/hardware supplier"
+  },
+  {
+    "file": "sroie_0016.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "CROSS CHANNEL NETWORK SDN. BHD.",
+    "date": "2018-01-29",
+    "amount": 6.35,
+    "categoryId": 30186,
+    "notes": "cat: Schneider electrical switch/socket outlet"
+  },
+  {
+    "file": "sroie_0018.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "CROSS CHANNEL NETWORK SDN. BHD.",
+    "date": "2017-12-31",
+    "amount": 7.95,
+    "categoryId": 30186,
+    "notes": "cat: PVC conduit, connector, cable clips"
+  },
+  {
+    "file": "sroie_0020.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "SWC ENTERPRISE SDN BHD",
+    "date": "2018-01-08",
+    "amount": 8,
+    "categoryId": 30186,
+    "notes": "cat: bags/sacks from hardware-type supplier"
+  },
+  {
+    "file": "sroie_0022.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "LIGHTROOM GALLERY SDN BHD",
+    "date": "2017-11-20",
+    "amount": 278.8,
+    "categoryId": 30186,
+    "notes": "cat: LED track lighting fixtures"
+  },
+  {
+    "file": "sroie_0024.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "99 SPEED MART S/B",
+    "date": "2017-11-20",
+    "amount": 169.8,
+    "categoryId": 22695,
+    "notes": "cat: 99 Speed Mart"
+  },
+  {
+    "file": "sroie_0026.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "SECURE PARKING CORPORATION S/B",
+    "date": "2018-03-23",
+    "amount": 1,
+    "categoryId": 48281,
+    "notes": "cat: parking fee"
+  },
+  {
+    "file": "sroie_0028.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "LIGHTROOM GALLERY SDN BHD",
+    "date": "2017-11-20",
+    "amount": 278.8,
+    "categoryId": 30186,
+    "notes": "cat: LED track lighting fixtures"
+  },
+  {
+    "file": "sroie_0030.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "UROKO JAPANESE CUISINE SDN BHD",
+    "date": "2018-03-20",
+    "amount": 53,
+    "categoryId": 21716
+  },
+  {
+    "file": "sroie_0032.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "TEO HENG STATIONERY & BOOKS",
+    "date": "2018-01-27",
+    "amount": 27.35,
+    "categoryId": 30426,
+    "notes": "SROIE label typo (TED→TEO) corrected; cat: stationery store"
+  },
+  {
+    "file": "sroie_0034.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "TEO HENG STATIONERY & BOOKS",
+    "date": "2018-03-15",
+    "amount": 127.2,
+    "categoryId": 30426,
+    "notes": "cat: stationery store"
+  },
+  {
+    "file": "sroie_0036.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "TEO HENG STATIONERY & BOOKS",
+    "date": "2018-01-29",
+    "amount": 1.05,
+    "categoryId": 30426,
+    "notes": "cat: stationery - carbon paper"
+  },
+  {
+    "file": "sroie_0038.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "SWC ENTERPRISE SDN BHD",
+    "date": "2018-01-02",
+    "amount": 4.2,
+    "categoryId": 30186,
+    "notes": "cat: plastic bags from supplier"
+  },
+  {
+    "file": "sroie_0040.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "F&P PHARMACY",
+    "date": "2018-03-02",
+    "amount": 31.9,
+    "categoryId": 17351,
+    "notes": "cat: F&P Pharmacy"
+  },
+  {
+    "file": "sroie_0042.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "PASAR MINI JIN SENG",
+    "date": "2018-03-03",
+    "amount": 33.8,
+    "categoryId": 22695,
+    "notes": "cat: mini mart"
+  },
+  {
+    "file": "sroie_0044.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "YHM AEON TEBRAU CITY",
+    "date": "2018-03-11",
+    "amount": 49.7,
+    "categoryId": 21716,
+    "notes": "cat: Yakiniku/beef bowl restaurant"
+  },
+  {
+    "file": "sroie_0046.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "YONG TAT HARDWARE TRADING",
+    "date": "2018-03-13",
+    "amount": 72,
+    "categoryId": 30186,
+    "notes": "cat: hardware - gasket"
+  },
+  {
+    "file": "sroie_0048.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "TRIPLE SIX POINT ENTERPRISE 666",
+    "date": "2018-03-22",
+    "amount": 22.6,
+    "categoryId": 22695,
+    "notes": "cat: snacks - cake, cashews, peanuts, drink"
+  },
+  {
+    "file": "sroie_0050.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "CONTENTO",
+    "date": "2018-03-20",
+    "amount": 21.6,
+    "categoryId": 21716,
+    "notes": "cat: Contento - bubble tea"
+  },
+  {
+    "file": "sroie_0052.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "B.I.G. Ben's Independent Grocer",
+    "date": "2018-03-09",
+    "amount": 133.7,
+    "categoryId": 22695,
+    "notes": "consumer name; cat: BIG grocer"
+  },
+  {
+    "file": "sroie_0054.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "B.I.G. Ben's Independent Grocer",
+    "date": "2018-03-08",
+    "amount": 81,
+    "categoryId": 22695,
+    "notes": "consumer name"
+  },
+  {
+    "file": "sroie_0056.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "99 SPEED MART S/B",
+    "date": "2018-03-10",
+    "amount": 5.35,
+    "categoryId": 22695
+  },
+  {
+    "file": "sroie_0058.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "STAR GROCER SDN BHD",
+    "date": "2018-03-25",
+    "amount": 66.15,
+    "categoryId": 22695
+  },
+  {
+    "file": "sroie_0060.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "PASARAYA BORONG PINTAR SDN BHD",
+    "date": "2018-03-09",
+    "amount": 10.4,
+    "categoryId": 22695
+  },
+  {
+    "file": "sroie_0062.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "PASARAYA BORONG PINTAR SDN BHD",
+    "date": "2018-03-14",
+    "amount": 0.9,
+    "categoryId": 22695
+  },
+  {
+    "file": "sroie_0064.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "RESTAURANT JIAWEI JIAWEI HOUSE",
+    "date": "2018-02-23",
+    "amount": 110,
+    "categoryId": 21716,
+    "notes": "cat: Restaurant Jiawei dine-in"
+  },
+  {
+    "file": "sroie_0066.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "PASARAYA BORONG PINTAR SDN BHD",
+    "date": "2018-01-30",
+    "amount": 1.7,
+    "categoryId": 22695
+  },
+  {
+    "file": "sroie_0068.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "PASARAYA BORONG PINTAR SDN BHD",
+    "date": "2018-02-14",
+    "amount": 1.45,
+    "categoryId": 22695
+  },
+  {
+    "file": "sroie_0070.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "POPULAR BOOK CO. (M) SDN BHD",
+    "date": "2017-12-23",
+    "amount": 140.65,
+    "categoryId": 1276,
+    "notes": "cat: Popular Book - SPM study books"
+  },
+  {
+    "file": "sroie_0072.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "POPULAR BOOK CO. (M) SDN BHD",
+    "date": "2017-08-20",
+    "amount": 5.05,
+    "categoryId": 30426,
+    "notes": "cat: Popular Book - stationery"
+  },
+  {
+    "file": "sroie_0074.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "EVERGREEN LIGHT SDN BHD",
+    "date": "2017-07-10",
+    "amount": 56,
+    "categoryId": 30186,
+    "notes": "cat: Evergreen Light - LED lighting"
+  },
+  {
+    "file": "sroie_0076.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "HON HWA HARDWARE TRADING",
+    "date": "2017-04-28",
+    "amount": 7.2,
+    "categoryId": 30186,
+    "notes": "SROIE label error (26→28) corrected; cat: Hon Hwa Hardware"
+  },
+  {
+    "file": "sroie_0078.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "HON HWA HARDWARE TRADING",
+    "date": "2017-02-11",
+    "amount": 19.6,
+    "categoryId": 30186,
+    "notes": "cat: Hon Hwa Hardware"
+  },
+  {
+    "file": "sroie_0080.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "HON HWA HARDWARE TRADING",
+    "date": "2017-01-05",
+    "amount": 5,
+    "categoryId": 30186,
+    "notes": "cat: Hon Hwa Hardware - PVC wallplug"
+  },
+  {
+    "file": "sroie_0082.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "EVERGREEN LIGHT SDN BHD",
+    "date": "2017-09-18",
+    "amount": 26,
+    "categoryId": 30186,
+    "notes": "cat: Evergreen Light - LED lighting"
+  },
+  {
+    "file": "sroie_0084.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "VIVOPAC MARKETING SDN BHD",
+    "date": "2017-01-17",
+    "amount": 46.65,
+    "categoryId": 30186,
+    "notes": "cat: Vivopac - PP packaging/tapes"
+  },
+  {
+    "file": "sroie_0086.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "VIVOPAC MARKETING SDN BHD",
+    "date": "2017-09-13",
+    "amount": 52.45,
+    "categoryId": 30186,
+    "notes": "cat: Vivopac packaging supplies"
+  },
+  {
+    "file": "sroie_0088.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "FY EAGLE ENTERPRISE",
+    "date": "2017-12-07",
+    "amount": 10,
+    "categoryId": 30186,
+    "notes": "cat: Paint remover"
+  },
+  {
+    "file": "sroie_0090.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "MODERN DEPOT SDN BHD",
+    "date": "2016-12-04",
+    "amount": 150,
+    "categoryId": 30186,
+    "notes": "cat: Stanley heat gun"
+  },
+  {
+    "file": "sroie_0092.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "Shell",
+    "date": "2017-03-23",
+    "amount": 30,
+    "categoryId": 48281,
+    "notes": "consumer brand (operator: CHOP YEW LIAN); cat: Shell V-Power 97 fuel"
+  },
+  {
+    "file": "sroie_0094.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "AEON",
+    "date": "2018-03-14",
+    "amount": 12.25,
+    "categoryId": 22695,
+    "notes": "consumer name (legal: AEON CO. (M) BHD); cat: AEON - floor cleaner"
+  },
+  {
+    "file": "sroie_0096.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "ECONSAVE CASH & CARRY (FC) S/B",
+    "date": "2018-03-22",
+    "amount": 5.15,
+    "categoryId": 22695,
+    "notes": "cat: Econsave cash & carry"
+  },
+  {
+    "file": "sroie_0098.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "POPULAR BOOK CO. (M) SDN BHD",
+    "date": "2018-03-14",
+    "amount": 7.95,
+    "categoryId": 30426,
+    "notes": "cat: Popular Book - rubber band"
+  },
+  {
+    "file": "sroie_0100.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "PREMIO STATIONERY SDN BHD",
+    "date": "2018-03-20",
+    "amount": 13.4,
+    "categoryId": 30426,
+    "notes": "cat: Premio Stationery - batteries"
+  },
+  {
+    "file": "sroie_0102.jpg",
+    "source": "SROIE",
+    "difficulty": "medium",
+    "merchant": "LIM SENG THO HARDWARE TRADING",
+    "date": "2018-02-08",
+    "amount": 10.5,
+    "categoryId": 30186,
+    "notes": "cat: Lim Seng Tho Hardware"
+  },
+  {
+    "file": "mcocr_0054.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Vincommerce",
+    "date": "2020-08-14",
+    "amount": 11616,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0056.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "NHÀ SÁCH GD-TC CẨM PHẢ",
+    "date": "2020-08-14",
+    "amount": 94000,
+    "categoryId": 30426,
+    "notes": "parser bug (bad month 13) corrected"
+  },
+  {
+    "file": "mcocr_0058.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "SCTC Cổ Thọ 104 Trần Phú - Cẩm Pha",
+    "date": "2020-08-08",
+    "amount": 10000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0060.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "SCTC Cỏ Thỏ 104 Trần Phú - Cẩm Phá",
+    "date": "2020-09-08",
+    "amount": 45000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0062.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinMart",
+    "date": "2020-08-13",
+    "amount": 22000,
+    "categoryId": 30186,
+    "notes": "consumer brand (operator: VinCommerce); cat: bath sponge"
+  },
+  {
+    "file": "mcocr_0064.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Vincommerce",
+    "date": "2020-08-12",
+    "amount": 14544,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0066.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Vincommerce",
+    "date": "2020-08-12",
+    "amount": 15000,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0068.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Vincommerce",
+    "date": "2020-08-15",
+    "amount": 6000,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0070.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "SCTC Cổ Thổ 104 Trần Phú - Cẩm Phả",
+    "date": "2020-08-08",
+    "amount": 75000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0072.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Vincommerce",
+    "date": "2020-08-15",
+    "amount": 14900,
+    "categoryId": 52714,
+    "notes": "cat: raincoat"
+  },
+  {
+    "file": "mcocr_0074.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-14",
+    "amount": 57900,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0076.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "MINIMART ANAN",
+    "date": "2020-08-10",
+    "amount": 47200,
+    "categoryId": 22695,
+    "notes": "parser truncation corrected"
+  },
+  {
+    "file": "mcocr_0078.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Thức Coffee",
+    "date": "2019-03-31",
+    "amount": 70000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0080.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-15",
+    "amount": 25600,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0082.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-15",
+    "amount": 25600,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0084.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Milano Coffee",
+    "date": "2020-10-02",
+    "amount": 25000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0086.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "NHÀ SÁCH GD-TC CẨM PHÁ",
+    "date": "2020-08-15",
+    "amount": 93000,
+    "categoryId": 30426
+  },
+  {
+    "file": "mcocr_0088.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "LAKE VIEW",
+    "date": "2020-08-15",
+    "amount": 241000,
+    "categoryId": 21716,
+    "notes": "parser transposition (15→2015) corrected; cat: cafe"
+  },
+  {
+    "file": "mcocr_0090.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "SCTC Cỏ Thỏ 104 Trần Phú - Cẩm Phá",
+    "date": "2020-08-09",
+    "amount": 70000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0092.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "SCT CƠ THƠ 104 TRẦN PHÚ - CẦM PHA",
+    "date": "2020-08-10",
+    "amount": 50000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0094.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Vincommerce",
+    "date": "2020-08-10",
+    "amount": 97926,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0096.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Vincommerce",
+    "date": "2020-08-15",
+    "amount": 42300,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0098.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Thức Coffee",
+    "date": "2019-03-31",
+    "amount": 35000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0100.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "DIM SUM CORNER TRUNG HÒA",
+    "date": "2020-08-13",
+    "amount": 292000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0102.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "NHÀ SÁCH GD-TC CẨM PHÁ",
+    "date": "2020-08-11",
+    "amount": 45000,
+    "categoryId": 30426
+  },
+  {
+    "file": "mcocr_0104.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-15",
+    "amount": 78166,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0106.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "SCTCC CƠ THƠ 104 TRẦN PHÚ - CẦM PHA",
+    "date": "2020-08-10",
+    "amount": 85000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0108.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "THÚC COFFEE",
+    "date": "2019-04-21",
+    "amount": 52000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0110.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Milano Coffee",
+    "date": "2020-10-02",
+    "amount": 64000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0112.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Milano Coffee",
+    "date": "2020-10-02",
+    "amount": 15000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0114.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Vincommerce",
+    "date": "2020-08-13",
+    "amount": 10500,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0116.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Vincommerce",
+    "date": "2020-08-14",
+    "amount": 11900,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0118.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "NHÀ SÁCH GD-TC CẨM PHÀ",
+    "date": "2020-08-14",
+    "amount": 75200,
+    "categoryId": 30426
+  },
+  {
+    "file": "mcocr_0120.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "SCT CƠ THƠ 104 TRẦN PHỦ - CẨM PHÁ",
+    "date": "2020-08-10",
+    "amount": 40000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0122.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "MILANO COFFEE",
+    "date": "2020-10-02",
+    "amount": 39000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0124.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-14",
+    "amount": 48600,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0126.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinMart",
+    "date": "2020-08-11",
+    "amount": 98500,
+    "categoryId": 22695,
+    "notes": "consumer brand (operator: VinCommerce)"
+  },
+  {
+    "file": "mcocr_0128.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Vincommerce",
+    "date": "2020-08-12",
+    "amount": 7200,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0130.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Legend",
+    "date": "2019-04-20",
+    "amount": 64000,
+    "categoryId": 21716,
+    "notes": "parser bug (bad month 20, neg amount) corrected"
+  },
+  {
+    "file": "mcocr_0132.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinMart",
+    "date": "2020-08-11",
+    "amount": 111200,
+    "categoryId": 22695,
+    "notes": "consumer brand (operator: VinCommerce)"
+  },
+  {
+    "file": "mcocr_0134.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Bún Bò Huế O Xuân",
+    "date": "2020-07-14",
+    "amount": 554000,
+    "categoryId": 21716,
+    "notes": "multiple parser bugs corrected"
+  },
+  {
+    "file": "mcocr_0136.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-10",
+    "amount": 7800,
+    "categoryId": 22695,
+    "notes": "parser truncation corrected"
+  },
+  {
+    "file": "mcocr_0138.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-12",
+    "amount": 19500,
+    "categoryId": 30186,
+    "notes": "cat: razors, personal care"
+  },
+  {
+    "file": "mcocr_0140.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-14",
+    "amount": 160000,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0142.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-12",
+    "amount": 9744,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0144.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-13",
+    "amount": 49500,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0146.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "SCTC CƠ THƠ 104 TRẦN PHÚ - CẨM PHÁ",
+    "date": "2020-08-10",
+    "amount": 85000,
+    "categoryId": 21716
+  },
+  {
+    "file": "mcocr_0148.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "Thức Coffee",
+    "date": "2019-04-21",
+    "amount": 35000,
+    "categoryId": 21716,
+    "notes": "parser bug (3-digit year) corrected"
+  },
+  {
+    "file": "mcocr_0150.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-14",
+    "amount": 187355,
+    "categoryId": 22695
+  },
+  {
+    "file": "mcocr_0152.jpg",
+    "source": "MC-OCR",
+    "difficulty": "hard",
+    "merchant": "VinCommerce",
+    "date": "2020-08-12",
+    "amount": 22000,
+    "categoryId": 22695
   }
 ]
