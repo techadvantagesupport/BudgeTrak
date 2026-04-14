@@ -9,7 +9,8 @@
 export const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
-    merchant: { type: "string", description: "Business name (common consumer form)." },
+    merchant: { type: "string", description: "Business name (consumer brand)." },
+    merchantLegalName: { type: "string", description: "Legal operator entity if distinct from consumer brand." },
     date: { type: "string", description: "YYYY-MM-DD." },
     amount: { type: "number", description: "Final total paid." },
     categoryAmounts: {

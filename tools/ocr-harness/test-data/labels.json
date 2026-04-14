@@ -526,10 +526,11 @@
     "file": "mcocr_0054.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "Vincommerce",
+    "merchant": "VinMart",
     "date": "2020-08-14",
     "amount": 11616,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0056.jpg",
@@ -573,28 +574,31 @@
     "file": "mcocr_0064.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "Vincommerce",
+    "merchant": "VinMart",
     "date": "2020-08-12",
     "amount": 14544,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0066.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "Vincommerce",
+    "merchant": "VinMart",
     "date": "2020-08-12",
     "amount": 15000,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0068.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "Vincommerce",
+    "merchant": "VinMart",
     "date": "2020-08-15",
     "amount": 6000,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0070.jpg",
@@ -609,20 +613,21 @@
     "file": "mcocr_0072.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "Vincommerce",
+    "merchant": "VinMart",
     "date": "2020-08-15",
     "amount": 14900,
     "categoryId": 52714,
-    "notes": "cat: raincoat"
+    "notes": "cat: raincoat; label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0074.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-14",
     "amount": 57900,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0076.jpg",
@@ -647,19 +652,21 @@
     "file": "mcocr_0080.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-15",
     "amount": 25600,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0082.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-15",
     "amount": 25600,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0084.jpg",
@@ -702,28 +709,31 @@
     "file": "mcocr_0092.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "SCT CƠ THƠ 104 TRẦN PHÚ - CẦM PHA",
+    "merchant": "SCTC CÔ THỎ 104 TRẦN PHÚ - CẨM PHẢ",
     "date": "2020-08-10",
     "amount": 50000,
-    "categoryId": 21716
+    "categoryId": 21716,
+    "notes": "label normalized (diacritic variance)"
   },
   {
     "file": "mcocr_0094.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "Vincommerce",
+    "merchant": "VinMart",
     "date": "2020-08-10",
     "amount": 97926,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0096.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "Vincommerce",
+    "merchant": "VinMart",
     "date": "2020-08-15",
     "amount": 42300,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0098.jpg",
@@ -756,19 +766,21 @@
     "file": "mcocr_0104.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-15",
     "amount": 78166,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0106.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "SCTCC CƠ THƠ 104 TRẦN PHÚ - CẦM PHA",
+    "merchant": "SCTC CÔ THỎ 104 TRẦN PHÚ - CẨM PHẢ",
     "date": "2020-08-10",
     "amount": 85000,
-    "categoryId": 21716
+    "categoryId": 21716,
+    "notes": "label normalized (diacritic variance)"
   },
   {
     "file": "mcocr_0108.jpg",
@@ -801,19 +813,21 @@
     "file": "mcocr_0114.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "Vincommerce",
+    "merchant": "VinMart",
     "date": "2020-08-13",
     "amount": 10500,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0116.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "Vincommerce",
+    "merchant": "VinMart",
     "date": "2020-08-14",
     "amount": 11900,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0118.jpg",
@@ -828,10 +842,11 @@
     "file": "mcocr_0120.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "SCT CƠ THƠ 104 TRẦN PHỦ - CẨM PHÁ",
+    "merchant": "SCTC CÔ THỎ 104 TRẦN PHÚ - CẨM PHẢ",
     "date": "2020-08-10",
     "amount": 40000,
-    "categoryId": 21716
+    "categoryId": 21716,
+    "notes": "label normalized (diacritic variance)"
   },
   {
     "file": "mcocr_0122.jpg",
@@ -846,10 +861,11 @@
     "file": "mcocr_0124.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-14",
     "amount": 48600,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0126.jpg",
@@ -865,10 +881,11 @@
     "file": "mcocr_0128.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "Vincommerce",
+    "merchant": "VinMart",
     "date": "2020-08-12",
     "amount": 7200,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0130.jpg",
@@ -904,48 +921,51 @@
     "file": "mcocr_0136.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-10",
     "amount": 7800,
     "categoryId": 22695,
-    "notes": "parser truncation corrected"
+    "notes": "parser truncation corrected; label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0138.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-12",
     "amount": 19500,
     "categoryId": 30186,
-    "notes": "cat: razors, personal care"
+    "notes": "cat: razors, personal care; label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0140.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-14",
     "amount": 160000,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0142.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-12",
     "amount": 9744,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0144.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-13",
     "amount": 49500,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0146.jpg",
@@ -970,18 +990,20 @@
     "file": "mcocr_0150.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-14",
     "amount": 187355,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   },
   {
     "file": "mcocr_0152.jpg",
     "source": "MC-OCR",
     "difficulty": "hard",
-    "merchant": "VinCommerce",
+    "merchant": "VinMart",
     "date": "2020-08-12",
     "amount": 22000,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
   }
 ]
