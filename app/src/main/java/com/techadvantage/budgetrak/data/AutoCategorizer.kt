@@ -37,6 +37,40 @@ fun autoCategorize(
     )
 }
 
+data class CategoryConfidence(
+    val matchCount: Int,
+    val topCategoryId: Int?,
+    val topCategoryCount: Int
+) {
+    val agreementRatio: Double get() = if (matchCount == 0) 0.0 else topCategoryCount.toDouble() / matchCount
+}
+
+fun categoryConfidence(
+    imported: Transaction,
+    existing: List<Transaction>,
+    minChars: Int = 5
+): CategoryConfidence {
+    val sixMonthsAgo = imported.date.minusMonths(6)
+    val source = imported.source.lowercase()
+    val matchingTxns = existing
+        .filter { ex ->
+            ex.categoryAmounts.isNotEmpty() &&
+            !ex.date.isBefore(sixMonthsAgo) &&
+            sharesFiveCharSubstring(source, ex.source.lowercase(), minChars)
+        }
+        .sortedByDescending { it.date }
+        .take(10)
+    if (matchingTxns.isEmpty()) return CategoryConfidence(0, null, 0)
+    val top = matchingTxns.flatMap { it.categoryAmounts }
+        .groupBy { it.categoryId }
+        .maxByOrNull { it.value.size }
+    return CategoryConfidence(
+        matchCount = matchingTxns.size,
+        topCategoryId = top?.key,
+        topCategoryCount = top?.value?.size ?: 0
+    )
+}
+
 private fun sharesFiveCharSubstring(s1: String, s2: String, minChars: Int = 5): Boolean {
     // Strip non-alphanumeric so "Wal-Mart"/"Walmart" and "O'Riley"/"ORiley" match
     val a = s1.replace(Regex("[^a-z0-9]"), "")

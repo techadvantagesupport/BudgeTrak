@@ -262,6 +262,8 @@ fun TransactionsScreen(
     categories: List<Category>,
     isPaidUser: Boolean = false,
     isSubscriber: Boolean = false,
+    aiCsvCategorizeEnabled: Boolean = false,
+    isNetworkAvailable: Boolean = true,
     recurringExpenses: List<RecurringExpense> = emptyList(),
     amortizationEntries: List<AmortizationEntry> = emptyList(),
     incomeSources: List<IncomeSource> = emptyList(),
@@ -401,6 +403,7 @@ fun TransactionsScreen(
     // CSV Import state
     val context = LocalContext.current
     var showImportFormatDialog by remember { mutableStateOf(false) }
+    var aiImportBusy by remember { mutableStateOf(false) }
     var selectedBankFormat by remember { mutableStateOf(BankFormat.GENERIC_CSV) }
     var importStage by remember { mutableStateOf<ImportStage?>(null) }
     val parsedTransactions = remember { mutableStateListOf<Transaction>() }
@@ -565,10 +568,16 @@ fun TransactionsScreen(
                 importStage = ImportStage.PARSE_ERROR
             } else {
                 // Auto-categorize only for bank imports (they lack categories)
-                val processed = if (selectedBankFormat == BankFormat.US_BANK || selectedBankFormat == BankFormat.GENERIC_CSV) {
+                val isBank = selectedBankFormat == BankFormat.US_BANK || selectedBankFormat == BankFormat.GENERIC_CSV
+                val heuristicResult = if (isBank) {
                     parsedTransactions.map { txn -> autoCategorize(txn, transactions, categories, matchChars) }
                 } else {
                     parsedTransactions.toList()
+                }
+                val processed = if (isBank && aiCsvCategorizeEnabled && (isPaidUser || isSubscriber) && isNetworkAvailable) {
+                    aiUpgradeLowConfidence(heuristicResult, parsedTransactions.toList(), transactions, categories, matchChars) { busy -> aiImportBusy = busy }
+                } else {
+                    heuristicResult
                 }
                 parsedTransactions.clear()
                 parsedTransactions.addAll(processed)
@@ -1935,6 +1944,7 @@ fun TransactionsScreen(
     ImportFormatSelectionDialog(
         showImportFormatDialog = showImportFormatDialog,
         selectedBankFormat = selectedBankFormat,
+        showAiOfflineHint = aiCsvCategorizeEnabled && (isPaidUser || isSubscriber) && !isNetworkAvailable,
         onDismiss = { showImportFormatDialog = false },
         onFormatSelected = { selectedBankFormat = it },
         onSelectFile = {
@@ -1942,6 +1952,34 @@ fun TransactionsScreen(
             filePickerLauncher.launch(arrayOf("text/*", "*/*"))
         }
     )
+
+    // AI categorization busy overlay
+    if (aiImportBusy) {
+        AdAwareDialog(onDismissRequest = { /* blocking */ }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = S.transactions.importAiBusy,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
 
     // Parse error dialog
     ImportParseErrorDialog(
@@ -1956,20 +1994,31 @@ fun TransactionsScreen(
             importError = null
         },
         onKeepParsed = {
-            val categorized = parsedTransactions.map { txn ->
+            val originalParsed = parsedTransactions.toList()
+            val heuristicResult = originalParsed.map { txn ->
                 autoCategorize(txn, transactions, categories, matchChars)
             }
-            parsedTransactions.clear()
-            parsedTransactions.addAll(categorized)
-            totalFileTransactions = parsedTransactions.size
-            val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
-            parsedTransactions.clear()
-            parsedTransactions.addAll(filtered)
-            importApproved.clear()
-            importIndex = 0
-            ignoreAllDuplicates = false
-            importError = null
-            importStage = ImportStage.DUPLICATE_CHECK
+            val applyAndAdvance: (List<Transaction>) -> Unit = { categorized ->
+                parsedTransactions.clear()
+                parsedTransactions.addAll(categorized)
+                totalFileTransactions = parsedTransactions.size
+                val filtered = filterAlreadyLoadedDays(parsedTransactions.toList(), transactions)
+                parsedTransactions.clear()
+                parsedTransactions.addAll(filtered)
+                importApproved.clear()
+                importIndex = 0
+                ignoreAllDuplicates = false
+                importError = null
+                importStage = ImportStage.DUPLICATE_CHECK
+            }
+            if (aiCsvCategorizeEnabled && (isPaidUser || isSubscriber) && isNetworkAvailable) {
+                saveScope.launch {
+                    val upgraded = aiUpgradeLowConfidence(heuristicResult, originalParsed, transactions, categories, matchChars) { busy -> aiImportBusy = busy }
+                    applyAndAdvance(upgraded)
+                }
+            } else {
+                applyAndAdvance(heuristicResult)
+            }
         },
         onDiscard = {
             parsedTransactions.clear()
@@ -5512,6 +5561,7 @@ private fun FullBackupLoadDialog(
 private fun ImportFormatSelectionDialog(
     showImportFormatDialog: Boolean,
     selectedBankFormat: BankFormat,
+    showAiOfflineHint: Boolean = false,
     onDismiss: () -> Unit,
     onFormatSelected: (BankFormat) -> Unit,
     onSelectFile: () -> Unit
@@ -5567,6 +5617,14 @@ private fun ImportFormatSelectionDialog(
                         }
                     }
 
+                    if (showAiOfflineHint) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = S.transactions.importAiNetworkHint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF9800)
+                        )
+                    }
                 }
 
                 DialogFooter {
@@ -5765,5 +5823,42 @@ private fun EffectExplanationPopup(
                 }
             }
         )
+    }
+}
+
+// Hybrid: run heuristic on every row, then send only low-confidence rows to Flash-Lite.
+// High-confidence = ≥5 matching historical txns AND ≥80% agreement on a single category.
+private suspend fun aiUpgradeLowConfidence(
+    heuristicResult: List<Transaction>,
+    originalParsed: List<Transaction>,
+    history: List<Transaction>,
+    categories: List<Category>,
+    matchChars: Int,
+    setBusy: (Boolean) -> Unit
+): List<Transaction> {
+    val lowConfIndices = heuristicResult.indices.filter { i ->
+        val conf = com.techadvantage.budgetrak.data.categoryConfidence(originalParsed[i], history, matchChars)
+        !(conf.matchCount >= 5 && conf.agreementRatio >= 0.8)
+    }
+    if (lowConfIndices.isEmpty()) return heuristicResult
+
+    setBusy(true)
+    try {
+        val batch = lowConfIndices.map { originalParsed[it] }
+        val apiResult = com.techadvantage.budgetrak.data.ai.AiCategorizerService
+            .categorizeBatch(batch, categories)
+        val aiMap = apiResult.getOrNull() ?: return heuristicResult
+        val output = heuristicResult.toMutableList()
+        lowConfIndices.forEachIndexed { batchIdx, origIdx ->
+            val catId = aiMap[batchIdx] ?: return@forEachIndexed
+            val base = output[origIdx]
+            output[origIdx] = base.copy(
+                categoryAmounts = listOf(CategoryAmount(catId, base.amount)),
+                isUserCategorized = false
+            )
+        }
+        return output
+    } finally {
+        setBusy(false)
     }
 }

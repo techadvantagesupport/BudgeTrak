@@ -124,6 +124,8 @@ fun SettingsScreen(
     onWidgetLogoChange: (Boolean) -> Unit = {},
     autoCapitalize: Boolean = true,
     onAutoCapitalizeChange: (Boolean) -> Unit = {},
+    aiCsvCategorizeEnabled: Boolean = false,
+    onAiCsvCategorizeChange: (Boolean) -> Unit = {},
     crashlyticsEnabled: Boolean = true,
     onCrashlyticsEnabledChange: (Boolean) -> Unit = {},
     matchDays: Int = 7,
@@ -778,6 +780,35 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground
                     )
+                }
+            }
+
+            // AI CSV categorization (Paid + Subscriber)
+            if (isPaidUser || isSubscriber) {
+                item {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = aiCsvCategorizeEnabled,
+                                onCheckedChange = onAiCsvCategorizeChange,
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.primary,
+                                    uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                                )
+                            )
+                            Text(
+                                text = S.settings.aiCsvCategorizeLabel,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                        Text(
+                            text = S.settings.aiCsvCategorizeSubtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+                            modifier = Modifier.padding(start = 48.dp, end = 16.dp, bottom = 4.dp)
+                        )
+                    }
                 }
             }
 

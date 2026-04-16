@@ -245,6 +245,11 @@ data class SettingsStrings(
     val aiOcrFailed: String,
     val aiOcrHelpTitle: String,
     val aiOcrHelpBody: String,
+    // AI CSV Categorization
+    val aiCsvCategorizeLabel: String,
+    val aiCsvCategorizeSubtitle: String,
+    val aiCsvCategorizeHelpTitle: String,
+    val aiCsvCategorizeHelpBody: String,
     val sharedImageProcessFailed: String,
     // Data Management
     val dataManagementSection: String,
@@ -449,6 +454,9 @@ data class TransactionsStrings(
     val linkedToIncome: (String) -> String,
     val linkedToSavingsGoal: (String) -> String,
     val unmodifiedBankTransactions: String,
+    // AI CSV Categorization — import-dialog side
+    val importAiNetworkHint: String,
+    val importAiBusy: String,
     // Bank format names
     val formatGenericCsv: String,
     val formatUsBank: String,

@@ -826,6 +826,13 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
 
             HelpDivider()
 
+            // ─── SECTION: AI CSV CATEGORIZATION ───
+            SectionTitle(S.settings.aiCsvCategorizeHelpTitle)
+            BodyText(S.settings.aiCsvCategorizeHelpBody)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDivider()
+
             // ─── SECTION 11: TIPS ───
             SectionTitle(S.transactionsHelp.tipsTitle)
             BulletText(S.transactionsHelp.tip1)

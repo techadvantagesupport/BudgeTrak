@@ -88,7 +88,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 ## Matching & Auto-Categorize
 - 4 ranked finders: `findDuplicates` (amount then date), `findRecurringExpenseMatches` + `findBudgetIncomeMatches` (date then amount), `findAmortizationMatches` (amount). Match confirmation dialogs show radio list, best pre-selected.
 - Merchant matching strips non-alphanumeric (Wal-Mart = Walmart).
-- **Auto-categorize** runs in two modes: (1) **CSV bank imports** (US_BANK, GENERIC_CSV) — applies to every row, falls back to "other" when no match; (2) **Manual entry in TransactionDialog** — fires once when merchant ≥ `matchChars` and no category selected, applies only if a real match exists (skips "other" fallback), respects an already-picked category. BudgeTrak-native CSV imports skip auto-categorize entirely (categories already present).
+- **Auto-categorize** runs in three modes: (1) **CSV bank imports** (US_BANK, GENERIC_CSV) — on-device heuristic applies to every row, falls back to "other" when no match; (2) **AI upgrade** (opt-in, Paid+Sub) — after the heuristic runs, rows with <5 matches OR <80% agreement are batched to Gemini 2.5 Flash-Lite; silent heuristic fallback on network/API failure; (3) **Manual entry in TransactionDialog** — fires once when merchant ≥ `matchChars` and no category selected, applies only if a real match exists (skips "other" fallback), respects an already-picked category. BudgeTrak-native CSV imports skip auto-categorize entirely.
 - Auto-capitalize APA Title Case (`TitleCaseUtil`) on merchant + description; Settings checkbox, default on.
 
 ## Dashboard, Simulation, Savings, Receipts, Backup
@@ -159,6 +159,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 ## Future Work
 - [Subscriber feature ideas](project_subscriber_feature_ideas.md).
 - [OCR/AI receipt capture plan](project_ocr_receipt_capture.md).
+- [AI CSV categorization](project_ai_csv_categorization.md) — **shipped 2026-04-16**. Flash-Lite, hybrid heuristic+AI (≥5 matches & ≥80% agreement skips AI), opt-in, Paid+Sub.
 - [Widget photo support (designed)](project_widget_photos.md).
 - [Pre-launch TODO](project_prelaunch_todo.md) — most done; App Check integrity level deferred.
 - [Play Store launch plan](project_play_store_launch.md) — personal-first then transfer-to-org strategy, address plan, DUNS timeline.

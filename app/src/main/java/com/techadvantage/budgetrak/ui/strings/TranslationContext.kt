@@ -233,6 +233,11 @@ object TranslationContext {
         "aiOcrIconDesc" to "Accessibility content description for the AI receipt scanner icon in the add-transaction dialog header.",
         "aiOcrComingSoon" to "Toast shown to subscribers who tap the placeholder AI icon while the real OCR extractor is not yet wired up.",
         "upgradeForAiOcr" to "Toast shown to non-subscribers (Free and Paid tiers) when they tap the AI icon, encouraging them to upgrade to the Subscriber tier.",
+        // AI CSV Categorization
+        "aiCsvCategorizeLabel" to "Checkbox label in Settings for enabling AI-powered categorization of bank-CSV imports. Paid and Subscriber tiers only.",
+        "aiCsvCategorizeSubtitle" to "Small gray subtitle under the AI CSV categorization checkbox explaining what the toggle does.",
+        "aiCsvCategorizeHelpTitle" to "Section title on the Transactions help page describing the AI CSV categorization feature.",
+        "aiCsvCategorizeHelpBody" to "Help page body explaining how AI CSV categorization works, the on-device/AI hybrid, data-in-transit encryption, no-retention promise, and that the user can turn it off. Multi-paragraph with \\n\\n between paragraphs.",
         "sharedImageProcessFailed" to "Toast shown when an image shared from another app fails to process into a receipt photo."
     )
 
@@ -431,6 +436,8 @@ object TranslationContext {
         "linkedToIncome" to "Badge/label on a transaction indicating it is linked to a budget income source. Lambda: 'name' is the income source name.",
         "linkedToSavingsGoal" to "Badge/label on a transaction indicating it is linked to a savings goal. Lambda: 'name' is the savings goal name. Displayed as 'Savings Goal: [name]'.",
         "unmodifiedBankTransactions" to "Filter/label for transactions imported from a bank that haven't been manually reviewed or modified by the user yet.",
+        "importAiNetworkHint" to "Orange-colored informational line shown in the CSV import-format dialog, only when AI CSV categorization is enabled and the device is offline, reminding the user to connect to Wi-Fi or mobile data first.",
+        "importAiBusy" to "Progress/spinner label shown while the AI is categorizing transactions during a CSV import.",
         "formatGenericCsv" to "Radio button label in the import dialog for a generic CSV parser that auto-detects column layout. Works with any bank's CSV export.",
         "formatUsBank" to "Radio button label in the import dialog for US Bank's specific CSV format. 'US Bank' is a brand name — do not translate.",
         "formatBudgeTrakCsv" to "Radio button label in the import dialog for loading a BudgeTrak CSV save file. 'BudgeTrak' is the app brand name — do not translate.",

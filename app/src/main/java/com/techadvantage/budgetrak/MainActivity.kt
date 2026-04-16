@@ -1615,6 +1615,11 @@ class MainActivity : ComponentActivity() {
                 vm.autoCapitalize = newValue
                 vm.prefs.edit().putBoolean("autoCapitalize", newValue).apply()
             },
+            aiCsvCategorizeEnabled = vm.aiCsvCategorizeEnabled,
+            onAiCsvCategorizeChange = { newValue ->
+                vm.aiCsvCategorizeEnabled = newValue
+                vm.prefs.edit().putBoolean("aiCsvCategorizeEnabled", newValue).apply()
+            },
             crashlyticsEnabled = vm.crashlyticsEnabled,
             onCrashlyticsEnabledChange = { newValue ->
                 vm.crashlyticsEnabled = newValue
@@ -1882,6 +1887,8 @@ class MainActivity : ComponentActivity() {
             categories = vm.activeCategories,
             isPaidUser = vm.isPaidUser || vm.isSubscriber,
             isSubscriber = vm.isSubscriber,
+            aiCsvCategorizeEnabled = vm.aiCsvCategorizeEnabled,
+            isNetworkAvailable = vm.isNetworkAvailable,
             recurringExpenses = vm.activeRecurringExpenses,
             amortizationEntries = vm.activeAmortizationEntries,
             incomeSources = vm.activeIncomeSources,

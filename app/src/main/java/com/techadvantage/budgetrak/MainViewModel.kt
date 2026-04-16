@@ -151,6 +151,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     var showWidgetLogo by mutableStateOf(prefs.getBoolean("showWidgetLogo", true))
     var autoCapitalize by mutableStateOf(prefs.getBoolean("autoCapitalize", true))
+    var aiCsvCategorizeEnabled by mutableStateOf(prefs.getBoolean("aiCsvCategorizeEnabled", false))
     var crashlyticsEnabled by mutableStateOf(prefs.getBoolean("crashlyticsEnabled", true))
 
     // ── Backup State ──
