@@ -819,6 +819,13 @@ fun TransactionsHelpScreen(onBack: () -> Unit) {
 
             HelpDivider()
 
+            // ─── SECTION: AI RECEIPT SCAN ───
+            SectionTitle(S.settings.aiOcrHelpTitle)
+            BodyText(S.settings.aiOcrHelpBody)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HelpDivider()
+
             // ─── SECTION 11: TIPS ───
             SectionTitle(S.transactionsHelp.tipsTitle)
             BulletText(S.transactionsHelp.tip1)

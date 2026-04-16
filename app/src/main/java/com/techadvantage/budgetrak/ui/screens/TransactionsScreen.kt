@@ -77,6 +77,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import com.techadvantage.budgetrak.ui.theme.AdAwareDatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -292,7 +293,10 @@ fun TransactionsScreen(
     onRequestArchived: () -> Unit = {},
     archiveCutoffDate: java.time.LocalDate? = null,
     onUpdateArchivedTransaction: (Transaction) -> Unit = {},
-    autoCapitalize: Boolean = true
+    autoCapitalize: Boolean = true,
+    ocrState: com.techadvantage.budgetrak.data.ocr.OcrState = com.techadvantage.budgetrak.data.ocr.OcrState.Idle,
+    onRunOcr: ((String) -> Unit)? = null,
+    onClearOcrState: (() -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -1265,7 +1269,13 @@ fun TransactionsScreen(
             budgetPeriod = budgetPeriod,
             isPaidUser = isPaidUser,
             isSubscriber = isSubscriber,
-            onDismiss = { showAddIncome = false },
+            ocrState = ocrState,
+            onRunOcr = onRunOcr,
+            onClearOcrState = onClearOcrState,
+            onDismiss = {
+                showAddIncome = false
+                onClearOcrState?.invoke()
+            },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
                 val dups = findDuplicates(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
@@ -1317,7 +1327,13 @@ fun TransactionsScreen(
             budgetPeriod = budgetPeriod,
             isPaidUser = isPaidUser,
             isSubscriber = isSubscriber,
-            onDismiss = { showAddExpense = false },
+            ocrState = ocrState,
+            onRunOcr = onRunOcr,
+            onClearOcrState = onClearOcrState,
+            onDismiss = {
+                showAddExpense = false
+                onClearOcrState?.invoke()
+            },
             onSave = { txn ->
                 val alreadyLinked = txn.linkedRecurringExpenseId != null || txn.linkedAmortizationEntryId != null || txn.linkedIncomeSourceId != null || txn.linkedSavingsGoalId != null
                 val dups = findDuplicates(txn, transactions, percentTolerance, matchDollar, matchDays, matchChars)
@@ -1377,7 +1393,13 @@ fun TransactionsScreen(
             budgetPeriod = budgetPeriod,
             isPaidUser = isPaidUser,
             isSubscriber = isSubscriber,
-            onDismiss = { editingTransaction = null },
+            ocrState = ocrState,
+            onRunOcr = onRunOcr,
+            onClearOcrState = onClearOcrState,
+            onDismiss = {
+                editingTransaction = null
+                onClearOcrState?.invoke()
+            },
             onUpdatePhoto = { updated ->
                 // Update transaction (photo add/delete) without closing dialog
                 onUpdateTransaction(updated)
@@ -2959,6 +2981,9 @@ fun TransactionDialog(
     isPaidUser: Boolean = false,
     isSubscriber: Boolean = false,
     initialReceiptId1: String? = null,
+    ocrState: com.techadvantage.budgetrak.data.ocr.OcrState = com.techadvantage.budgetrak.data.ocr.OcrState.Idle,
+    onRunOcr: ((String) -> Unit)? = null,
+    onClearOcrState: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit,
     onUpdatePhoto: ((Transaction) -> Unit)? = null,  // update transaction without closing dialog
@@ -3221,6 +3246,51 @@ fun TransactionDialog(
         unfocusedLabelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
     )
 
+    // AI OCR: observe ocrState and prefill fields on Success, toast on Failure.
+    LaunchedEffect(ocrState) {
+        val state = ocrState
+        when (state) {
+            is com.techadvantage.budgetrak.data.ocr.OcrState.Success -> {
+                val r = state.result
+                // Merchant
+                if (source.isBlank()) source = r.merchant
+                // Date (parse ISO YYYY-MM-DD)
+                runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { selectedDate = it }
+                // Amount + categories — only prefill if user hasn't started entering amounts.
+                val anyAmountEntered = singleAmountText.isNotBlank() ||
+                    categoryAmountTexts.values.any { it.isNotBlank() } ||
+                    totalAmountText.isNotBlank()
+                val cats = r.categoryAmounts.orEmpty().filter { ca ->
+                    categories.any { it.id == ca.categoryId }
+                }
+                if (!anyAmountEntered) {
+                    if (cats.size <= 1) {
+                        singleAmountText = formatAmount(r.amount, maxDecimals)
+                        cats.firstOrNull()?.let { selectedCategoryIds[it.categoryId] = true }
+                    } else {
+                        totalAmountText = formatAmount(r.amount, maxDecimals)
+                        cats.forEach {
+                            selectedCategoryIds[it.categoryId] = true
+                            categoryAmountTexts[it.categoryId] = formatAmount(it.amount, maxDecimals)
+                        }
+                        userOwnedFields = buildSet {
+                            add("total")
+                            cats.forEach { add(it.categoryId.toString()) }
+                        }
+                    }
+                }
+                // User must review (OCR-provided data is never "verified").
+                verified = false
+                onClearOcrState?.invoke()
+            }
+            is com.techadvantage.budgetrak.data.ocr.OcrState.Failed -> {
+                toastState.show(S.settings.aiOcrFailed)
+                onClearOcrState?.invoke()
+            }
+            else -> Unit
+        }
+    }
+
     // Category picker dialog state
     var showCategoryPicker by remember { mutableStateOf(false) }
     var pickerHasOpened by remember { mutableStateOf(false) }
@@ -3324,21 +3394,40 @@ fun TransactionDialog(
                         modifier = Modifier.align(Alignment.CenterEnd),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Placeholder AI OCR icon — same greyed-icon-with-toast pattern as camera.
-                        // Gated on isSubscriber only (Free AND Paid tiers see the upgrade toast).
-                        Icon(
-                            imageVector = Icons.Filled.AutoAwesome,
-                            contentDescription = S.settings.aiOcrIconDesc,
-                            tint = if (isSubscriber) headerTxt else headerTxt.copy(alpha = 0.3f),
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clickable {
-                                    toastState.show(
-                                        if (isSubscriber) S.settings.aiOcrComingSoon
-                                        else S.settings.upgradeForAiOcr
-                                    )
-                                }
-                        )
+                        // AI OCR icon — subscriber-only, explicit-tap trigger.
+                        // Greyed for Free/Paid users; mid-greyed when no slot-1 photo present.
+                        val slot1ReceiptId = if (isEdit) editTransaction?.receiptId1 else addModeReceiptId1
+                        val hasSlot1 = slot1ReceiptId != null
+                        val isOcrLoading = ocrState is com.techadvantage.budgetrak.data.ocr.OcrState.Loading
+                        if (isOcrLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = headerTxt
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.AutoAwesome,
+                                contentDescription = S.settings.aiOcrIconDesc,
+                                tint = when {
+                                    !isSubscriber -> headerTxt.copy(alpha = 0.3f)
+                                    !hasSlot1     -> headerTxt.copy(alpha = 0.5f)
+                                    else          -> headerTxt
+                                },
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clickable {
+                                        when {
+                                            !isSubscriber -> toastState.show(S.settings.upgradeForAiOcr)
+                                            !hasSlot1     -> toastState.show(S.settings.aiOcrAddReceiptFirst)
+                                            slot1ReceiptId != null -> {
+                                                toastState.show(S.settings.aiOcrReading)
+                                                onRunOcr?.invoke(slot1ReceiptId)
+                                            }
+                                        }
+                                    }
+                            )
+                        }
                         Spacer(Modifier.width(12.dp))
                         if (!isPaidUser) {
                             Icon(

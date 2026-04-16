@@ -1,5 +1,6 @@
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Properties
 import java.util.TimeZone
 
 plugins {
@@ -53,6 +54,15 @@ android {
             timeZone = TimeZone.getTimeZone("UTC")
         }.format(Date())
         buildConfigField("String", "BUILD_TIME", "\"$buildTime UTC\"")
+
+        // Gemini API key from local.properties (kept out of VCS).
+        val localProps = Properties()
+        val localPropsFile = rootProject.file("local.properties")
+        if (localPropsFile.exists()) {
+            localPropsFile.inputStream().use { localProps.load(it) }
+        }
+        val geminiKey = localProps.getProperty("GEMINI_API_KEY", "")
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
     }
 }
 
@@ -87,6 +97,9 @@ dependencies {
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     implementation("com.google.firebase:firebase-appcheck-debug")
     implementation("com.google.firebase:firebase-crashlytics")
+
+    // Google AI (Gemini) — direct SDK, uses API key from local.properties
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.1")

@@ -217,6 +217,65 @@ Share-intent routing + placeholder AI icon shipped 2026-04-14 (commits `03e10cd`
 - **Vietnamese deferred to post-launch.** Flash already does 90/100/100/94 on Vietnamese but we're US-English first. Localization adds in parallel after launch is stable.
 - **Flash-Lite deferred to post-launch cost optimization.** Smart-reask targeting small-digit numeric confusion may close the gap; revisit when OCR usage is high enough for the 5× cost savings to matter.
 
+## Flash-Lite R11 iteration (2026-04-14) — production-viable cost alternative
+
+Three-round iteration loop in `tools/ocr-harness/scripts/iterate-round{1,2,3}.js` + `validate-r11.js`. Goal: recover Flash-Lite's amount accuracy without sacrificing Lite's 5× cost / 3× speed advantage.
+
+### R11 — the winning Lite configuration
+
+Two techniques stacked:
+
+1. **Integer-cents representation** — schema returns `amountCents: <integer>` instead of `amount: <number>`. Forces Lite to read both cent digits structurally. `$5.35 → 535`, `$169.78 → 16978`. Biggest single win (+83% amount accuracy on struggle set).
+2. **Transcribe-then-extract** — schema includes a required `transcription` string field filled first, with extraction derived from it. Forces character-by-character reading. Fixed the "cashier name grabbed as merchant" bug (`tan chay yee` → `OJC MARKETING`).
+
+Canonical R11 prompt preserved in `scripts/iterate-round3.js` and `scripts/validate-r11.js` (`R11_PROMPT` + `R11_SCHEMA`). Port this text when wiring Lite as an alternative to Flash.
+
+### R11 validation on 53 English receipts (final numbers)
+
+| Metric | R11 Lite | Flash v0.4 | Lite v0.4 (pre-R11) |
+|---|---|---|---|
+| merchant | 94.3% | 98.1% | 92.5% |
+| date | **100%** | 100% | 96.2% |
+| amount | **100%** | 100% | 88.7% |
+| category (single-bucket) | 71.7% | 83.0% | 77.4% |
+| avg latency | 2.9s | 4.8s | 1.4s |
+| cost/call | ~$0.00025 | ~$0.001 | ~$0.0002 |
+
+R11 Lite matches Flash on the two business-critical fields (date + amount) at 25% of the cost. Only gap is merchant (3 TEO/TED misses — OCR character confusion) and category (5pt regression — transcription distracts from semantic categorization).
+
+### What worked in the iteration
+
+- **Integer cents (R4)** — the single biggest lever (+5 amount wins on 12-receipt struggle set)
+- **Transcribe-then-extract (R6)** — perfect date, caught identity errors
+- **Merchant re-ask focused on "do NOT return a cashier name"** — fixed `tan chay yee` specifically
+- **Explicit YYYY-MM-DD ISO enforcement** — fixed terse-prompt date regression
+- **GST-summary trap directive** — got the AEON pre-tax-net case (12.25 not 11.55)
+- **Label audit** — `sroie_0024` was 169.8 but receipt actually says 169.78 (Malaysian cash-rounding quirk). Fixing one bad label moved several tests from 11/12 to 12/12.
+
+### What didn't work (negative results worth remembering)
+
+- **Self-consistency multi-pass** — Lite's errors are systematic not random; two passes give the same wrong answer
+- **Focused amount re-ask** (T7 Round 1, R7 Round 2) — actively regressed. Asking Lite again makes it double down on the wrong value.
+- **Meticulous bookkeeper persona** — essentially no effect
+- **Amount-as-string** (R10) — no improvement over number; Lite drops cents either way
+- **Few-shot cents examples** (R14) — matched R4 but no uplift
+- **Temperature 0.3 variance** (R17) — no change
+- **Flash amount cross-check** (R12 round 3) — regressed on Malaysian cash-rounding receipts where Lite got 169.78 correct and Flash "corrected" to 169.80
+- **Chain-of-thought** (T3 round 1) — modest +2 but couldn't beat R11's +10
+- **amountLineRaw stage** (R18 round 3) — adding a verbatim-quote step HURT amount accuracy. Too many stages = drift.
+
+### Remaining limitation: character-level OCR confusion
+
+TEO HENG STATIONERY → TED HENG in 3/53 English receipts. Lite's vision model biases toward the English word "TED" over the less common Malay name "TEO". This is model-capability, not prompt-fixable. Options if we pursue further:
+- Higher-resolution image preprocessing (needs `sharp` which isn't available on android-arm64)
+- Flash for merchant only (+$0.0003/call)
+- Post-extraction fuzzy matching against user's historical merchants
+- Accept the 3-receipt pattern, trust users to correct "TED HENG" when they see it
+
+### Session cost
+
+All 3 iteration rounds + validation: ~$0.10. Total OCR-harness spend across the whole project: ~$0.90 of $10 prepayment.
+
 ## Smart-reask in production (how it works without labels)
 
 In the harness we detect mismatches by comparing to known labels. In production there are no labels — so smart-reask must work from signals available in the extraction response itself. Four tiers of signal, in decreasing reliability:
@@ -442,3 +501,29 @@ Draft language to drop into the help file and privacy policy once the feature sh
 - Do we strip EXIF / GPS / device metadata from the image before sending? Probably yes — there's no reason to send location data along with a receipt.
 - How do we surface errors gracefully? "AI couldn't read this receipt" needs to drop the user into the manual entry dialog with the photo still attached, not feel like a failure.
 - Multi-language receipts: does Haiku handle them out of the box? (Almost certainly yes for major languages, but worth verifying with a test set.)
+
+## v1 implementation — shipped 2026-04-16
+
+**Prompt winner**: R7-T10 (offline harness Round 7, variant T10) — category rules C3+C4+C6 + merchant priority prepended BEFORE `FLASH_BASE`. Validated on 158 app-quality receipts: 85% merchant, 99% date, 100% amount, 65% cset.
+
+**SDK choice**: `com.google.ai.client.generativeai:generativeai:0.9.0` (direct Google AI SDK, not Firebase AI Logic). Earlier attempts with `firebase-vertexai` required Firebase BOM 33.x, and the BOM bump was destabilizing the existing Firebase stack. Direct SDK keeps Firebase BOM at 32.7.0 and uses `BuildConfig.GEMINI_API_KEY` loaded from `local.properties` at build time.
+
+**Trigger model**: Explicit user tap on the AutoAwesome (sparkle) icon in the TransactionDialog header. Not automatic on capture/share. Only processes the photo in slot 1 (`receiptId1`). Help screen instructs users to put their receipt in slot 1 first.
+
+**Gating**: `isSubscriber` only. Free and Paid tiers see the upgrade toast. No slot-1 photo → mid-greyed icon with "Add a receipt photo to slot 1 first" toast.
+
+**Files**:
+- `data/ocr/OcrResult.kt` — `OcrResult` + `OcrCategoryAmount` + sealed `OcrState`
+- `data/ocr/OcrPromptBuilder.kt` — Kotlin port of the harness prompt with dynamic category list
+- `data/ocr/ReceiptOcrService.kt` — singleton using `GenerativeModel("gemini-2.5-flash")` temp 0, JSON schema, 30s `withTimeout`, Crashlytics on failure
+- `MainViewModel.runOcrOnSlot1()` / `clearOcrState()` / `var ocrState`
+- `TransactionDialog` — AI icon handler + `LaunchedEffect(ocrState)` pre-fills merchant/date/amount/categories on Success, toasts on Failure, shows `CircularProgressIndicator` during Loading. Only pre-fills fields the user hasn't already entered. Sets `verified = false`.
+
+**Deferred from v1 plan**:
+- First-run consent dialog — not yet wired (assumes subscriber opted in at subscribe time)
+- Monthly quota for Free/Paid trials — not implemented; feature is Subscribers-only
+- EXIF/GPS strip before upload — not yet added
+- Settings toggle to disable Receipt AI — not yet wired
+- ZDR request to Google — pending usage justification
+
+**Known gotcha** (see `feedback_gradle_clean_after_dep_swap.md` in global memory): always `./gradlew clean assembleDebug` after dependency changes — incremental builds leave stale DEX files that can cause startup crashes.

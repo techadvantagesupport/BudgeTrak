@@ -9,3 +9,6 @@ results/*.csv
 # amount/date/merchant ground truth.
 test-data/images/*
 !test-data/images/.gitkeep
+test-data/images-original/*
+!test-data/images-original/.gitkeep
+test-data/staging-*/

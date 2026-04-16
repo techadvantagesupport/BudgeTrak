@@ -48,6 +48,8 @@ import com.techadvantage.budgetrak.data.findAmortizationMatches
 import com.techadvantage.budgetrak.data.findBudgetIncomeMatches
 import com.techadvantage.budgetrak.data.findDuplicates
 import com.techadvantage.budgetrak.data.findRecurringExpenseMatches
+import com.techadvantage.budgetrak.data.ocr.OcrState
+import com.techadvantage.budgetrak.data.ocr.ReceiptOcrService
 import com.techadvantage.budgetrak.data.generateTransactionId
 import com.techadvantage.budgetrak.data.getDefaultCategoryName
 import com.techadvantage.budgetrak.data.getDoubleCompat
@@ -110,6 +112,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Signals MainActivity to show a 5s "photos require paid/subscriber" toast when a
     // free user shares an image (dialog still opens, but the photo is discarded).
     var sharedPhotoBlockedToastPending by mutableStateOf(false)
+
+    // ── AI OCR ──
+    var ocrState by mutableStateOf<OcrState>(OcrState.Idle)
 
     // Dashboard matching state
     var dashPendingManualSave by mutableStateOf<Transaction?>(null)
@@ -2201,6 +2206,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             dashboardShowAddExpense = true
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // AI OCR (subscriber-only, explicit tap trigger, reads slot-1 photo)
+    // ═══════════════════════════════════════════════════════════════════
+
+    fun runOcrOnSlot1(receiptId: String) {
+        if (ocrState is OcrState.Loading) return
+        ocrState = OcrState.Loading
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                ReceiptOcrService.extractFromReceipt(context, receiptId, categories.toList())
+            }
+            ocrState = result.fold(
+                onSuccess = { OcrState.Success(it) },
+                onFailure = { OcrState.Failed(it.message ?: "OCR failed") }
+            )
+        }
+    }
+
+    fun clearOcrState() {
+        ocrState = OcrState.Idle
     }
 
     // ═══════════════════════════════════════════════════════════════════

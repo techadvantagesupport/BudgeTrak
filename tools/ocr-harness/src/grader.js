@@ -43,6 +43,49 @@ export function gradeResult(expected, actual) {
     result.category.pass = ids.includes(expected.categoryId);
   }
 
+  // ── Per-item category grading (new) ────────────────────────────────────
+  // When expected.categoryAmounts is populated (per-line-item ground truth),
+  // we evaluate two additional metrics:
+  //   - setMatch: every expected categoryId appears in extracted with ≥$0.01
+  //   - shareMatch: for every expected category, extracted amount within
+  //       max($2.00, 15% of expected). Requires setMatch first.
+  //
+  // Single-category expected labels trivially trigger setMatch when the
+  // extracted array includes that one id. Multi-category labels are where
+  // this gets interesting — Target, Sam's Club, etc.
+  result.categoryAmounts = {
+    expected: expected.categoryAmounts,
+    actual: actual?.categoryAmounts,
+    setMatch: false,
+    shareMatch: false,
+    skipped: !expected.categoryAmounts,
+  };
+
+  if (expected.categoryAmounts && actual?.categoryAmounts) {
+    // SUM per-categoryId — handle models that return one entry per line item
+    // rather than consolidating (e.g., Lite returns 37 entries for Sam's Club).
+    const actualById = new Map();
+    for (const c of actual.categoryAmounts) {
+      if (typeof c.categoryId !== "number" || typeof c.amount !== "number") continue;
+      actualById.set(c.categoryId, (actualById.get(c.categoryId) || 0) + c.amount);
+    }
+    // Drop any categories with total < $0.01 (protects against tiny rounding residuals).
+    for (const [id, amt] of [...actualById]) if (Math.abs(amt) < 0.01) actualById.delete(id);
+
+    const expectedIds = expected.categoryAmounts.map(c => c.categoryId);
+    const allPresent = expectedIds.every(id => actualById.has(id));
+    result.categoryAmounts.setMatch = allPresent;
+
+    if (allPresent) {
+      const allWithinTolerance = expected.categoryAmounts.every(exp => {
+        const act = actualById.get(exp.categoryId);
+        const tolerance = Math.max(2.0, Math.abs(exp.amount) * 0.15);
+        return Math.abs(exp.amount - act) <= tolerance;
+      });
+      result.categoryAmounts.shareMatch = allWithinTolerance;
+    }
+  }
+
   return result;
 }
 
@@ -53,6 +96,10 @@ export function summarize(perTestResults) {
     date:     { pass: 0, total: 0 },
     amount:   { pass: 0, total: 0 },
     category: { pass: 0, total: 0 },
+    categorySet:   { pass: 0, total: 0 },
+    categoryShare: { pass: 0, total: 0 },
+    multiCategorySet:   { pass: 0, total: 0 },
+    multiCategoryShare: { pass: 0, total: 0 },
     elapsedMsTotal: 0,
   };
   for (const t of perTestResults) {
@@ -65,6 +112,20 @@ export function summarize(perTestResults) {
     if (!t.grade.category.skipped) {
       totals.category.total++;
       if (t.grade.category.pass) totals.category.pass++;
+    }
+    const ca = t.grade.categoryAmounts;
+    if (ca && !ca.skipped) {
+      totals.categorySet.total++;
+      if (ca.setMatch) totals.categorySet.pass++;
+      totals.categoryShare.total++;
+      if (ca.shareMatch) totals.categoryShare.pass++;
+      // Multi-category-only sub-segment (receipts with >1 expected category).
+      if (ca.expected && ca.expected.length > 1) {
+        totals.multiCategorySet.total++;
+        if (ca.setMatch) totals.multiCategorySet.pass++;
+        totals.multiCategoryShare.total++;
+        if (ca.shareMatch) totals.multiCategoryShare.pass++;
+      }
     }
   }
   return totals;

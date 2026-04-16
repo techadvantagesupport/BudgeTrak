@@ -891,10 +891,17 @@ class MainActivity : ComponentActivity() {
                 budgetPeriod = vm.budgetPeriod,
                 isPaidUser = vm.isPaidUser || vm.isSubscriber,
                 isSubscriber = vm.isSubscriber,
-                onDismiss = { vm.dashboardShowAddIncome = false },
+                ocrState = vm.ocrState,
+                onRunOcr = { rid -> vm.runOcrOnSlot1(rid) },
+                onClearOcrState = { vm.clearOcrState() },
+                onDismiss = {
+                    vm.dashboardShowAddIncome = false
+                    vm.clearOcrState()
+                },
                 onSave = { txn ->
                     vm.runMatchingChain(txn)
                     vm.dashboardShowAddIncome = false
+                    vm.clearOcrState()
                 },
                 onAddAmortization = { entry ->
                     val added = entry.copy(deviceId = vm.localDeviceId)
@@ -933,14 +940,19 @@ class MainActivity : ComponentActivity() {
                 isPaidUser = vm.isPaidUser || vm.isSubscriber,
                 isSubscriber = vm.isSubscriber,
                 initialReceiptId1 = vm.pendingSharedReceiptId,
+                ocrState = vm.ocrState,
+                onRunOcr = { rid -> vm.runOcrOnSlot1(rid) },
+                onClearOcrState = { vm.clearOcrState() },
                 onDismiss = {
                     vm.dashboardShowAddExpense = false
                     vm.pendingSharedReceiptId = null
+                    vm.clearOcrState()
                 },
                 onSave = { txn ->
                     vm.runMatchingChain(txn)
                     vm.dashboardShowAddExpense = false
                     vm.pendingSharedReceiptId = null
+                    vm.clearOcrState()
                 },
                 onAddAmortization = { entry ->
                     val added = entry.copy(deviceId = vm.localDeviceId)
@@ -2082,7 +2094,10 @@ class MainActivity : ComponentActivity() {
             onRequestArchived = { vm.loadArchivedTransactionsAsync() },
             archiveCutoffDate = vm.archiveCutoffDate,
             onUpdateArchivedTransaction = { vm.updateArchivedTransaction(it) },
-            autoCapitalize = vm.autoCapitalize
+            autoCapitalize = vm.autoCapitalize,
+            ocrState = vm.ocrState,
+            onRunOcr = { rid -> vm.runOcrOnSlot1(rid) },
+            onClearOcrState = { vm.clearOcrState() }
         )
     }
 

@@ -1,23 +1,47 @@
 [
   {
-    "file": "sams_club.png",
+    "file": "sams_club.jpg",
     "source": "internal-screenshots",
     "difficulty": "medium",
     "merchant": "Sam's Club",
     "date": "2026-04-13",
     "amount": 366.88,
     "categoryId": 22695,
-    "notes": "Warehouse store, primarily groceries. Best single-bucket fit is Groceries. Mixed items include home/pet (Dove, pet food) so a legitimate split into Home Supplies is also acceptable."
+    "notes": "Warehouse store, primarily groceries. Best single-bucket fit is Groceries. Mixed items include home/pet (Dove, pet food) so a legitimate split into Home Supplies is also acceptable.",
+    "categoryAmounts": [
+      {
+        "categoryId": 30426,
+        "amount": 38.84
+      },
+      {
+        "categoryId": 30186,
+        "amount": 68.69
+      },
+      {
+        "categoryId": 22695,
+        "amount": 259.35
+      }
+    ]
   },
   {
-    "file": "target.png",
+    "file": "target.jpg",
     "source": "internal-screenshots",
     "difficulty": "easy",
     "merchant": "Target",
     "date": "2026-04-07",
     "amount": 43.45,
     "categoryId": 30186,
-    "notes": "Mixed grocery + home items. Home Supplies is the best single bucket; a split to Groceries is also correct."
+    "notes": "Mixed grocery + home items. Home Supplies is the best single bucket; a split to Groceries is also correct.",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 16.63
+      },
+      {
+        "categoryId": 30186,
+        "amount": 26.82
+      }
+    ]
   },
   {
     "file": "wendys.jpg",
@@ -27,7 +51,13 @@
     "date": "2025-12-19",
     "amount": 12.76,
     "categoryId": 21716,
-    "notes": "Crumpled thermal paper with staining. Fast food → Restaurants/Prepared Food."
+    "notes": "Crumpled thermal paper with staining. Fast food → Restaurants/Prepared Food.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 12.76
+      }
+    ]
   },
   {
     "file": "sroie_0004.jpg",
@@ -37,7 +67,13 @@
     "date": "2019-01-15",
     "amount": 193,
     "categoryId": 47837,
-    "notes": "cat: Kings Safety Shoes - work safety footwear"
+    "notes": "cat: Kings Safety Shoes - work safety footwear",
+    "categoryAmounts": [
+      {
+        "categoryId": 47837,
+        "amount": 193
+      }
+    ]
   },
   {
     "file": "sroie_0006.jpg",
@@ -47,7 +83,13 @@
     "date": "2019-01-02",
     "amount": 170,
     "categoryId": 47837,
-    "notes": "cat: Kings Safety Shoes - work safety footwear"
+    "notes": "cat: Kings Safety Shoes - work safety footwear",
+    "categoryAmounts": [
+      {
+        "categoryId": 47837,
+        "amount": 170
+      }
+    ]
   },
   {
     "file": "sroie_0008.jpg",
@@ -57,7 +99,13 @@
     "date": "2018-02-09",
     "amount": 436.2,
     "categoryId": 30186,
-    "notes": "cat: hardware: welding rods, cutting discs, gloves, pipe fittings"
+    "notes": "cat: hardware: welding rods, cutting discs, gloves, pipe fittings",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 436.2
+      }
+    ]
   },
   {
     "file": "sroie_0010.jpg",
@@ -67,7 +115,13 @@
     "date": "2018-02-01",
     "amount": 4.9,
     "categoryId": 21716,
-    "notes": "cat: Petron station kiosk but only drinks/sandwich purchased, no fuel"
+    "notes": "cat: Petron station kiosk but only drinks/sandwich purchased, no fuel",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 4.9
+      }
+    ]
   },
   {
     "file": "sroie_0012.jpg",
@@ -77,7 +131,13 @@
     "date": "2018-01-18",
     "amount": 38.9,
     "categoryId": 21716,
-    "notes": "consumer name (operator: GERBANG ALAF RESTAURANTS SDN BHD)"
+    "notes": "consumer name (operator: GERBANG ALAF RESTAURANTS SDN BHD)",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 38.9
+      }
+    ]
   },
   {
     "file": "sroie_0014.jpg",
@@ -87,7 +147,13 @@
     "date": "2018-02-05",
     "amount": 7.3,
     "categoryId": 30186,
-    "notes": "cat: building/hardware supplier"
+    "notes": "cat: building/hardware supplier",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 7.3
+      }
+    ]
   },
   {
     "file": "sroie_0016.jpg",
@@ -97,7 +163,13 @@
     "date": "2018-01-29",
     "amount": 6.35,
     "categoryId": 30186,
-    "notes": "cat: Schneider electrical switch/socket outlet"
+    "notes": "cat: Schneider electrical switch/socket outlet",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 6.35
+      }
+    ]
   },
   {
     "file": "sroie_0018.jpg",
@@ -107,7 +179,13 @@
     "date": "2017-12-31",
     "amount": 7.95,
     "categoryId": 30186,
-    "notes": "cat: PVC conduit, connector, cable clips"
+    "notes": "cat: PVC conduit, connector, cable clips",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 7.95
+      }
+    ]
   },
   {
     "file": "sroie_0020.jpg",
@@ -117,7 +195,13 @@
     "date": "2018-01-08",
     "amount": 8,
     "categoryId": 30186,
-    "notes": "cat: bags/sacks from hardware-type supplier"
+    "notes": "cat: bags/sacks from hardware-type supplier",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 8
+      }
+    ]
   },
   {
     "file": "sroie_0022.jpg",
@@ -127,7 +211,13 @@
     "date": "2017-11-20",
     "amount": 278.8,
     "categoryId": 30186,
-    "notes": "cat: LED track lighting fixtures"
+    "notes": "cat: LED track lighting fixtures",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 278.8
+      }
+    ]
   },
   {
     "file": "sroie_0024.jpg",
@@ -135,9 +225,23 @@
     "difficulty": "medium",
     "merchant": "99 SPEED MART S/B",
     "date": "2017-11-20",
-    "amount": 169.8,
+    "amount": 169.78,
     "categoryId": 22695,
-    "notes": "cat: 99 Speed Mart"
+    "notes": "cat: 99 Speed Mart; audit: patched 169.8→169.78 (Total Sales Inclusive GST line; 169.80 was Malaysian cash rounding)",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 156.13
+      },
+      {
+        "categoryId": 1276,
+        "amount": 6.24
+      },
+      {
+        "categoryId": 17351,
+        "amount": 7.41
+      }
+    ]
   },
   {
     "file": "sroie_0026.jpg",
@@ -147,7 +251,13 @@
     "date": "2018-03-23",
     "amount": 1,
     "categoryId": 48281,
-    "notes": "cat: parking fee"
+    "notes": "cat: parking fee",
+    "categoryAmounts": [
+      {
+        "categoryId": 48281,
+        "amount": 1
+      }
+    ]
   },
   {
     "file": "sroie_0028.jpg",
@@ -157,7 +267,13 @@
     "date": "2017-11-20",
     "amount": 278.8,
     "categoryId": 30186,
-    "notes": "cat: LED track lighting fixtures"
+    "notes": "cat: LED track lighting fixtures",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 278.8
+      }
+    ]
   },
   {
     "file": "sroie_0030.jpg",
@@ -166,7 +282,13 @@
     "merchant": "UROKO JAPANESE CUISINE SDN BHD",
     "date": "2018-03-20",
     "amount": 53,
-    "categoryId": 21716
+    "categoryId": 21716,
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 53
+      }
+    ]
   },
   {
     "file": "sroie_0032.jpg",
@@ -176,7 +298,13 @@
     "date": "2018-01-27",
     "amount": 27.35,
     "categoryId": 30426,
-    "notes": "SROIE label typo (TED→TEO) corrected; cat: stationery store"
+    "notes": "SROIE label typo (TED→TEO) corrected; cat: stationery store",
+    "categoryAmounts": [
+      {
+        "categoryId": 30426,
+        "amount": 27.35
+      }
+    ]
   },
   {
     "file": "sroie_0034.jpg",
@@ -186,7 +314,13 @@
     "date": "2018-03-15",
     "amount": 127.2,
     "categoryId": 30426,
-    "notes": "cat: stationery store"
+    "notes": "cat: stationery store",
+    "categoryAmounts": [
+      {
+        "categoryId": 30426,
+        "amount": 127.2
+      }
+    ]
   },
   {
     "file": "sroie_0036.jpg",
@@ -196,7 +330,13 @@
     "date": "2018-01-29",
     "amount": 1.05,
     "categoryId": 30426,
-    "notes": "cat: stationery - carbon paper"
+    "notes": "cat: stationery - carbon paper",
+    "categoryAmounts": [
+      {
+        "categoryId": 30426,
+        "amount": 1.05
+      }
+    ]
   },
   {
     "file": "sroie_0038.jpg",
@@ -206,7 +346,13 @@
     "date": "2018-01-02",
     "amount": 4.2,
     "categoryId": 30186,
-    "notes": "cat: plastic bags from supplier"
+    "notes": "cat: plastic bags from supplier",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 4.2
+      }
+    ]
   },
   {
     "file": "sroie_0040.jpg",
@@ -216,7 +362,13 @@
     "date": "2018-03-02",
     "amount": 31.9,
     "categoryId": 17351,
-    "notes": "cat: F&P Pharmacy"
+    "notes": "cat: F&P Pharmacy",
+    "categoryAmounts": [
+      {
+        "categoryId": 17351,
+        "amount": 31.9
+      }
+    ]
   },
   {
     "file": "sroie_0042.jpg",
@@ -226,7 +378,13 @@
     "date": "2018-03-03",
     "amount": 33.8,
     "categoryId": 22695,
-    "notes": "cat: mini mart"
+    "notes": "cat: mini mart",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 33.8
+      }
+    ]
   },
   {
     "file": "sroie_0044.jpg",
@@ -236,7 +394,13 @@
     "date": "2018-03-11",
     "amount": 49.7,
     "categoryId": 21716,
-    "notes": "cat: Yakiniku/beef bowl restaurant"
+    "notes": "cat: Yakiniku/beef bowl restaurant",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 49.7
+      }
+    ]
   },
   {
     "file": "sroie_0046.jpg",
@@ -246,7 +410,13 @@
     "date": "2018-03-13",
     "amount": 72,
     "categoryId": 30186,
-    "notes": "cat: hardware - gasket"
+    "notes": "cat: hardware - gasket",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 72
+      }
+    ]
   },
   {
     "file": "sroie_0048.jpg",
@@ -256,7 +426,13 @@
     "date": "2018-03-22",
     "amount": 22.6,
     "categoryId": 22695,
-    "notes": "cat: snacks - cake, cashews, peanuts, drink"
+    "notes": "cat: snacks - cake, cashews, peanuts, drink",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 22.6
+      }
+    ]
   },
   {
     "file": "sroie_0050.jpg",
@@ -266,7 +442,13 @@
     "date": "2018-03-20",
     "amount": 21.6,
     "categoryId": 21716,
-    "notes": "cat: Contento - bubble tea"
+    "notes": "cat: Contento - bubble tea",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 21.6
+      }
+    ]
   },
   {
     "file": "sroie_0052.jpg",
@@ -276,7 +458,13 @@
     "date": "2018-03-09",
     "amount": 133.7,
     "categoryId": 22695,
-    "notes": "consumer name; cat: BIG grocer"
+    "notes": "consumer name; cat: BIG grocer",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 133.7
+      }
+    ]
   },
   {
     "file": "sroie_0054.jpg",
@@ -286,7 +474,13 @@
     "date": "2018-03-08",
     "amount": 81,
     "categoryId": 22695,
-    "notes": "consumer name"
+    "notes": "consumer name",
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 81
+      }
+    ]
   },
   {
     "file": "sroie_0056.jpg",
@@ -295,7 +489,13 @@
     "merchant": "99 SPEED MART S/B",
     "date": "2018-03-10",
     "amount": 5.35,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 5.35
+      }
+    ]
   },
   {
     "file": "sroie_0058.jpg",
@@ -304,7 +504,13 @@
     "merchant": "STAR GROCER SDN BHD",
     "date": "2018-03-25",
     "amount": 66.15,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 66.15
+      }
+    ]
   },
   {
     "file": "sroie_0060.jpg",
@@ -313,7 +519,13 @@
     "merchant": "PASARAYA BORONG PINTAR SDN BHD",
     "date": "2018-03-09",
     "amount": 10.4,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 10.4
+      }
+    ]
   },
   {
     "file": "sroie_0062.jpg",
@@ -322,7 +534,13 @@
     "merchant": "PASARAYA BORONG PINTAR SDN BHD",
     "date": "2018-03-14",
     "amount": 0.9,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 0.9
+      }
+    ]
   },
   {
     "file": "sroie_0064.jpg",
@@ -332,7 +550,13 @@
     "date": "2018-02-23",
     "amount": 110,
     "categoryId": 21716,
-    "notes": "cat: Restaurant Jiawei dine-in"
+    "notes": "cat: Restaurant Jiawei dine-in",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 110
+      }
+    ]
   },
   {
     "file": "sroie_0066.jpg",
@@ -341,7 +565,13 @@
     "merchant": "PASARAYA BORONG PINTAR SDN BHD",
     "date": "2018-01-30",
     "amount": 1.7,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 1.7
+      }
+    ]
   },
   {
     "file": "sroie_0068.jpg",
@@ -350,7 +580,13 @@
     "merchant": "PASARAYA BORONG PINTAR SDN BHD",
     "date": "2018-02-14",
     "amount": 1.45,
-    "categoryId": 22695
+    "categoryId": 22695,
+    "categoryAmounts": [
+      {
+        "categoryId": 22695,
+        "amount": 1.45
+      }
+    ]
   },
   {
     "file": "sroie_0070.jpg",
@@ -360,7 +596,21 @@
     "date": "2017-12-23",
     "amount": 140.65,
     "categoryId": 1276,
-    "notes": "cat: Popular Book - SPM study books"
+    "notes": "cat: Popular Book - SPM study books",
+    "categoryAmounts": [
+      {
+        "categoryId": 30426,
+        "amount": 72.73
+      },
+      {
+        "categoryId": 22695,
+        "amount": 1.35
+      },
+      {
+        "categoryId": 1276,
+        "amount": 66.57
+      }
+    ]
   },
   {
     "file": "sroie_0072.jpg",
@@ -370,7 +620,13 @@
     "date": "2017-08-20",
     "amount": 5.05,
     "categoryId": 30426,
-    "notes": "cat: Popular Book - stationery"
+    "notes": "cat: Popular Book - stationery",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 5.05
+      }
+    ]
   },
   {
     "file": "sroie_0074.jpg",
@@ -380,7 +636,13 @@
     "date": "2017-07-10",
     "amount": 56,
     "categoryId": 30186,
-    "notes": "cat: Evergreen Light - LED lighting"
+    "notes": "cat: Evergreen Light - LED lighting",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 56
+      }
+    ]
   },
   {
     "file": "sroie_0076.jpg",
@@ -390,7 +652,13 @@
     "date": "2017-04-28",
     "amount": 7.2,
     "categoryId": 30186,
-    "notes": "SROIE label error (26→28) corrected; cat: Hon Hwa Hardware"
+    "notes": "SROIE label error (26→28) corrected; cat: Hon Hwa Hardware",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 7.2
+      }
+    ]
   },
   {
     "file": "sroie_0078.jpg",
@@ -400,7 +668,13 @@
     "date": "2017-02-11",
     "amount": 19.6,
     "categoryId": 30186,
-    "notes": "cat: Hon Hwa Hardware"
+    "notes": "cat: Hon Hwa Hardware",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 19.6
+      }
+    ]
   },
   {
     "file": "sroie_0080.jpg",
@@ -410,7 +684,13 @@
     "date": "2017-01-05",
     "amount": 5,
     "categoryId": 30186,
-    "notes": "cat: Hon Hwa Hardware - PVC wallplug"
+    "notes": "cat: Hon Hwa Hardware - PVC wallplug",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 5
+      }
+    ]
   },
   {
     "file": "sroie_0082.jpg",
@@ -420,7 +700,13 @@
     "date": "2017-09-18",
     "amount": 26,
     "categoryId": 30186,
-    "notes": "cat: Evergreen Light - LED lighting"
+    "notes": "cat: Evergreen Light - LED lighting",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 26
+      }
+    ]
   },
   {
     "file": "sroie_0084.jpg",
@@ -430,7 +716,13 @@
     "date": "2017-01-17",
     "amount": 46.65,
     "categoryId": 30186,
-    "notes": "cat: Vivopac - PP packaging/tapes"
+    "notes": "cat: Vivopac - PP packaging/tapes",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 46.65
+      }
+    ]
   },
   {
     "file": "sroie_0086.jpg",
@@ -440,7 +732,13 @@
     "date": "2017-09-13",
     "amount": 52.45,
     "categoryId": 30186,
-    "notes": "cat: Vivopac packaging supplies"
+    "notes": "cat: Vivopac packaging supplies",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 52.45
+      }
+    ]
   },
   {
     "file": "sroie_0088.jpg",
@@ -450,7 +748,13 @@
     "date": "2017-12-07",
     "amount": 10,
     "categoryId": 30186,
-    "notes": "cat: Paint remover"
+    "notes": "cat: Paint remover",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 10
+      }
+    ]
   },
   {
     "file": "sroie_0090.jpg",
@@ -460,7 +764,13 @@
     "date": "2016-12-04",
     "amount": 150,
     "categoryId": 30186,
-    "notes": "cat: Stanley heat gun"
+    "notes": "cat: Stanley heat gun",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 150
+      }
+    ]
   },
   {
     "file": "sroie_0092.jpg",
@@ -470,7 +780,13 @@
     "date": "2017-03-23",
     "amount": 30,
     "categoryId": 48281,
-    "notes": "consumer brand (operator: CHOP YEW LIAN); cat: Shell V-Power 97 fuel"
+    "notes": "consumer brand (operator: CHOP YEW LIAN); cat: Shell V-Power 97 fuel",
+    "categoryAmounts": [
+      {
+        "categoryId": 48281,
+        "amount": 30
+      }
+    ]
   },
   {
     "file": "sroie_0094.jpg",
@@ -480,7 +796,13 @@
     "date": "2018-03-14",
     "amount": 12.25,
     "categoryId": 22695,
-    "notes": "consumer name (legal: AEON CO. (M) BHD); cat: AEON - floor cleaner"
+    "notes": "consumer name (legal: AEON CO. (M) BHD); cat: AEON - floor cleaner",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 12.25
+      }
+    ]
   },
   {
     "file": "sroie_0096.jpg",
@@ -490,7 +812,17 @@
     "date": "2018-03-22",
     "amount": 5.15,
     "categoryId": 22695,
-    "notes": "cat: Econsave cash & carry"
+    "notes": "cat: Econsave cash & carry",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 4.2
+      },
+      {
+        "categoryId": 22695,
+        "amount": 0.95
+      }
+    ]
   },
   {
     "file": "sroie_0098.jpg",
@@ -500,7 +832,13 @@
     "date": "2018-03-14",
     "amount": 7.95,
     "categoryId": 30426,
-    "notes": "cat: Popular Book - rubber band"
+    "notes": "cat: Popular Book - rubber band",
+    "categoryAmounts": [
+      {
+        "categoryId": 30426,
+        "amount": 7.95
+      }
+    ]
   },
   {
     "file": "sroie_0100.jpg",
@@ -510,7 +848,13 @@
     "date": "2018-03-20",
     "amount": 13.4,
     "categoryId": 30426,
-    "notes": "cat: Premio Stationery - batteries"
+    "notes": "cat: Premio Stationery - batteries",
+    "categoryAmounts": [
+      {
+        "categoryId": 30426,
+        "amount": 13.4
+      }
+    ]
   },
   {
     "file": "sroie_0102.jpg",
@@ -520,7 +864,13 @@
     "date": "2018-02-08",
     "amount": 10.5,
     "categoryId": 30186,
-    "notes": "cat: Lim Seng Tho Hardware"
+    "notes": "cat: Lim Seng Tho Hardware",
+    "categoryAmounts": [
+      {
+        "categoryId": 30186,
+        "amount": 10.5
+      }
+    ]
   },
   {
     "file": "mcocr_0054.jpg",
@@ -1005,5 +1355,897 @@
     "amount": 22000,
     "categoryId": 22695,
     "notes": "label patched Vincommerce→VinMart (consumer brand, v0.4 convention)"
+  },
+  {
+    "file": "1010-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Friendly Red's of Windham",
+    "date": "2018-07-21",
+    "amount": 77.83,
+    "categoryId": 21716,
+    "notes": "Sit-down restaurant receipt, includes cocktails (Cadillac Margarita, Bud Light) and entrees (crab cakes, chicken caprese, chix parm). Single bucket: Restaurants/Prepared Food.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 77.83
+      }
+    ]
+  },
+  {
+    "file": "1013-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Albetos Mexican Food",
+    "date": null,
+    "amount": 9.58,
+    "categoryId": 21716,
+    "notes": "Small taqueria order: 3 asada tacos + ATM charge. No date printed on receipt. Single bucket: Restaurants/Prepared Food.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 9.58
+      }
+    ]
+  },
+  {
+    "file": "1014-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Loaded Cafe",
+    "date": "2019-02-23",
+    "amount": 48.53,
+    "categoryId": 21716,
+    "notes": "Dine-in cafe breakfast (enchi omelette, hashbrowns, coffee, diet coke). Single bucket: Restaurants/Prepared Food.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 48.53
+      }
+    ]
+  },
+  {
+    "file": "1016-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "Chef Wang",
+    "date": "2019-02-02",
+    "amount": 35.52,
+    "categoryId": 21716,
+    "notes": "Chinese restaurant dine-in (scallion pancake, pork buns, beef dishes). Receipt partially obscured by leather menu cover but totals legible.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 35.52
+      }
+    ]
+  },
+  {
+    "file": "1018-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "In-N-Out Burger",
+    "date": "2012-04-27",
+    "amount": 2.17,
+    "categoryId": 21716,
+    "notes": "Crumpled fast food receipt for a single hamburger. Single bucket: Restaurants/Prepared Food.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 2.17
+      }
+    ]
+  },
+  {
+    "file": "1023-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Thai Gusto",
+    "date": "2017-06-16",
+    "amount": 30.15,
+    "categoryId": 21716,
+    "notes": "Thai restaurant dine-in (Chang beer, garlic delight, red curry). Marked 'Guest Check - This is not a receipt' but contains full totals.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 30.15
+      }
+    ]
+  },
+  {
+    "file": "1026-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "Chris's Hamburgers",
+    "date": "2018-07-22",
+    "amount": 51.82,
+    "categoryId": 21716,
+    "notes": "Faded purple ink receipt with line items shown only as 'TAXABLE T1' (no item descriptions). Burger restaurant.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 51.82
+      }
+    ]
+  },
+  {
+    "file": "1027-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "Longboards",
+    "date": "2019-01-11",
+    "amount": 44.31,
+    "categoryId": 21716,
+    "notes": "Hawaii restaurant (Kapolei, HI). Subtotal $42.75 minus Ohana discount + tax = printed total $41.31, with handwritten gratuity $3.00 making final $44.31.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 44.31
+      }
+    ]
+  },
+  {
+    "file": "1029-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Rincon Mexicano",
+    "date": "2017-05-09",
+    "amount": 30.98,
+    "categoryId": 21716,
+    "notes": "Taco Tuesday dine-in order (multiple tacos, arroz, horchata). Single bucket: Restaurants/Prepared Food.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 30.98
+      }
+    ]
+  },
+  {
+    "file": "1031-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Laurel Tavern",
+    "date": "2019-01-12",
+    "amount": 44.35,
+    "categoryId": 21716,
+    "notes": "Tavern dine-in (beer, brussels sprouts, cantonese tenders, grilled cheese, garlic fries). Single bucket: Restaurants/Prepared Food.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 44.35
+      }
+    ]
+  },
+  {
+    "file": "1035-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "Argonaut Diner",
+    "date": "2017-08-13",
+    "amount": 26.38,
+    "categoryId": 21716,
+    "notes": "Diner breakfast (coffee, tea, waffle, french toast, eggs, banana). Image is a Facebook screenshot of a photographed receipt - some shadowing.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 26.38
+      }
+    ]
+  },
+  {
+    "file": "1041-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "hard",
+    "merchant": "la Source",
+    "date": "2015-08-02",
+    "amount": 17,
+    "categoryId": 21716,
+    "notes": "French cafe receipt (Paris, 75015) - small/low-resolution image, French language (Perrier, Coca-Cola, Jus Orange). Total 17.00 EUR. Restaurants/Prepared Food.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 17
+      }
+    ]
+  },
+  {
+    "file": "1044-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "hard",
+    "merchant": "Church's Chicken",
+    "date": "2019-05-21",
+    "amount": 10.94,
+    "categoryId": 21716,
+    "notes": "Small low-resolution fast food receipt (1 piece chicken meal). Cashier signature visible. Single bucket: Restaurants/Prepared Food.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 10.94
+      }
+    ]
+  },
+  {
+    "file": "1045-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "Yum's Restaurant",
+    "date": "2018-06-24",
+    "amount": 22.03,
+    "categoryId": 21716,
+    "notes": "Walk-in order on pink paper, slightly tilted. Steak cheese egg rolls, wings, fries - prepared food/restaurant.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 22.03
+      }
+    ]
+  },
+  {
+    "file": "1049-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Kickin Kajun Kapolei",
+    "date": "2019-07-18",
+    "amount": 77.49,
+    "categoryId": 21716,
+    "notes": "Cajun seafood restaurant in Kapolei, HI. Snow crab combo with margaritas/daiquiris. Receipt total shown is $77.49 (Receipt Total $38.75 line is split-check artifact).",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 77.49
+      }
+    ]
+  },
+  {
+    "file": "1054-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Big Jo's",
+    "date": "2018-01-25",
+    "amount": 56.5,
+    "categoryId": 21716,
+    "notes": "Big Jo's Burgers in Santa Monica. Burgers, fries, chili fries pickup order.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 56.5
+      }
+    ]
+  },
+  {
+    "file": "1058-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "hard",
+    "merchant": "Caldera Brewery & Restaurant",
+    "date": "2017-12-28",
+    "amount": 37.6,
+    "categoryId": 21716,
+    "notes": "Dim/dark lighting, receipt photographed at angle on dark surface. Brewery restaurant in Ashland, OR with beer, butter noodles, mahi mahi taco.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 37.6
+      }
+    ]
+  },
+  {
+    "file": "1063-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "hard",
+    "merchant": "Primo Family Restaurant",
+    "date": "2019-05-03",
+    "amount": 52.47,
+    "categoryId": 21716,
+    "notes": "Small/low-resolution thermal receipt, hard to read fine details. Family restaurant - 3 prem glass and veggie items.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 52.47
+      }
+    ]
+  },
+  {
+    "file": "1064-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "In-N-Out Burger",
+    "date": "2013-08-10",
+    "amount": 19.44,
+    "categoryId": 21716,
+    "notes": "Receipt has a red ink/marker streak across it. In-N-Out Escondido counter-eat-in order with burgers, fries, drinks.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 19.44
+      }
+    ]
+  },
+  {
+    "file": "1068-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "Cafe Eugene",
+    "date": "2016-04-10",
+    "amount": 42.9,
+    "categoryId": 21716,
+    "notes": "Cafe in Albany CA - breakfast (pork, pancakes, side bacon). Receipt is partially cut off at top showing only 'eugene' logo.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 42.9
+      }
+    ]
+  },
+  {
+    "file": "1069-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "River Village Family Restaurant",
+    "date": "2019-08-12",
+    "amount": 10.9,
+    "categoryId": 21716,
+    "notes": "Family restaurant in Rockwood MI. Apple French toast and coffee breakfast.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 10.9
+      }
+    ]
+  },
+  {
+    "file": "1071-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Trinity Restaurant",
+    "date": "2017-02-18",
+    "amount": 75.5,
+    "categoryId": 21716,
+    "notes": "Restaurant in Floral Park NY. Quesadilla, pot roast, fish and chips, drafts (Shock Top, Guinness).",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 75.5
+      }
+    ]
+  },
+  {
+    "file": "1073-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "hard",
+    "merchant": "Subway",
+    "date": "2019-05-01",
+    "amount": 13.22,
+    "categoryId": 21716,
+    "notes": "Small/low-res receipt photographed handheld. Subway #44969 in Pasadena CA. Footlong steak/cheese and BMT subs eat-in.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 13.22
+      }
+    ]
+  },
+  {
+    "file": "1084-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Trattoria Saporito",
+    "date": "2018-07-01",
+    "amount": 125.99,
+    "categoryId": 21716,
+    "notes": "Italian restaurant in Hoboken NJ. Stuffed artichoke, fettuccine porcini, costolette, broccoli rabe, espressos.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 125.99
+      }
+    ]
+  },
+  {
+    "file": "1089-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Firepoint Grill",
+    "date": "2016-12-07",
+    "amount": 142.93,
+    "categoryId": 21716,
+    "notes": "Grill restaurant in Newtown Square PA. Old fashioneds, Woodford Reserve, NY strip, chicken & rib combo - dining.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 142.93
+      }
+    ]
+  },
+  {
+    "file": "1090-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Five Guys",
+    "date": "2017-05-25",
+    "amount": 32.66,
+    "categoryId": 21716,
+    "notes": "Five Guys Lodi CA. Little hamburger, cheeseburger, large fries, sodas.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 32.66
+      }
+    ]
+  },
+  {
+    "file": "1091-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "City Taste",
+    "date": "2018-05-11",
+    "amount": 28.78,
+    "categoryId": 21716,
+    "notes": "Sushi/Thai dine-in. Single category restaurant.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 28.78
+      }
+    ]
+  },
+  {
+    "file": "1097-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "El Pollo Loco",
+    "date": "2017-06-28",
+    "amount": 13.12,
+    "categoryId": 21716,
+    "notes": "Drive thru fast food. Receipt slightly faded with see-through bleed from back side. Total/payment is 13.12; cash given 13.25, change 0.13.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 13.12
+      }
+    ]
+  },
+  {
+    "file": "1098-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Nick's Tuscan Grill",
+    "date": "2018-03-18",
+    "amount": 67.89,
+    "categoryId": 21716,
+    "notes": "Italian dine-in with bar drinks. Single category restaurant.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 67.89
+      }
+    ]
+  },
+  {
+    "file": "1099-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "Mexican Restaurant & Bar",
+    "date": "2017-12-29",
+    "amount": 64.52,
+    "categoryId": 21716,
+    "notes": "Mexican dine-in (San Jose). Merchant name partially cut from header; only 'Mexican Restaurant & Bar' visible. Total includes 18% gratuity.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 64.52
+      }
+    ]
+  },
+  {
+    "file": "1109-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "BreadFish Cafe",
+    "date": "2017-06-14",
+    "amount": 27.62,
+    "categoryId": 21716,
+    "notes": "Chinese/Taiwanese dine-in with bilingual Chinese/English item names. Sub-Total shown is post-tax 27.62 (no tip line on receipt).",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 27.62
+      }
+    ]
+  },
+  {
+    "file": "1110-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "hard",
+    "merchant": "Chelokababi",
+    "date": "2018-08-18",
+    "amount": 160.07,
+    "categoryId": 21716,
+    "notes": "Persian restaurant; receipt is crumpled and has handwritten 'Thanks :)' over the gratuity line. Includes 18% gratuity.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 160.07
+      }
+    ]
+  },
+  {
+    "file": "1116-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "hard",
+    "merchant": "Villaggio Grille",
+    "date": "2019-06-08",
+    "amount": 34.12,
+    "categoryId": 21716,
+    "notes": "Heavily wrinkled/embossed thermal receipt. Contains kid's meals (Kid Peperoni Pizza, Kid Alfredo) but as restaurant dine-in stays in Restaurants/Prepared Food.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 34.12
+      }
+    ]
+  },
+  {
+    "file": "1121-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Heart of Portugal",
+    "date": "2017-09-10",
+    "amount": 71.58,
+    "categoryId": 21716,
+    "notes": "Portuguese restaurant dine-in. Item prices on receipt sum to 65.90 matching subtotal; first item line shows two prices (20.95/28.95) due to formatting.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 71.58
+      }
+    ]
+  },
+  {
+    "file": "1123-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "El Gato Negro",
+    "date": "2019-08-23",
+    "amount": 21.76,
+    "categoryId": 21716,
+    "notes": "Mexican dine-in in New Orleans. Clean receipt, single category.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 21.76
+      }
+    ]
+  },
+  {
+    "file": "1125-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "Chatpata Restaurant",
+    "date": "2019-03-19",
+    "amount": 19.1,
+    "categoryId": 21716,
+    "notes": "Indian restaurant. Receipt photo includes the card-place plastic insert at top, slight glare but text is clear.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 19.1
+      }
+    ]
+  },
+  {
+    "file": "1128-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Kalaveras",
+    "date": "2019-08-30",
+    "amount": 68.99,
+    "categoryId": 21716,
+    "notes": "Mexican cuisine & bar - bar tab with cocktails (Micheladas, tequila). Single category restaurant.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 68.99
+      }
+    ]
+  },
+  {
+    "file": "1130-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "BOA",
+    "date": "2017-12-20",
+    "amount": 47.09,
+    "categoryId": 21716,
+    "notes": "BOA Steakhouse lunch (Beverly Hills, 310 area code). Separate check 1-of-3. Receipt has blue tint/shadow on lower half.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 47.09
+      }
+    ]
+  },
+  {
+    "file": "1140-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Shake Shack",
+    "date": "2015-03-03",
+    "amount": 25.47,
+    "categoryId": 21716,
+    "notes": "Clean fast-casual receipt: ShackBurger, Smoke Shack, cheese fries, sodas, iced tea. Single category.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 25.47
+      }
+    ]
+  },
+  {
+    "file": "1145-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Miguels Mexican",
+    "date": "2012-12-26",
+    "amount": 65.14,
+    "categoryId": 21716,
+    "notes": "Tampa FL Mexican restaurant; entrees plus margaritas. Single category.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 65.14
+      }
+    ]
+  },
+  {
+    "file": "1150-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "HMS Host Esquire Grille",
+    "date": "2016-04-04",
+    "amount": 80.45,
+    "categoryId": 21716,
+    "notes": "Sacramento Intl Airport sit-down restaurant. Slightly faded thermal print but readable.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 80.45
+      }
+    ]
+  },
+  {
+    "file": "1154-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "Via Mar Restaurant",
+    "date": "2018-09-06",
+    "amount": 73.24,
+    "categoryId": 21716,
+    "notes": "Crumpled receipt with tear at right edge near totals; total readable as $73.24.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 73.24
+      }
+    ]
+  },
+  {
+    "file": "1155-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Marco Pierre White Steakhouse & Grill",
+    "date": "2019-02-16",
+    "amount": 129.75,
+    "categoryId": 21716,
+    "notes": "Dawson Street (Ireland) steakhouse; balance due 129.75 (likely EUR). Single category.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 129.75
+      }
+    ]
+  },
+  {
+    "file": "1167-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Casa Rubio Cafe",
+    "date": "2019-05-21",
+    "amount": 33.75,
+    "categoryId": 21716,
+    "notes": "Astoria NY cafe; grilled skirt steak + fountain soda. Handwritten 'Thank you' across header.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 33.75
+      }
+    ]
+  },
+  {
+    "file": "1172-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "El Valle Mexican Restaurant",
+    "date": "2017-12-02",
+    "amount": 17.75,
+    "categoryId": 21716,
+    "notes": "Matthews NC Mexican restaurant; lunch fajitas, guac, diet coke. Single category.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 17.75
+      }
+    ]
+  },
+  {
+    "file": "1174-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Ipanema Brazilian Steak House",
+    "date": "2018-04-13",
+    "amount": 55.38,
+    "categoryId": 21716,
+    "notes": "Ocala FL Brazilian steakhouse; rodizio dinner with auto-gratuity included.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 55.38
+      }
+    ]
+  },
+  {
+    "file": "1178-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "easy",
+    "merchant": "Gourdough's Public House",
+    "date": "2017-01-21",
+    "amount": 11.91,
+    "categoryId": 21716,
+    "notes": "Austin TX bar/restaurant; Freebird, ice cream, Lonestar beer. Single category.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 11.91
+      }
+    ]
+  },
+  {
+    "file": "1184-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": null,
+    "date": "2013-03-22",
+    "amount": 193.35,
+    "categoryId": 21716,
+    "notes": "Merchant header cropped out of frame; clearly a fine-dining restaurant (martinis, NY sirloin, crabcakes, espresso, torte). T5 Main Dining Room receipt.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 193.35
+      }
+    ]
+  },
+  {
+    "file": "1197-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "hard",
+    "merchant": "Bar Ristorante San Montano",
+    "date": "2018-08-28",
+    "amount": 34,
+    "categoryId": 21716,
+    "notes": "Italian-language receipt (Lacco Ameno NA, Italy); EUR. Items: macedonia, insalata, bufala, pomodorini.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 34
+      }
+    ]
+  },
+  {
+    "file": "1199-receipt.jpg",
+    "source": "hardReceipts-set",
+    "difficulty": "medium",
+    "merchant": "Nonna",
+    "date": "2012-05-21",
+    "amount": 128.33,
+    "categoryId": 21716,
+    "notes": "West Hollywood CA Italian restaurant; tartare, linguine scampi, branzino, pizza, wines. Low-light photo.",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 128.33
+      }
+    ]
+  },
+  {
+    "file": "Screenshot_20260415_191112_DoorDash.jpg",
+    "source": "DoorDash",
+    "difficulty": "easy",
+    "merchant": "Popeyes Louisiana Kitchen",
+    "date": "2026-03-07",
+    "amount": 17.53,
+    "categoryId": 21716,
+    "notes": "Flounder Fish Sandwich; $14.53 + $3.00 tip split payment",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 17.53
+      }
+    ]
+  },
+  {
+    "file": "Screenshot_20260415_191135_DoorDash.jpg",
+    "source": "DoorDash",
+    "difficulty": "easy",
+    "merchant": "Church's Texas Chicken",
+    "date": "2026-02-24",
+    "amount": 19.99,
+    "categoryId": 21716,
+    "notes": "Jalapeno Cheese Bombers + 4PC Chicken",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 19.99
+      }
+    ]
+  },
+  {
+    "file": "Screenshot_20260415_191214_DoorDash.jpg",
+    "source": "DoorDash",
+    "difficulty": "easy",
+    "merchant": "Checkers & Rally's",
+    "date": "2026-02-23",
+    "amount": 14.93,
+    "categoryId": 21716,
+    "notes": "Choose Two and Save (Deep Sea Double + Double Classic Cheeseburger) + ketchup packets",
+    "categoryAmounts": [
+      {
+        "categoryId": 21716,
+        "amount": 14.93
+      }
+    ]
+  },
+  {
+    "file": "Screenshot_20260415_191342_Amazon Shopping.jpg",
+    "source": "Amazon",
+    "difficulty": "hard",
+    "merchant": "Amazon",
+    "date": "2026-04-08",
+    "amount": 199.27,
+    "categoryId": 17351,
+    "notes": "Mixed order: Rifles for Watie book ($9.20) + Renew Life Adult Probiotic ($16.97); item subtotal $185.12 implies a third item not visible. Allocated visible items: book to 30426 Other, probiotic to 17351 Health/Pharmacy. Remaining $158.95 of subtotal + $13.65 tax + $0.50 fee assigned to 17351 as dominant/unknown bucket since the third undisclosed item could not be classified.",
+    "categoryAmounts": [
+      {
+        "categoryId": 30426,
+        "amount": 9.2
+      },
+      {
+        "categoryId": 17351,
+        "amount": 190.07
+      }
+    ]
+  },
+  {
+    "file": "Screenshot_20260415_191443_Amazon Shopping.jpg",
+    "source": "Amazon",
+    "difficulty": "medium",
+    "merchant": "Amazon",
+    "date": "2026-04-03",
+    "amount": 36.25,
+    "categoryId": 30186,
+    "notes": "ESV Gospel of John ($4.99 book), SLSESIN 100pc 16MM Dice ($7.99 entertainment/game), iGuerburn 6ft CPAP Hose ($20.78 health). Tax $2.49 allocated proportionally across categories.",
+    "categoryAmounts": [
+      {
+        "categoryId": 30426,
+        "amount": 5.36
+      },
+      {
+        "categoryId": 57937,
+        "amount": 8.58
+      },
+      {
+        "categoryId": 17351,
+        "amount": 22.31
+      }
+    ]
   }
 ]

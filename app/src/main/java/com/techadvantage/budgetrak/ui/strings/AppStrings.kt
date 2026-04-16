@@ -236,10 +236,15 @@ data class SettingsStrings(
     val deletePhotoConfirm: String,
     val upgradeForPhotos: String,
     val sharedPhotoNeedsUpgrade: String,
-    // AI OCR (placeholder)
+    // AI OCR
     val aiOcrIconDesc: String,
     val aiOcrComingSoon: String,
     val upgradeForAiOcr: String,
+    val aiOcrAddReceiptFirst: String,
+    val aiOcrReading: String,
+    val aiOcrFailed: String,
+    val aiOcrHelpTitle: String,
+    val aiOcrHelpBody: String,
     val sharedImageProcessFailed: String,
     // Data Management
     val dataManagementSection: String,
