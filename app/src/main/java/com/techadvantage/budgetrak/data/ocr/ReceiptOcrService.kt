@@ -17,8 +17,12 @@ import org.json.JSONObject
 object ReceiptOcrService {
     private const val TAG = "ReceiptOcrService"
     private const val MODEL_NAME = "gemini-2.5-flash"
-    private const val TIMEOUT_MS = 30_000L
+    private const val TIMEOUT_MS = 90_000L
 
+    // `lineItems` intentionally omitted — harness A/B test (2026-04-16) showed
+    // dropping it from the response saves ~53% output tokens with no loss to
+    // category accuracy. See memory/project_ocr_receipt_capture.md. When a
+    // future item-view feature needs it, re-add both here and in the parser.
     private val responseSchema = Schema.obj(
         name = "OcrResult",
         description = "Receipt extraction result",
@@ -35,11 +39,6 @@ object ReceiptOcrService {
                 Schema.int("categoryId", "Category id from the user's list"),
                 Schema.double("amount", "Amount for this category")
             )
-        ),
-        Schema.arr(
-            "lineItems",
-            "Visible line item descriptions",
-            Schema.str("item", "One line item")
         ),
         Schema.str("notes", "Optional free-form note")
     )

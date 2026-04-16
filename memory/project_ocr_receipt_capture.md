@@ -527,3 +527,26 @@ Draft language to drop into the help file and privacy policy once the feature sh
 - ZDR request to Google — pending usage justification
 
 **Known gotcha** (see `feedback_gradle_clean_after_dep_swap.md` in global memory): always `./gradlew clean assembleDebug` after dependency changes — incremental builds leave stale DEX files that can cause startup crashes.
+
+## lineItems dropped from app response schema (2026-04-16)
+
+**Change**: `ReceiptOcrService.responseSchema` no longer includes `lineItems`. The harness still requests it (useful for calibration and future item-view feature).
+
+**A/B evidence** (harness `test-lineitems-ab.js`, R7-T10 prompt, 7 multi-category receipts × 2 runs each = 14 calls per variant, Gemini 2.5 Flash temp 0):
+
+| Variant | Merchant | Date | Amount | cset | cshare | Avg output |
+|---------|----------|------|--------|------|--------|------------|
+| With lineItems (old) | 14/14 | 14/14 | 14/14 | 7/14 | 6/14 | 236 tok |
+| No lineItems (new)   | 14/14 | 14/14 | 12/14 | 9/14 | 6/14 | **110 tok** |
+
+**Why we made the trade-off**:
+- **~53% fewer output tokens per call** → real $/receipt savings at scale (Sam's-class receipts drop from ~450 tok → ~110 tok output).
+- **Category set accuracy actually improved** (+2/14). Hypothesis: when the schema doesn't require enumerating items, the model spends its output budget on the decision that matters (merchant/date/amount/categoryAmounts) rather than on lineItems transcription.
+- **Share-match accuracy unchanged** (6/14 both).
+- **One amount regression** — sroie_0024 (Malaysian cash-rounding edge case: 169.78 vs 169.80). Single tricky receipt; not representative of typical consumer OCR.
+
+**What we keep**:
+- `OcrResult.lineItems: List<String>?` field stays in the Kotlin data class (just never populated by the app response). If the future transaction-detail feature (see `project_line_items_transaction_detail.md`) gets built, re-adding `lineItems` to the schema is a one-line change in `ReceiptOcrService`.
+- Harness `prompt.js` and `schema.js` still list `lineItems` — harness output is the ground truth for calibration.
+
+**Don't revert this without re-running `test-lineitems-ab.js`** — the token savings are the main driver.

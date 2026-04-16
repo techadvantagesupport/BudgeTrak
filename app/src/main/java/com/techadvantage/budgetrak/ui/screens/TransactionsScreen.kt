@@ -3253,7 +3253,9 @@ fun TransactionDialog(
             is com.techadvantage.budgetrak.data.ocr.OcrState.Success -> {
                 val r = state.result
                 // Merchant
-                if (source.isBlank()) source = r.merchant
+                if (source.isBlank()) {
+                    source = if (autoCapitalize) com.techadvantage.budgetrak.data.toApaTitleCase(r.merchant) else r.merchant
+                }
                 // Date (parse ISO YYYY-MM-DD)
                 runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { selectedDate = it }
                 // Amount + categories — only prefill if user hasn't started entering amounts.
