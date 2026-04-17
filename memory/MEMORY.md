@@ -39,8 +39,9 @@
 - **Three-tier threading**: decrypt on Default, UI on Main, JSON saves on IO.
 - **`saveCollection<T>`** generic with optional `hint`. `SyncWriteHelper.pushBatch()` chunks at 500 ops with retry+individual-push fallback.
 - **Receipt sync**: foreground uses **flag-clock polling** on `imageLedgerMeta` (not a listener). On new transaction arrival, 5-concurrent parallel download. Full spec: [`spec_receipt_photos.md`](spec_receipt_photos.md).
-- **Three-tier `BackgroundSyncWorker`**: (1) app active → skip, (2) ViewModel alive → App Check refresh + listener health + RTDB ping, (3) ViewModel dead → full sync. Tiers 2/3 Firebase ops gated by `isSyncConfigured` — solo users skip Auth / App Check / RTDB / Firestore. RTDB `lastSeen` uses `.await()`.
+- **Three-tier `BackgroundSyncWorker`**: (1) app active → skip, (2) ViewModel alive → App Check refresh + listener health + RTDB ping, (3) ViewModel dead → full sync. Tiers 2/3 Firebase ops gated by `isSyncConfigured` — solo users skip Auth / App Check / RTDB / Firestore. RTDB `lastSeen` uses `.await()`. Guarded by in-process `AtomicBoolean isRunning` — periodic + FCM one-shot use different unique work names, so without this guard they could double-fire (seen in Kim's 2026-04-16 diag dump: two Tier 3 runs 118ms apart, doubled listeners + RTDB pings).
 - **WakeReceiver**: manifest-registered `ACTION_POWER_CONNECTED/DISCONNECTED`, 5-min rate limit, fires `BackgroundSyncWorker.runOnce`.
+- **FCM wake**: `FcmService.handleWakeForSync()` enqueues `runOnce` then **busy-waits up to 9s** on `BackgroundSyncWorker.isRunning`. The busy-wait keeps the FCM process alive so WorkManager can dispatch the worker in-process; otherwise on Samsung/Xiaomi Doze-aggressive devices, `onMessageReceived` returns, the process dies, and the enqueued worker gets deferred for hours. Once the worker is dispatched, WorkManager's service binding pins the process — the pipeline completes (widget update, RTDB ping, receipt sync) even after the FCM handler releases at the 9s mark.
 - **DebugDumpWorker**: one-shot, FCM `debug_request` triggered, debug builds only.
 
 ## Transaction Linking & Remembered Amounts

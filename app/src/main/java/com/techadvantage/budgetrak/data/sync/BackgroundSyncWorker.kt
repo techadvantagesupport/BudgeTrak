@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Background worker that syncs from Firestore, runs period refresh, updates
@@ -36,6 +37,19 @@ class BackgroundSyncWorker(
         private const val TAG = "BackgroundSyncWorker"
         private const val WORK_NAME = "period_refresh"
         private const val ONESHOT_WORK_NAME = "period_refresh_oneshot"
+
+        // Guard against double-fire: the periodic worker and the FCM-triggered
+        // one-shot use different unique work names (WORK_NAME vs ONESHOT_WORK_NAME),
+        // so WorkManager's KEEP policy doesn't dedupe between them. If a periodic
+        // run is already executing when an FCM arrives, WorkManager happily starts
+        // the one-shot in parallel — duplicating listeners, RTDB pings, and reads.
+        // This in-process flag catches that case.
+        //
+        // Also read by FcmService.handleWakeForSync() to keep the FCM thread alive
+        // while the worker runs in the same process (without this, onMessageReceived
+        // returns, Android kills the process, and the enqueued worker gets deferred
+        // indefinitely under Doze/App Standby).
+        internal val isRunning = AtomicBoolean(false)
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<BackgroundSyncWorker>(
@@ -78,6 +92,10 @@ class BackgroundSyncWorker(
     }
 
     override suspend fun doWork(): Result {
+        if (!isRunning.compareAndSet(false, true)) {
+            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("Worker skipped: another run already in progress")
+            return Result.success()
+        }
         try {
             // Skip if the app is visible — foreground handles everything
             if (com.techadvantage.budgetrak.MainActivity.isAppActive) {
@@ -264,6 +282,8 @@ class BackgroundSyncWorker(
         } catch (e: Exception) {
             Log.e(TAG, "BackgroundSyncWorker failed: ${e.message}", e)
             return Result.success() // don't retry, wait for next scheduled run
+        } finally {
+            isRunning.set(false)
         }
     }
 

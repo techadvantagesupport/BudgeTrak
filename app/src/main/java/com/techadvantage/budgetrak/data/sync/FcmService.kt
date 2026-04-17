@@ -43,15 +43,41 @@ class FcmService : FirebaseMessagingService() {
 
     /**
      * On `sync_push` (another device wrote data) or `heartbeat` (scheduler saw
-     * this device's RTDB lastSeen go stale), enqueue a one-shot sync.
+     * this device's RTDB lastSeen go stale), enqueue a one-shot sync and then
+     * block this FCM thread until the worker finishes (or our 9-second FCM
+     * execution budget expires).
+     *
+     * The busy-wait is load-bearing. Without it, `onMessageReceived` returns
+     * immediately after enqueue; Android then kills the process and
+     * WorkManager defers the enqueued worker under Doze / App Standby on
+     * OEM-aggressive devices (Samsung, Xiaomi, etc.), leaving `lastSeen`
+     * stale and the widget un-refreshed for hours. Keeping this thread alive
+     * extends the process lifetime so WorkManager can actually dispatch the
+     * worker in-process right after enqueue.
+     *
      * BackgroundSyncWorker.runOnce is expedited on Android 12+ and deduped
-     * so bursts collapse into a single run.
+     * so FCM bursts collapse into a single run.
      */
     private fun handleWakeForSync() {
         try {
             BackgroundSyncWorker.runOnce(applicationContext)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to enqueue sync runOnce: ${e.message}")
+            return
+        }
+        kotlinx.coroutines.runBlocking {
+            val deadline = System.currentTimeMillis() + 9_000L
+            // Wait for WorkManager to dispatch the worker (usually within a few
+            // hundred ms once the process is alive).
+            while (!BackgroundSyncWorker.isRunning.get() && System.currentTimeMillis() < deadline) {
+                kotlinx.coroutines.delay(100)
+            }
+            // Then wait for it to finish. We don't cancel on timeout — the
+            // worker will keep running and complete on its own; we just release
+            // this FCM thread so the service can return cleanly.
+            while (BackgroundSyncWorker.isRunning.get() && System.currentTimeMillis() < deadline) {
+                kotlinx.coroutines.delay(200)
+            }
         }
     }
 }
