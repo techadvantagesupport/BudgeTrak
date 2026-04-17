@@ -2,15 +2,19 @@ package com.techadvantage.budgetrak.data.ocr
 
 import com.techadvantage.budgetrak.data.Category
 
-// R7-T10 winner from the offline OCR harness (Round 7, variant T10).
-// Configuration: category rules (C3+C4+C6+MP) prepended BEFORE the base extraction
-// prompt. Benchmarked at 85%/99%/100%/65% (merchant/date/amount/cset) on 158
-// app-quality receipts with Gemini 2.5 Flash at temperature 0.
+// T9 winner (2026-04-16) — Pro prompt A/B on 5 worst multi-cat receipts.
+// Configuration: C3 + C4 + C6 + T1_THEMATIC prepended BEFORE the base extraction
+// prompt. Dropped MP (merchant-priority) — harness confirmed it's dead weight
+// since merchant accuracy is already 100% on Pro. Added T1_THEMATIC — scans
+// for seasonal patterns (Easter/Christmas/Halloween) before generic mapping;
+// fixes walmart_1's Easter-candy miss.
 //
-// Source of truth: tools/ocr-harness/src/prompt.js + scripts/iterate-round7.js.
+// Pro@1024 thinking: cset 10/10, cshr 5/10 on the 5 hardest receipts. $0.014/call.
+//
+// Source of truth: tools/ocr-harness/scripts/test-pro-prompts.js + test-pro-combo.js.
 // When iterating further in the harness, keep this file in sync.
 
-const val OCR_PROMPT_VERSION = "R7-T10"
+const val OCR_PROMPT_VERSION = "T9"
 
 fun buildOcrPrompt(categories: List<Category>): String {
     val filtered = categories.filter { it.tag != "supercharge" && it.tag != "recurring_income" && !it.deleted }
@@ -42,9 +46,16 @@ Fuel, parking, tolls → 48281 Transportation/Gas.
 Work safety gear, uniforms → 47837 Employment Expenses.
 Hardware, electrical, lighting, paint → 30186 Home Supplies."""
 
-    val mp = """
+    val t1Thematic = """
 
-PRIORITY REMINDER: merchant and amount are the most important fields. Do not compromise them while attending to category work. Merchant MUST be the consumer brand (not a cashier name, customer name, or translated English word)."""
+CATEGORY RULE — thematic first-pass:
+Before applying per-item category mapping, scan the full receipt for seasonal or thematic patterns. If you see items whose descriptions clearly tie to a holiday or theme, route them first:
+  • Easter eggs, Easter bunnies, Easter baskets, jelly beans in Easter packaging → 49552 Holidays/Birthdays
+  • Christmas ornaments, stockings, holiday gift items → 49552 Holidays/Birthdays
+  • Halloween candy, costumes, decor → 49552 Holidays/Birthdays
+  • Valentine candy, cards → 49552 Holidays/Birthdays
+  • Back-to-school workbooks, kids' crayons, lunchboxes → 1276 Kid's Stuff
+Only items that DON'T match a theme fall through to the generic mappings below."""
 
     val flashBase = """You are a receipt-reading assistant. Extract purchase details from the image and return JSON that matches the provided schema.
 
@@ -65,8 +76,8 @@ $categoryList
 Do not invent categoryIds that are not in the list. If no category fits, omit categoryAmounts.
 If a required field is genuinely not visible on the receipt, omit it rather than guessing."""
 
-    // R7-T10 cat-first ordering: category rules prepended BEFORE the base extraction prompt.
-    return c3 + c4 + c6 + mp + "\n\n" + flashBase
+    // T9 cat-first ordering: category rules + thematic first-pass, no MP.
+    return c3 + c4 + c6 + t1Thematic + "\n\n" + flashBase
 }
 
 /**

@@ -105,6 +105,13 @@ object ReceiptOcrService {
                 responseMimeType = "application/json"
                 responseSchema = flashProSchema
                 temperature = 0f
+                // NOTE: Gemini 2.5 Pro runs with default thinking (~6500 hidden
+                // tokens ≈ $0.07/call). Harness confirmed thinkingBudget=1024
+                // gives equivalent quality at $0.014/call (5× cheaper, 4×
+                // faster), but generativeai:0.9.0 doesn't expose thinkingConfig
+                // client-side. Upgrade path: swap to raw HTTP or Firebase AI
+                // Logic SDK when convenient. Prompt improvements (T9/combo)
+                // still apply and drive the cset 10/10 quality win.
             }
         )
     }
