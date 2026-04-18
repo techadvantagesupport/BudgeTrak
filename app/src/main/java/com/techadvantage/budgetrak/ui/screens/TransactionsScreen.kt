@@ -120,6 +120,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.offset
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
@@ -3667,6 +3668,10 @@ fun TransactionDialog(
                         var draggedSlot by remember { mutableIntStateOf(-1) }
                         var dragOffsetXPx by remember { mutableStateOf(0f) }
                         var dragDidMove by remember { mutableStateOf(false) }
+                        // ocrTargetSlot as it was BEFORE the current long-press. Used in
+                        // onDragEnd to decide whether a no-drag long-press should clear
+                        // (already-highlighted → untoggle) or keep (newly highlighted).
+                        var preDragHighlight by remember { mutableIntStateOf(-1) }
 
                         val draggedVisibleIdx = if (draggedSlot >= 0) occupiedSlots.indexOf(draggedSlot) else -1
                         val proposedNewVisibleIdx = if (draggedVisibleIdx >= 0) {
@@ -3674,33 +3679,12 @@ fun TransactionDialog(
                             (draggedVisibleIdx + shift).coerceIn(0, occupiedSlots.size - 1)
                         } else -1
 
-                        fun commitReorder(fromVis: Int, toVis: Int) {
-                            if (fromVis == toVis || fromVis < 0 || toVis < 0) return
-                            val newOrder = occupiedSlots.toMutableList().apply {
-                                val item = removeAt(fromVis)
-                                add(toVis, item)
-                            }
-                            val newRids = newOrder.map { dialogReceiptIds[it] }
-                            if (isEdit && editTransaction != null) {
-                                val updated = editTransaction.copy(
-                                    receiptId1 = newRids.getOrNull(0),
-                                    receiptId2 = newRids.getOrNull(1),
-                                    receiptId3 = newRids.getOrNull(2),
-                                    receiptId4 = newRids.getOrNull(3),
-                                    receiptId5 = newRids.getOrNull(4),
-                                )
-                                onUpdatePhoto?.invoke(updated)
-                            } else {
-                                addModeReceiptId1 = newRids.getOrNull(0)
-                                addModeReceiptId2 = newRids.getOrNull(1)
-                                addModeReceiptId3 = newRids.getOrNull(2)
-                                addModeReceiptId4 = newRids.getOrNull(3)
-                                addModeReceiptId5 = newRids.getOrNull(4)
-                            }
-                            // Highlight follows the moved photo to its new slot index (post-compact).
-                            ocrTargetSlot = toVis
-                            dialogThumbRefresh++
-                        }
+                        // Track current values via rememberUpdatedState so the pointerInput
+                        // lambdas (established once, keyed only by slot index) always see
+                        // the latest photo layout — not the first-render snapshot.
+                        val occupiedSlotsState = rememberUpdatedState(occupiedSlots)
+                        val receiptIdsState = rememberUpdatedState(dialogReceiptIds)
+                        val editTxnState = rememberUpdatedState(editTransaction)
 
                         Row(
                             modifier = Modifier
@@ -3750,9 +3734,10 @@ fun TransactionDialog(
                                             if (thumb != null) {
                                                 Modifier
                                                     .clickable { dialogFullScreenSlot = i }
-                                                    .pointerInput(i, occupiedSlots.size) {
+                                                    .pointerInput(i) {
                                                         detectDragGesturesAfterLongPress(
                                                             onDragStart = {
+                                                                preDragHighlight = ocrTargetSlot
                                                                 draggedSlot = i
                                                                 dragOffsetXPx = 0f
                                                                 dragDidMove = false
@@ -3764,18 +3749,55 @@ fun TransactionDialog(
                                                                 if (kotlin.math.abs(dragAmount.x) > 0.5f) dragDidMove = true
                                                             },
                                                             onDragEnd = {
-                                                                if (dragDidMove && draggedVisibleIdx >= 0 &&
-                                                                    proposedNewVisibleIdx != draggedVisibleIdx) {
-                                                                    commitReorder(draggedVisibleIdx, proposedNewVisibleIdx)
+                                                                // Recompute against the latest snapshots (callbacks
+                                                                // were created once; composition-time vals are stale).
+                                                                val curOccupied = occupiedSlotsState.value
+                                                                val curRids = receiptIdsState.value
+                                                                val curEditTxn = editTxnState.value
+                                                                val curVisIdx = curOccupied.indexOf(i)
+                                                                val shiftCells = kotlin.math.round(dragOffsetXPx / strideDpFloat).toInt()
+                                                                val maxIdx = (curOccupied.size - 1).coerceAtLeast(0)
+                                                                val curProposed = (curVisIdx + shiftCells).coerceIn(0, maxIdx)
+
+                                                                if (dragDidMove && curVisIdx >= 0 && curProposed != curVisIdx) {
+                                                                    // Commit reorder inline so we use current state.
+                                                                    val newOrder = curOccupied.toMutableList().apply {
+                                                                        val item = removeAt(curVisIdx)
+                                                                        add(curProposed, item)
+                                                                    }
+                                                                    val newRids = newOrder.map { curRids[it] }
+                                                                    if (isEdit && curEditTxn != null) {
+                                                                        val updated = curEditTxn.copy(
+                                                                            receiptId1 = newRids.getOrNull(0),
+                                                                            receiptId2 = newRids.getOrNull(1),
+                                                                            receiptId3 = newRids.getOrNull(2),
+                                                                            receiptId4 = newRids.getOrNull(3),
+                                                                            receiptId5 = newRids.getOrNull(4),
+                                                                        )
+                                                                        onUpdatePhoto?.invoke(updated)
+                                                                    } else {
+                                                                        addModeReceiptId1 = newRids.getOrNull(0)
+                                                                        addModeReceiptId2 = newRids.getOrNull(1)
+                                                                        addModeReceiptId3 = newRids.getOrNull(2)
+                                                                        addModeReceiptId4 = newRids.getOrNull(3)
+                                                                        addModeReceiptId5 = newRids.getOrNull(4)
+                                                                    }
+                                                                    // Highlight follows the moved photo to its new slot.
+                                                                    ocrTargetSlot = curProposed
+                                                                    dialogThumbRefresh++
                                                                 } else if (!dragDidMove) {
-                                                                    // Pure long-press (no drag) toggles highlight.
-                                                                    ocrTargetSlot = if (ocrTargetSlot == i) -1 else i
+                                                                    // Pure long-press: toggle against PRE-drag state
+                                                                    // (onDragStart already set ocrTargetSlot = i, so
+                                                                    // checking current would always clear).
+                                                                    ocrTargetSlot = if (preDragHighlight == i) -1 else i
                                                                 }
                                                                 draggedSlot = -1
                                                                 dragOffsetXPx = 0f
                                                                 dragDidMove = false
                                                             },
                                                             onDragCancel = {
+                                                                // Cancelled — leave ocrTargetSlot at whatever
+                                                                // onDragStart set it to; just reset drag state.
                                                                 draggedSlot = -1
                                                                 dragOffsetXPx = 0f
                                                                 dragDidMove = false
