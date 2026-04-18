@@ -2249,50 +2249,30 @@
     ]
   },
   {
-    "file": "costco_1.jpg",
+    "file": "costco_3.jpg",
     "source": "Costco",
     "difficulty": "medium",
     "merchant": "Costco",
-    "date": "2026-03-17",
-    "amount": 554.68,
-    "categoryId": 22695,
-    "notes": "Mostly groceries with home supplies (Tide pods, Dixie plates, shelving, fire extinguisher, storage bin, dog toy, ziploc) and rubber boots. Tax allocated proportionally.",
+    "date": "2026-03-28",
+    "amount": 233.14,
+    "categoryId": 30186,
+    "notes": "Costco St Cloud #1344. Mixed run: groceries (FR HB eggs, Diet Mtn Dew, tzatziki dip, 2% milk, turkey pesto, Greek pita, ABF chicken melt), home/pet supplies (KS dental chews, KS 3-ply tissue, Kleenex towel with -$3 coupon, KS cat food), health (One-A-Day Mens multivitamin, Allertec syrup), and a mixed bouquet. Pet items grouped into Home Supplies per user preference; bouquet treated as Holidays/Birthdays. 8% MN tax ($11.83) allocated proportionally.",
     "categoryAmounts": [
       {
-        "categoryId": 22695,
-        "amount": 341.1
-      },
-      {
         "categoryId": 30186,
-        "amount": 200.24
+        "amount": 106
       },
-      {
-        "categoryId": 52714,
-        "amount": 13.34
-      }
-    ]
-  },
-  {
-    "file": "costco_2.jpg",
-    "source": "Costco",
-    "difficulty": "medium",
-    "merchant": "Costco",
-    "date": "2026-02-03",
-    "amount": 610,
-    "categoryId": 22695,
-    "notes": "Mostly groceries with home supplies (storage bin, ziploc, bin rack, Tampax) and one clothing item (BR flex pants). Tax allocated proportionally.",
-    "categoryAmounts": [
       {
         "categoryId": 22695,
-        "amount": 414.61
+        "amount": 79.21
       },
       {
-        "categoryId": 30186,
-        "amount": 174.82
+        "categoryId": 17351,
+        "amount": 28.5
       },
       {
-        "categoryId": 52714,
-        "amount": 20.57
+        "categoryId": 49552,
+        "amount": 19.43
       }
     ]
   },
@@ -2342,7 +2322,7 @@
     "difficulty": "hard",
     "merchant": "Target",
     "date": "2025-11-07",
-    "amount": 531.9,
+    "amount": 531.93,
     "categoryId": 52714,
     "notes": "Large multi-section receipt. Apparel dominates (Wonderstop, AND Dress, Ava & Viv, Wild Fable, A New Day, Zoe+Liv, AND Shorts, Belt Tan, necklaces, earrings). Plus Health & Beauty (Garnier, eos, Aveeno, Kristin Ess, Dove Beauty -> Health/Pharmacy per convention), Home/Furniture/Kitchen/Garage (Brightroom, Threshold, Brica -> Home Supplies), Grocery (Market Pantry, GG, Tillamook, Celsius). Tax (MN 7.875%) and 5% Target Circle discount allocated proportionally.",
     "categoryAmounts": [
