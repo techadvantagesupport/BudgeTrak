@@ -3104,6 +3104,12 @@ fun TransactionDialog(
     // a photo first. Replaces the previous "always read slot 1" default.
     var ocrTargetSlot by remember { mutableIntStateOf(-1) }
 
+    // Snapshot of "did the user have any category pre-selected when OCR was
+    // launched?" Consulted in the OcrState.Success handler below to decide
+    // whether to overwrite the checkbox selection. If true, the selection is
+    // preserved (user intent wins). If false, OCR's categories replace it.
+    var ocrHadPreselect by remember { mutableStateOf(false) }
+
     // Dialog camera state (for header camera icon)
     var dialogTempPhotoUri by remember { mutableStateOf<Uri?>(null) }
     val dialogPhotoScope = rememberCoroutineScope()
@@ -3335,35 +3341,48 @@ fun TransactionDialog(
         when (state) {
             is com.techadvantage.budgetrak.data.ocr.OcrState.Success -> {
                 val r = state.result
-                // Merchant
-                if (source.isBlank()) {
-                    source = if (autoCapitalize) com.techadvantage.budgetrak.data.toApaTitleCase(r.merchant) else r.merchant
-                }
-                // Date (parse ISO YYYY-MM-DD)
+
+                // Merchant — always overwrite (user review expected; verified=false below).
+                source = if (autoCapitalize) com.techadvantage.budgetrak.data.toApaTitleCase(r.merchant) else r.merchant
+
+                // Date — always overwrite (parse ISO YYYY-MM-DD; leave as-is if unparseable).
                 runCatching { LocalDate.parse(r.date) }.getOrNull()?.let { selectedDate = it }
-                // Amount + categories — only prefill if user hasn't started entering amounts.
-                val anyAmountEntered = singleAmountText.isNotBlank() ||
-                    categoryAmountTexts.values.any { it.isNotBlank() } ||
-                    totalAmountText.isNotBlank()
+
+                // Filter OCR's category set to cats the app actually has.
                 val cats = r.categoryAmounts.orEmpty().filter { ca ->
                     categories.any { it.id == ca.categoryId }
                 }
-                if (!anyAmountEntered) {
-                    if (cats.size <= 1) {
-                        singleAmountText = formatAmount(r.amount, maxDecimals)
-                        cats.firstOrNull()?.let { selectedCategoryIds[it.categoryId] = true }
-                    } else {
-                        totalAmountText = formatAmount(r.amount, maxDecimals)
-                        cats.forEach {
-                            selectedCategoryIds[it.categoryId] = true
-                            categoryAmountTexts[it.categoryId] = formatAmount(it.amount, maxDecimals)
-                        }
-                        userOwnedFields = buildSet {
-                            add("total")
-                            cats.forEach { add(it.categoryId.toString()) }
-                        }
+
+                // Amount fields — always overwrite, clearing the "other mode" so
+                // stale values (e.g. a user's typed singleAmountText) don't linger
+                // when OCR switches to multi-cat mode (or vice versa).
+                if (cats.size <= 1) {
+                    singleAmountText = formatAmount(r.amount, maxDecimals)
+                    totalAmountText = ""
+                    categoryAmountTexts.clear()
+                    userOwnedFields = emptySet()
+                } else {
+                    singleAmountText = ""
+                    totalAmountText = formatAmount(r.amount, maxDecimals)
+                    categoryAmountTexts.clear()
+                    cats.forEach {
+                        categoryAmountTexts[it.categoryId] = formatAmount(it.amount, maxDecimals)
+                    }
+                    userOwnedFields = buildSet {
+                        add("total")
+                        cats.forEach { add(it.categoryId.toString()) }
                     }
                 }
+
+                // Category selection (checkboxes) — only change if the user had
+                // NO pre-selection when OCR launched. If they pre-selected, their
+                // choices win; OCR's per-cat amounts (set above) still populate
+                // the amount fields for those they happened to match.
+                if (!ocrHadPreselect) {
+                    selectedCategoryIds.clear()
+                    cats.forEach { selectedCategoryIds[it.categoryId] = true }
+                }
+
                 // User must review (OCR-provided data is never "verified").
                 verified = false
                 onClearOcrState?.invoke()
@@ -3521,6 +3540,7 @@ fun TransactionDialog(
                                                     .filter { it.value }
                                                     .keys
                                                     .toSet()
+                                                ocrHadPreselect = preSelected.isNotEmpty()
                                                 onRunOcr?.invoke(targetReceiptId, preSelected)
                                             }
                                         }
