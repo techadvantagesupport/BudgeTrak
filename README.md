@@ -36,7 +36,14 @@ APK ends up at `app/build/outputs/apk/debug/app-debug.apk`. Copy to `/storage/em
 
 ## Memory system
 
-`memory/` is symlinked from `~/.claude/projects/-data-data-com-termux-files-home-dailyBudget/memory` so Claude Code reads the same files that are tracked in git. `/push` covers memory changes automatically.
+Claude's auto-memory lives at `~/.claude/projects/-data-data-com-termux-files-home/memory/`, which is a **symlink** to this repo's `memory/` directory. Every memory write lands in the tracked working tree, shows up in `git status`, and gets committed + pushed via `/push`. Cloning the repo on a new device and re-creating the symlink restores all memory.
+
+On a fresh device:
+```
+ln -s /path/to/dailyBudget/memory ~/.claude/projects/-data-data-com-termux-files-home/memory
+```
+
+A sibling directory `~/.claude/projects/-data-data-com-termux-files-home/private-notes/` stays **un-tracked** — it's the destination for genuinely personal memory (health notes, financial info outside BudgeTrak, etc.) that shouldn't end up on GitHub. See `memory/feedback_memory_routing.md` for the routing rule.
 
 ## Branches
 

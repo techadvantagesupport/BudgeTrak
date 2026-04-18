@@ -134,6 +134,13 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 - [JIT extraction lambda overhead](feedback_jit_extraction.md).
 - [Compose state-seed order + LaunchedEffect cancellation](feedback_compose_state_seed_order.md) — seed VM fields before the visibility flag; hoist long work to viewModelScope.
 - [Receipt pruning design](feedback_receipt_pruning_design.md) — cloud 14-day and local prune age are independent.
+- [AI feature UX — explicit trigger, tier per-feature](feedback_ai_feature_ux.md) — OCR sub-only; CSV categorization Paid+Sub; OCR prefill always overwrites scalars and preserves cat selection when pre-selected; CSV payload is merchant+amount only (no date).
+- [APK naming — always BudgeTrak.apk](feedback_apk_naming.md) — one file in Downloads, overwritten each build; no versioned names.
+- [Batteries = Home Supplies, not Other](feedback_batteries_as_home_supplies.md) — receipt-labeling preference.
+- [Claude unsuitable for BudgeTrak OCR](feedback_claude_receipt_ocr_unsuitable.md) — 30 prompt variants × Haiku/Sonnet/Opus all fail on compressed receipts; don't re-run.
+- [Run gradle clean after dep swap](feedback_gradle_clean_after_dep_swap.md) — removing deps leaves stale DEX files; causes startup crash.
+- [Ambiguous categories aren't OCR errors](feedback_ocr_ambiguous_categories_not_errors.md) — rotisserie chicken, steel-toed boots, soap: multiple valid buckets; don't penalize.
+- [Memory routing — project vs private](feedback_memory_routing.md) — tracked `memory/` for project content; un-tracked `~/.claude/projects/.../private-notes/` for personal.
 
 ## Firebase Backend
 - Plan: Blaze. App Check enforced on Firestore/RTDB/Storage (not Auth). Debug → `DebugAppCheckProviderFactory`, release → `PlayIntegrityAppCheckProviderFactory`. Token TTL 4 h (set in Firebase Console — not overridden in code). `firebase-config-reference.txt` currently says 1 h and is stale.
@@ -160,6 +167,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 ## Future Work
 - [Subscriber feature ideas](project_subscriber_feature_ideas.md).
 - [OCR/AI receipt capture plan](project_ocr_receipt_capture.md).
+- [OCR pipeline decisions — Lite 3-call shipped](project_ocr_pipeline_decisions.md) — final config, Pro alternative, 40+ prompt iteration findings, caching/schema gotchas for future model swaps.
 - [AI CSV categorization](project_ai_csv_categorization.md) — **shipped 2026-04-16**. Flash-Lite, hybrid heuristic+AI (≥5 matches & ≥80% agreement skips AI), opt-in, Paid+Sub.
 - [Widget photo support (designed)](project_widget_photos.md).
 - [Pre-launch TODO](project_prelaunch_todo.md) — most done; App Check integrity level deferred.
@@ -168,6 +176,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 
 ## Documentation
 - SSD/LLD v2.6 at `docs/BudgeTrak_SSD_v2.6.md` + `docs/BudgeTrak_LLD_v2.6.md`. Verified against code on 2026-04-12; bump on any structural change.
+- [Legal repo location](reference_legal_repo.md) — privacy.md + branding live in separate `budgetrak-legal` repo at `/storage/emulated/0/Download/BudgeTrak Legal Files`.
 
 ## Audit Follow-ups
 - **2026-04-12 memory audit** (this one): clarified the two sync hashes — `cashHash` (Layer 2 consistency) is hex via `.toString(16)`; the `enc_hash` per-doc cache in FirestoreDocSync is decimal. An earlier draft conflated them. Removed `WidgetRefreshWorker` refs, restored auto-categorize scope (CSV import only), updated screen count (10 navigable + 10 help, plus QuickStartGuide overlay), deleted obsolete CRDT-era files, added spec_simulation / spec_dashboard / spec_recurring_and_savings / spec_backup / spec_diagnostics.
