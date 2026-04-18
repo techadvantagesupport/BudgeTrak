@@ -838,7 +838,7 @@ object TranslationContext {
         "crashReportsTitle" to "Help section heading: 'Send Crash Reports'. About the Settings → Privacy toggle that controls Firebase Crashlytics opt-out.",
         "crashReportsBody" to "Help body explaining the Send Crash Reports toggle. Encourages the user to leave it on (it's how the developer hears about real-world bugs and ships repair updates) while being clear it's optional. Specifically lists what is NOT sent (transaction details, merchants, amounts, dates, photos) and what IS sent (crash stack traces, anonymous device info, sync status, counts, and a one-way hashed cash digest \u2014 not the raw cash value).",
         "receiptPhotosTitle" to "Section heading for receipt photo feature in settings help.",
-        "receiptPhotosBody" to "Overview of the photo feature: how to attach photos (swipe left or camera icon), up to 5 per transaction, paid-only.",
+        "receiptPhotosBody" to "Multi-paragraph overview of the photo feature for the Settings help page. Covers: attaching photos (swipe left or dialog camera icon, up to 5/tx, images + PDFs); interacting with the photo bar (tap = full-screen viewer with Delete button; long-press + drag = reorder); and SYNC'd pending placeholders (camera icon shown while bytes download; still reorderable; tapping shows a toast). Keep paragraph breaks (\\n\\n).",
         "receiptPhotosBullet1" to "Bullet: receipt photos are stored locally and sync across linked devices when SYNC is enabled.",
         "receiptPhotosBullet2" to "Bullet: how to delete a photo (long-press thumbnail).",
         "receiptPhotosBullet3" to "Bullet: how to view a photo full-screen (tap thumbnail).",

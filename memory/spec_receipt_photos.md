@@ -88,9 +88,35 @@ Also used for the **join snapshot**: `uploadJoinSnapshot` / `downloadJoinSnapsho
 
 `receiptPruneAgeDays` in SharedSettings controls deletion of **local files** for transactions older than the configured age. Effective prune date = `max(today - age, mostRecentPrunedDate)`. Re-upload is suppressed for pruned transactions to avoid re-download → re-prune cycles.
 
+## Thumbnail-bar interactions (2026-04-18)
+
+Two renderings of the 5-slot photo thumbnail bar use the same gesture model:
+the transaction-list swipe-left panel (`SwipeablePhotoRow`) and the Add/Edit
+Transaction dialog thumbnail bar (inline in `TransactionsScreen`).
+
+- **Tap** → opens `FullScreenPhotoViewer` (delete button lives inside it).
+- **Long-press** → picks up the thumbnail; a blue 2dp outline appears.
+  - Dialog variant: the highlight is the AI OCR scan target — survives
+    release and becomes the slot the sparkle icon reads from. Long-pressing
+    the already-highlighted slot clears the highlight.
+  - List-row variant: highlight is purely drag-in-progress feedback; clears
+    on release.
+- **Long-press + drag (no lift)** → reorders among occupied slots. Other
+  thumbnails animate out of the way in real time. Drop commits by rewriting
+  `receiptId1..5` on the transaction (compacting any gaps from prior deletes
+  as a side effect — slot-number preservation isn't meaningful to users).
+- **Pending-download placeholders** (receiptId set, thumbnail not yet
+  downloaded) participate in reorder. Tap shows a short toast
+  ("Waiting for this photo to download from the device that added it").
+
+Long-press-to-delete was removed in 2026-04-18; deletion is exclusively via
+the full-screen viewer's Delete button. See commits `47013da`, `2cee3ba`,
+`a071804`, `c79a574`, `1b2c386`, `180fc38`.
+
 ## Full deletion chain
 
-User long-presses a thumbnail → confirm dialog → `ReceiptManager.deleteReceiptFull`:
+User taps a thumbnail → full-screen viewer → Delete button → confirm dialog →
+`ReceiptManager.deleteReceiptFull`:
 1. Clear slot on transaction.
 2. Remove local file + thumbnail.
 3. Remove entry from pending-upload queue.
