@@ -55,7 +55,9 @@ Initial build runs on `Dispatchers.Default` — the EMA ticker from the async-lo
 The dashboard's supercharge bolt is not part of the simulator — see `spec_recurring_and_savings.md`. But when a user accepts a Supercharge ACHIEVE_SOONER adjustment, the simulator's low-point value usually improves: showing the before/after low point is a natural next UX step if we decide to surface it.
 
 ## Gating
-Simulation is not paywalled. `isPaidUser` / `isSubscriber` do not gate `SimulationGraphScreen`.
+The "View Chart" entry button on `SavingsGoalsScreen` is gated to **Paid Users and Subscribers** (`isPaidUser || isSubscriber`). Free users see the button but get an "Upgrade to access this feature" toast when tapping. `SimulationGraphScreen` itself (the destination) isn't separately paywalled — the gate lives on the entry button only.
+
+Previously Subscriber-only; promoted to Paid+Subscriber on 2026-04-18. Pricing table in `budgetrak-legal/README.md` reflects the new gating.
 
 ## Performance notes
 - Simulator runs O(events) — typically ~2000 events for a 3-person household over 18 months.

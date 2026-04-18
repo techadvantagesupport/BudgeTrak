@@ -1,9 +1,32 @@
 ---
-name: OCR / AI Receipt Capture plan
-description: Subscriber feature plan for snap-or-share receipt and screenshot capture using a multimodal LLM. Primary provider Firebase AI Logic → Gemini 2.5 Flash (Anthropic Claude Haiku 4.5 as alternate). Covers architecture, costs, Android share-intent integration, the user-decided privacy model (opt-in, per-receipt exception to E2E encryption, manual entry encouraged for sensitive transactions), help/privacy-policy copy, accuracy research, and dedupe concerns.
+name: OCR / AI Receipt Capture plan (historical + current status)
+description: Subscriber feature for snap-or-share receipt capture via multimodal LLM. SHIPPED 2026-04-17 with Gemini 2.5 Flash-Lite 3-call pipeline (unified with Call 1 routing probe). Document below retains the 2026-04-13 planning/provider-decision history. For the current shipping config see the header block and project_ocr_pipeline_decisions.md.
 type: project
 originSessionId: e62277a3-386c-4af8-8747-78a2f79a4bee
 ---
+
+# 🟢 CURRENT SHIPPING STATE (as of 2026-04-18)
+
+The original plan below chose **Gemini 2.5 Flash** (single-call) as the provider. We have since iterated past that:
+
+- **Model:** Gemini 2.5 Flash-**Lite** (not Flash). No Flash or Pro fallback.
+- **Architecture:** Unified pipeline with Call 1 routing probe.
+  1. Call 1 always runs (header + optional `multiCategoryLikely` / `singleCategoryId` hints when no preselection).
+  2. Continue to Calls 2+3 when `preSelect.size >= 2` OR (`preSelect.isEmpty()` AND Call 1 says multi-cat).
+  3. Single-cat path returns from Call 1 alone; no extra API calls.
+- **Measured cost (14-receipt multi-cat bank):** $0.00078/multi-cat, ~$0.0002/single-cat, ~$0.42/user/year at 100 receipts/mo.
+- **Implementation:** `app/src/main/java/.../data/ocr/ReceiptOcrService.kt` (prompts inlined; `OcrPromptBuilder.kt` deleted). Caller: `MainViewModel.runOcrOnSlot1(receiptId, preSelectedCategoryIds)`.
+- **Detailed decisions + prompt iteration findings:** `~/.claude/projects/.../memory/project_ocr_pipeline_decisions.md`.
+
+UX gating (still valid from original plan):
+- **Subscriber-only** — Free and Paid see upgrade toast.
+- **Explicit trigger** — user taps the sparkle (`AutoAwesome`) icon in the TransactionDialog header. Never auto-runs on photo capture or share.
+- **Slot 1 only** — OCR reads `receiptId1`; extras are supplemental photos.
+
+Historical context (Flash decision, cost modeling, provider alternates, privacy copy, etc.) follows below.
+
+---
+
 A subscriber-tier feature where users either snap a photo of a paper receipt or share a screenshot from any other app (DoorDash, Amazon, Uber Eats, bank notification email, etc.), and BudgeTrak extracts merchant, amount, date, and a category hint, then creates a transaction with the image attached as the receipt photo. Originated from the 2026-04-11 brainstorm session as the strongest single subscription-conversion candidate.
 
 ## Why this is the right approach
