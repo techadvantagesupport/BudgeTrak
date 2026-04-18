@@ -774,9 +774,9 @@ object TranslationContext {
         "paidPhotos" to "Paid User tier bullet: transaction photos, up to 5 per transaction.",
         "paidWidget" to "Paid User tier bullet: unlimited widget transactions and a clean Solari widget display without the upgrade overlay.",
         "paidLoad" to "Paid User tier bullet: Save/Load transactions (CSV / Excel / PDF export, CSV import). Moved from Subscriber tier to Paid User tier in v2.5.x.",
+        "paidSimulation" to "Paid User tier bullet: cash flow simulation chart on the Savings Goals page, interactive, lets users experiment with different savings and spending rates. Moved from Subscriber tier to Paid User tier (both Paid Users and Subscribers have access).",
         "paidAdFree" to "Subscriber tier subsection heading: 'Subscriber (\$5 monthly subscription) adds advanced features:'. This is a subsection title, NOT a bullet. The field key is historical (was originally the ad-free bullet); the value has been repurposed.",
         "subBulletSync" to "Subscriber tier bullet: create and administer SYNC groups. Long explanation emphasizing it is BudgeTrak's most powerful feature, the subscription fee supports cloud costs, only one member needs a subscription, others can be free or Paid User.",
-        "subBulletSimulation" to "Subscriber tier bullet: cash flow simulation chart on the Savings Goals page, interactive, lets users experiment with different savings and spending rates.",
         "subFooterNote" to "Standalone footer note below the Subscriber bullets: free users can join existing SYNC groups without a subscription; Subscriber status automatically includes all Paid User benefits."
     )
 

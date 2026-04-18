@@ -809,9 +809,9 @@ data class DashboardHelpStrings(
     val paidPhotos: String,       // Paid User bullet: receipt photos (new in v2.5.x)
     val paidWidget: String,       // Paid User bullet: unlimited widget transactions + clean display
     val paidLoad: String,         // Paid User bullet: save/load transactions (moved from Subscriber to Paid in v2.5.x)
+    val paidSimulation: String,   // Paid User bullet: cash flow simulation chart (moved from Subscriber to Paid)
     val paidAdFree: String,       // Subscriber subsection heading (previously a bullet; renamed semantically but kept key for minimal churn)
     val subBulletSync: String,    // Subscriber bullet: create/administer SYNC groups
-    val subBulletSimulation: String, // Subscriber bullet: cash flow simulation chart
     val subFooterNote: String     // Standalone note below Subscriber bullets: free users can join; subscribers auto-include Paid
 )
 

@@ -290,14 +290,15 @@ fun SavingsGoalsScreen(
                             maxLines = 1
                         )
                     }
+                    val canViewChart = isPaidUser || isSubscriber
                     OutlinedButton(
                         onClick = {
-                            if (isSubscriber) onViewChart()
-                            else toastState.show(S.settings.subscribeToAccess)
+                            if (canViewChart) onViewChart()
+                            else toastState.show(S.settings.upgradeToAccess)
                         },
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                        enabled = isSubscriber
+                        enabled = canViewChart
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ShowChart,

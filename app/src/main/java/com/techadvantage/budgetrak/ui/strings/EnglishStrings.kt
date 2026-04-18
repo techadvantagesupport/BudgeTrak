@@ -863,7 +863,7 @@ object EnglishStrings : AppStrings {
         paidLoad = "Save/Load transactions \u2014 export to CSV, Excel, or PDF, and import from bank statements",
         paidAdFree = "Subscriber (\$5 monthly subscription) adds advanced features:",
         subBulletSync = "Create and administer SYNC groups \u2014 BudgeTrak's most powerful feature, letting you share a budget with other members of your family, small business, club, etc. Our subscription fee is about half the cost of our competitors and covers the cost of maintaining the cloud service. Only one group member needs a subscription; other devices in the group can be free versions or can pay the one-time Paid User purchase above to remove ads and unlock the Paid User features.",
-        subBulletSimulation = "Cash flow simulation chart \u2014 an interactive chart that shows exactly how we calculate your required cash-on-hand on the Savings Goals page, and lets you experiment with different savings and spending rates.",
+        paidSimulation = "Cash flow simulation chart \u2014 an interactive chart that shows exactly how we calculate your required cash-on-hand on the Savings Goals page, and lets you experiment with different savings and spending rates.",
         subFooterNote = "Free users can join existing SYNC groups without a subscription. Subscriber status automatically includes all Paid User benefits."
     )
 
@@ -1807,7 +1807,7 @@ object EnglishStrings : AppStrings {
         overviewBody = "The Cash Flow Simulation projects your financial trajectory over the next 18 months. " +
             "It takes your current budget, income sources, recurring expenses, savings goals, and amortization " +
             "entries and plays them forward in time to show how your available cash is expected to change. " +
-            "Cash Flow Simulation is a subscriber feature \u2014 open it from the chart icon on the Savings " +
+            "Cash Flow Simulation is a paid feature \u2014 open it from the chart icon on the Savings " +
             "Goals screen.",
         howItWorksTitle = "How It Works",
         howItWorksBody = "The simulation starts with your current available cash and steps through each budget period " +
