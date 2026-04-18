@@ -14,7 +14,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
-import java.time.format.DateTimeFormatter
 
 object AiCategorizerService {
     private const val TAG = "AiCategorizerService"
@@ -90,14 +89,17 @@ object AiCategorizerService {
         batch: List<Transaction>,
         categories: List<Category>
     ): String {
-        val iso = DateTimeFormatter.ISO_LOCAL_DATE
+        // We send only merchant + amount (not date) to minimise data shared
+        // with Google. Merchant is the dominant categorization signal;
+        // amount occasionally nudges edge cases (e.g. small vs large charges
+        // at mixed-purpose retailers). Date adds almost nothing for typical
+        // consumer receipts and isn't worth the extra payload.
         val arr = JSONArray()
         batch.forEachIndexed { idx, t ->
             arr.put(JSONObject().apply {
                 put("i", idx)
                 put("merchant", t.source)
                 put("amount", t.amount)
-                put("date", t.date.format(iso))
             })
         }
         val batchJson = JSONObject().put("transactions", arr).toString()

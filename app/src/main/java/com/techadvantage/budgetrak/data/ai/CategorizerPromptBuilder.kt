@@ -11,7 +11,7 @@ fun buildCategorizerPrompt(categories: List<Category>, batchJson: String): Strin
         else                    "  - id=${c.id} name=\"${c.name}\""
     }
 
-    return """You are a transaction categorizer for a personal-finance app. Given a list of bank transactions (merchant, amount, date) and the user's categories, assign each transaction to the single best-matching category id.
+    return """You are a transaction categorizer for a personal-finance app. Given a list of bank transactions (merchant, amount) and the user's categories, assign each transaction to the single best-matching category id.
 
 Guidance:
 - Consider amount as a disambiguator. A small charge at a gas station often means food or drinks; a larger charge at the same gas station usually means fuel.
