@@ -3709,6 +3709,7 @@ fun TransactionDialog(
                                 val thumb = dialogThumbnails.getOrNull(i)
                                 val rid = dialogReceiptIds.getOrNull(i)
                                 if (thumb == null && rid == null) return@forEachIndexed
+                                val isPending = thumb == null && rid != null
                                 val isOcrTarget = ocrTargetSlot == i
                                 val isBeingDragged = draggedSlot == i
 
@@ -3741,82 +3742,85 @@ fun TransactionDialog(
                                                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
                                             shape = RoundedCornerShape(6.dp)
                                         )
-                                        .then(
-                                            if (thumb != null) {
-                                                Modifier
-                                                    .clickable { dialogFullScreenSlot = i }
-                                                    .pointerInput(i) {
-                                                        detectDragGesturesAfterLongPress(
-                                                            onDragStart = {
-                                                                preDragHighlight = ocrTargetSlot
-                                                                draggedSlot = i
-                                                                dragOffsetXPx = 0f
-                                                                dragDidMove = false
-                                                                ocrTargetSlot = i  // highlight on long-press
-                                                            },
-                                                            onDrag = { change, dragAmount ->
-                                                                change.consume()
-                                                                dragOffsetXPx += dragAmount.x
-                                                                if (kotlin.math.abs(dragAmount.x) > 0.5f) dragDidMove = true
-                                                            },
-                                                            onDragEnd = {
-                                                                // Recompute against the latest snapshots (callbacks
-                                                                // were created once; composition-time vals are stale).
-                                                                val curOccupied = occupiedSlotsState.value
-                                                                val curRids = receiptIdsState.value
-                                                                val curEditTxn = editTxnState.value
-                                                                val curVisIdx = curOccupied.indexOf(i)
-                                                                val shiftCells = kotlin.math.round(dragOffsetXPx / strideDpFloat).toInt()
-                                                                val maxIdx = (curOccupied.size - 1).coerceAtLeast(0)
-                                                                val curProposed = (curVisIdx + shiftCells).coerceIn(0, maxIdx)
+                                        // Tap → full-screen viewer when the image is on disk,
+                                        // or an explanatory toast if the bytes haven't synced yet.
+                                        .clickable {
+                                            if (isPending) {
+                                                toastState.show(S.settings.pendingPhotoTapped)
+                                            } else {
+                                                dialogFullScreenSlot = i
+                                            }
+                                        }
+                                        .pointerInput(i) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = {
+                                                    preDragHighlight = ocrTargetSlot
+                                                    draggedSlot = i
+                                                    dragOffsetXPx = 0f
+                                                    dragDidMove = false
+                                                    ocrTargetSlot = i  // highlight on long-press
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragOffsetXPx += dragAmount.x
+                                                    if (kotlin.math.abs(dragAmount.x) > 0.5f) dragDidMove = true
+                                                },
+                                                onDragEnd = {
+                                                    // Recompute against the latest snapshots (callbacks
+                                                    // were created once; composition-time vals are stale).
+                                                    val curOccupied = occupiedSlotsState.value
+                                                    val curRids = receiptIdsState.value
+                                                    val curEditTxn = editTxnState.value
+                                                    val curVisIdx = curOccupied.indexOf(i)
+                                                    val shiftCells = kotlin.math.round(dragOffsetXPx / strideDpFloat).toInt()
+                                                    val maxIdx = (curOccupied.size - 1).coerceAtLeast(0)
+                                                    val curProposed = (curVisIdx + shiftCells).coerceIn(0, maxIdx)
 
-                                                                if (dragDidMove && curVisIdx >= 0 && curProposed != curVisIdx) {
-                                                                    // Commit reorder inline so we use current state.
-                                                                    val newOrder = curOccupied.toMutableList().apply {
-                                                                        val item = removeAt(curVisIdx)
-                                                                        add(curProposed, item)
-                                                                    }
-                                                                    val newRids = newOrder.map { curRids[it] }
-                                                                    if (isEdit && curEditTxn != null) {
-                                                                        val updated = curEditTxn.copy(
-                                                                            receiptId1 = newRids.getOrNull(0),
-                                                                            receiptId2 = newRids.getOrNull(1),
-                                                                            receiptId3 = newRids.getOrNull(2),
-                                                                            receiptId4 = newRids.getOrNull(3),
-                                                                            receiptId5 = newRids.getOrNull(4),
-                                                                        )
-                                                                        onUpdatePhoto?.invoke(updated)
-                                                                    } else {
-                                                                        addModeReceiptId1 = newRids.getOrNull(0)
-                                                                        addModeReceiptId2 = newRids.getOrNull(1)
-                                                                        addModeReceiptId3 = newRids.getOrNull(2)
-                                                                        addModeReceiptId4 = newRids.getOrNull(3)
-                                                                        addModeReceiptId5 = newRids.getOrNull(4)
-                                                                    }
-                                                                    // Highlight follows the moved photo to its new slot.
-                                                                    ocrTargetSlot = curProposed
-                                                                    dialogThumbRefresh++
-                                                                } else if (!dragDidMove) {
-                                                                    // Pure long-press: toggle against PRE-drag state
-                                                                    // (onDragStart already set ocrTargetSlot = i, so
-                                                                    // checking current would always clear).
-                                                                    ocrTargetSlot = if (preDragHighlight == i) -1 else i
-                                                                }
-                                                                draggedSlot = -1
-                                                                dragOffsetXPx = 0f
-                                                                dragDidMove = false
-                                                            },
-                                                            onDragCancel = {
-                                                                // Cancelled — leave ocrTargetSlot at whatever
-                                                                // onDragStart set it to; just reset drag state.
-                                                                draggedSlot = -1
-                                                                dragOffsetXPx = 0f
-                                                                dragDidMove = false
-                                                            }
-                                                        )
+                                                    if (dragDidMove && curVisIdx >= 0 && curProposed != curVisIdx) {
+                                                        // Commit reorder inline so we use current state.
+                                                        val newOrder = curOccupied.toMutableList().apply {
+                                                            val item = removeAt(curVisIdx)
+                                                            add(curProposed, item)
+                                                        }
+                                                        val newRids = newOrder.map { curRids[it] }
+                                                        if (isEdit && curEditTxn != null) {
+                                                            val updated = curEditTxn.copy(
+                                                                receiptId1 = newRids.getOrNull(0),
+                                                                receiptId2 = newRids.getOrNull(1),
+                                                                receiptId3 = newRids.getOrNull(2),
+                                                                receiptId4 = newRids.getOrNull(3),
+                                                                receiptId5 = newRids.getOrNull(4),
+                                                            )
+                                                            onUpdatePhoto?.invoke(updated)
+                                                        } else {
+                                                            addModeReceiptId1 = newRids.getOrNull(0)
+                                                            addModeReceiptId2 = newRids.getOrNull(1)
+                                                            addModeReceiptId3 = newRids.getOrNull(2)
+                                                            addModeReceiptId4 = newRids.getOrNull(3)
+                                                            addModeReceiptId5 = newRids.getOrNull(4)
+                                                        }
+                                                        // Highlight follows the moved photo to its new slot.
+                                                        ocrTargetSlot = curProposed
+                                                        dialogThumbRefresh++
+                                                    } else if (!dragDidMove) {
+                                                        // Pure long-press: toggle against PRE-drag state
+                                                        // (onDragStart already set ocrTargetSlot = i, so
+                                                        // checking current would always clear).
+                                                        ocrTargetSlot = if (preDragHighlight == i) -1 else i
                                                     }
-                                            } else Modifier
-                                        ),
+                                                    draggedSlot = -1
+                                                    dragOffsetXPx = 0f
+                                                    dragDidMove = false
+                                                },
+                                                onDragCancel = {
+                                                    // Cancelled — leave ocrTargetSlot at whatever
+                                                    // onDragStart set it to; just reset drag state.
+                                                    draggedSlot = -1
+                                                    dragOffsetXPx = 0f
+                                                    dragDidMove = false
+                                                }
+                                            )
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (thumb != null) {

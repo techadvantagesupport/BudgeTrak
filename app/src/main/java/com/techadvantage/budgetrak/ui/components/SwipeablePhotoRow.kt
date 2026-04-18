@@ -370,17 +370,21 @@ fun SwipeablePhotoRow(
                                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
                                 shape = RoundedCornerShape(6.dp)
                             )
-                            // Tap → full-screen viewer only when the image is actually on disk.
-                            // Pending placeholders still drag, but tapping them does nothing
-                            // (loadFullImage would return null and bounce back).
-                            .then(
-                                if (!isPending) {
-                                    Modifier.clickable {
-                                        if (onPhotoTap != null) onPhotoTap(i)
-                                        else fullScreenSlot = i
-                                    }
-                                } else Modifier
-                            )
+                            // Tap → full-screen viewer when the image is on disk, or a
+                            // short toast explaining the wait when the pending bytes haven't
+                            // arrived from the SYNC device that added it.
+                            .clickable {
+                                if (isPending) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        S.settings.pendingPhotoTapped,
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    if (onPhotoTap != null) onPhotoTap(i)
+                                    else fullScreenSlot = i
+                                }
+                            }
                             .pointerInput(i) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {

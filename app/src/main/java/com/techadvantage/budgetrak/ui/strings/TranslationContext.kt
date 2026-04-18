@@ -229,6 +229,7 @@ object TranslationContext {
         "deletePhotoConfirm" to "Dialog body asking if user wants to remove the receipt photo.",
         "upgradeForPhotos" to "Toast message shown to free users explaining photos require paid upgrade.",
         "sharedPhotoNeedsUpgrade" to "5-second toast shown when a free user shares an image to BudgeTrak: the Add Expense dialog still opens but the photo is discarded because photos are a paid/subscriber feature.",
+        "pendingPhotoTapped" to "Short toast when the user taps a receipt-photo placeholder in the transaction's photo bar. The placeholder represents a photo added on another SYNC device whose bytes haven't finished syncing to this device yet. Keep the message reassuring (it will arrive), action-free, under ~12 words.",
         // AI OCR placeholder (feature not yet implemented)
         "aiOcrIconDesc" to "Accessibility content description for the AI receipt scanner icon in the add-transaction dialog header.",
         "aiOcrComingSoon" to "Toast shown to subscribers who tap the placeholder AI icon while the real OCR extractor is not yet wired up.",

@@ -236,6 +236,7 @@ data class SettingsStrings(
     val deletePhotoConfirm: String,
     val upgradeForPhotos: String,
     val sharedPhotoNeedsUpgrade: String,
+    val pendingPhotoTapped: String,  // Toast when user taps a receipt photo placeholder whose bytes haven't synced from the other SYNC device yet
     // AI OCR
     val aiOcrIconDesc: String,
     val aiOcrComingSoon: String,

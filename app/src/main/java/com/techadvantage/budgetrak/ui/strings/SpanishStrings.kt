@@ -213,6 +213,7 @@ object SpanishStrings : AppStrings {
         deletePhotoConfirm = "\u00bfEliminar esta foto de recibo?",
         upgradeForPhotos = "Actualiza para fotos de recibos",
         sharedPhotoNeedsUpgrade = "A\u00f1adir fotos o recibos a las transacciones requiere una actualizaci\u00f3n de pago \u00fanico o una suscripci\u00f3n",
+        pendingPhotoTapped = "Esperando a que esta foto se descargue del dispositivo que la agreg\u00f3",
         aiOcrIconDesc = "Esc\u00e1ner de Recibos con IA",
         aiOcrComingSoon = "El esc\u00e1ner de recibos con IA est\u00e1 en camino",
         upgradeForAiOcr = "Suscr\u00edbete para activar el esc\u00e1ner de recibos con IA",
