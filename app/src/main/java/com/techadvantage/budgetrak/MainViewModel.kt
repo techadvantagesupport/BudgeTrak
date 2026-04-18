@@ -2240,8 +2240,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun runOcrOnSlot1(receiptId: String, preSelectedCategoryIds: Set<Int> = emptySet()) {
         if (ocrState is OcrState.Loading) return
         ocrState = OcrState.Loading
-        // 3-call Lite pipeline (Call 1 header, Call 2 items+cats, Call 3 prices,
-        // then reconcile). Handles single-cat and multi-cat in one path.
+        // ReceiptOcrService routes internally by preSelectedCategoryIds.size:
+        //   0-1 preselected → single-call Lite (1 API call, cheapest path)
+        //   2+ preselected  → 3-call Lite pipeline (header + items+cats + prices + reconcile)
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 ReceiptOcrService.extractFromReceipt(
