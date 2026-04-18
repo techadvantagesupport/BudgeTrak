@@ -83,11 +83,33 @@ object ReceiptOcrService {
         )
     )
 
+    // Single-call (0-1 preselected cats): header + one categoryAmounts entry.
+    private val singleCallSchema = Schema.obj(
+        name = "SingleCallResult",
+        description = "Receipt extraction — single-cat duty",
+        Schema.str("merchant", "Consumer brand on the receipt header"),
+        Schema.str("merchantLegalName", "Optional legal operator entity"),
+        Schema.str("date", "Transaction date in YYYY-MM-DD"),
+        Schema.int("amountCents", "Final total paid, integer cents"),
+        Schema.arr(
+            "categoryAmounts",
+            "Single-entry array with the best-fit category",
+            Schema.obj(
+                name = "CategoryAmount",
+                description = "The receipt's primary category",
+                Schema.int("categoryId", "Category id from the provided list"),
+                Schema.double("amount", "Amount for this category (should equal the total)")
+            )
+        ),
+        Schema.str("notes", "Optional free-form note")
+    )
+
     // ── Models (separate instances per call — SDK binds schema to config) ─
 
     private val call1Model by lazy { liteModel(call1Schema) }
     private val call2Model by lazy { liteModel(call2Schema) }
     private val call3Model by lazy { liteModel(call3Schema) }
+    private val singleCallModel by lazy { liteModel(singleCallSchema) }
 
     private fun liteModel(schema: Schema<*>) = GenerativeModel(
         modelName = "gemini-2.5-flash-lite",
@@ -102,11 +124,15 @@ object ReceiptOcrService {
     // ── Public API ─────────────────────────────────────────────────
 
     /**
-     * Extract receipt data using the 3-call Lite pipeline.
+     * Extract receipt data.
      *
-     * @param preSelectedCategoryIds when non-empty, the prompt is narrowed to
-     *   these categories and a soft "try to cover all, but skip if no fit"
-     *   nudge fires. Empty set → full category list is passed with no nudge.
+     * Routing by pre-selection:
+     *   • 0-1 pre-selected cats → single-call path (1 API call). Assumes the
+     *     receipt belongs to one category — the model returns a single
+     *     categoryAmounts entry. Cheapest/fastest for typical receipts.
+     *   • 2+ pre-selected cats → 3-call pipeline (header + items+cats + prices,
+     *     then reconcile). Needed for multi-cat receipts (Target/Costco/etc)
+     *     where the user wants a split across buckets.
      */
     suspend fun extractFromReceipt(
         context: Context,
@@ -126,7 +152,11 @@ object ReceiptOcrService {
                 ?: return Result.failure(IllegalStateException("Could not decode receipt image"))
 
             val result = withTimeout(TIMEOUT_MS) {
-                runPipeline(bitmap, categories, preSelectedCategoryIds)
+                if (preSelectedCategoryIds.size >= 2) {
+                    runThreeCallPipeline(bitmap, categories, preSelectedCategoryIds)
+                } else {
+                    runSingleCall(bitmap, categories, preSelectedCategoryIds)
+                }
             }
             bitmap.recycle()
             Result.success(result)
@@ -139,9 +169,70 @@ object ReceiptOcrService {
         }
     }
 
-    // ── Pipeline ───────────────────────────────────────────────────
+    // ── Single-call path (0-1 preselected) ─────────────────────────
 
-    private suspend fun runPipeline(
+    private suspend fun runSingleCall(
+        bitmap: Bitmap,
+        allCategories: List<Category>,
+        preSelectedCategoryIds: Set<Int>
+    ): OcrResult {
+        val promptCats = if (preSelectedCategoryIds.isNotEmpty()) {
+            allCategories.filter { it.id in preSelectedCategoryIds }
+        } else {
+            allCategories.filter { it.tag != "supercharge" && it.tag != "recurring_income" && !it.deleted }
+        }
+        val json = JSONObject(generateWithRetry(singleCallModel, bitmap, buildSingleCallPrompt(promptCats)))
+
+        val merchant = json.optString("merchant").takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("Missing merchant in OCR response")
+        val merchantLegalName = json.optString("merchantLegalName").takeIf { it.isNotBlank() }
+        val date = json.optString("date").takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("Missing date in OCR response")
+        val amountCents = json.optInt("amountCents", -1).takeIf { it >= 0 }
+            ?: throw IllegalStateException("Missing amountCents in OCR response")
+        val notes = json.optString("notes").takeIf { it.isNotBlank() }
+
+        // Single-call emits one categoryAmounts entry (single-cat duty). If the
+        // model hallucinates an id not in promptCats, remap. If it omits the
+        // entry entirely, synthesize one from the first preselected cat.
+        val validSet = promptCats.mapTo(mutableSetOf()) { it.id }
+        val rawCatId = json.optJSONArray("categoryAmounts")
+            ?.optJSONObject(0)
+            ?.optInt("categoryId", -1)
+            ?.takeIf { it != -1 }
+        val categoryId = when {
+            rawCatId != null && rawCatId in validSet -> rawCatId
+            preSelectedCategoryIds.size == 1 -> preSelectedCategoryIds.first()
+            rawCatId != null -> remapSingleCategoryId(rawCatId, promptCats)
+            else -> null
+        }
+        val categoryAmounts = categoryId?.let {
+            listOf(OcrCategoryAmount(categoryId = it, amount = amountCents / 100.0))
+        }
+
+        return OcrResult(
+            merchant = merchant,
+            merchantLegalName = merchantLegalName,
+            date = date,
+            amount = amountCents / 100.0,
+            categoryAmounts = categoryAmounts,
+            lineItems = null,
+            notes = notes
+        )
+    }
+
+    private fun remapSingleCategoryId(cid: Int, cats: List<Category>): Int? {
+        val valid = cats.mapTo(mutableSetOf()) { it.id }
+        return when {
+            cid in valid -> cid
+            30426 in valid -> 30426
+            else -> cats.firstOrNull()?.id
+        }
+    }
+
+    // ── 3-call pipeline (2+ preselected) ───────────────────────────
+
+    private suspend fun runThreeCallPipeline(
         bitmap: Bitmap,
         allCategories: List<Category>,
         preSelectedCategoryIds: Set<Int>
@@ -207,6 +298,25 @@ object ReceiptOcrService {
     }
 
     // ── Prompts ────────────────────────────────────────────────────
+
+    private fun buildSingleCallPrompt(cats: List<Category>): String {
+        val categoryList = cats.joinToString("\n") { c ->
+            if (c.tag.isNotEmpty()) "  - id=${c.id} name=\"${c.name}\" tag=\"${c.tag}\""
+            else                    "  - id=${c.id} name=\"${c.name}\""
+        }
+        return """Extract receipt header data and assign the receipt's best-fit category. Return JSON {merchant, merchantLegalName?, date, amountCents (integer), categoryAmounts, notes?}.
+
+- merchant: the consumer brand (e.g. "McDonald's", "Target"). Prefer the consumer brand over the legal operator entity. Preserve original language; don't translate.
+- merchantLegalName: optional, only when the legal entity is clearly distinct from the consumer brand.
+- date: YYYY-MM-DD ISO. Prefer transaction date over print/due dates. DD/MM locales: Malaysia, Singapore, Vietnam, most of Europe. MM/DD: US.
+- amountCents: INTEGER cents for the final paid total (tax and tip included). Ignore subtotal and pre-tax lines. Vietnamese đồng (VND) — dots are thousand separators, return integer đồng.
+- categoryAmounts: a single-entry array [{categoryId, amount}] where amount equals the receipt total. Pick the best-fit category from the list below. Stationery / office / pens / paper / bookstores → Other unless clearly kids' school supplies (→ Kid's Stuff). Hardware / electrical / plumbing / paint → Home Supplies.
+
+Categories:
+$categoryList
+
+Do not invent categoryIds not in the list."""
+    }
 
     private fun buildCall1Prompt(): String =
         """Extract receipt header data as JSON: {merchant, merchantLegalName?, date, amountCents (integer), notes?}.
