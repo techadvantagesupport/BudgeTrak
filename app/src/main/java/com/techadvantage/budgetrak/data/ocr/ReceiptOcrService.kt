@@ -17,116 +17,102 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 
+/**
+ * 3-call Gemini 2.5 Flash-Lite receipt OCR pipeline.
+ *
+ *   Call 1 (header): merchant, date, amountCents
+ *   Call 2 (items):  {description, categoryId} per line, with category rules
+ *   Call 3 (prices): priceCents per line, using multiplier / coupon / rebate cues
+ *
+ * Post-processing:
+ *   - Invalid categoryId remap (Gemini sometimes invents ids for tax lines when
+ *     the provided cat list has no natural tax home).
+ *   - Proportional reconciliation so Σ(item prices) = Call 1's amountCents.
+ *     Receipt-level discounts (Target Circle, Walmart DISCOUNT GIVEN) are
+ *     absorbed here since line items encode only pre-discount printed prices.
+ *   - Aggregate by category → OcrResult.categoryAmounts (tax allocated to the
+ *     dominant non-tax bucket, matching the app's labelling convention).
+ *
+ * Source of truth: tools/ocr-harness/scripts/test-bakeoff-lite3-vs-pro.js.
+ * Measured on 14 multi-cat receipts: cset 12/14, cshr 4/14, avg $0.00078,
+ * avg 9.5s. Beats Pro single-call on cset, ~4× cheaper, ~4× faster.
+ */
 object ReceiptOcrService {
     private const val TAG = "ReceiptOcrService"
     private const val TIMEOUT_MS = 90_000L
 
-    enum class Tier { LITE, FLASH, PRO }
-
     // ── Schemas ────────────────────────────────────────────────────
 
-    // Shared by Flash and Pro — amount as Double. `lineItems` omitted (harness
-    // A/B showed ~53% fewer output tokens with no loss to accuracy).
-    private val flashProSchema = Schema.obj(
-        name = "OcrResult",
-        description = "Receipt extraction result",
-        Schema.str("merchant", "Consumer brand on the receipt header"),
-        Schema.str("merchantLegalName", "Optional legal operator entity"),
-        Schema.str("date", "Transaction date in YYYY-MM-DD"),
-        Schema.double("amount", "Final total paid"),
-        Schema.arr(
-            "categoryAmounts",
-            "Per-category amounts that sum to the total",
-            Schema.obj(
-                name = "CategoryAmount",
-                description = "One category's share of the receipt",
-                Schema.int("categoryId", "Category id from the user's list"),
-                Schema.double("amount", "Amount for this category")
-            )
-        ),
-        Schema.str("notes", "Optional free-form note")
-    )
-
-    // Lite-specific: uses amountCents (integer) to sidestep locale float-parse
-    // issues. Includes transcription field (Lite's R11 transcribe-then-extract
-    // pattern — improves downstream accuracy on complex receipts).
-    private val liteSchema = Schema.obj(
-        name = "OcrResult",
-        description = "Receipt extraction result (Lite)",
-        Schema.str("transcription", "Plain-text transcription of every line on the receipt"),
+    private val call1Schema = Schema.obj(
+        name = "Call1Result",
+        description = "Receipt header",
         Schema.str("merchant", "Consumer brand on the receipt header"),
         Schema.str("merchantLegalName", "Optional legal operator entity"),
         Schema.str("date", "Transaction date in YYYY-MM-DD"),
         Schema.int("amountCents", "Final total paid, integer cents"),
-        Schema.arr(
-            "categoryAmounts",
-            "Per-category amounts that sum to the total (dollars, not cents)",
-            Schema.obj(
-                name = "CategoryAmount",
-                description = "One category's share of the receipt",
-                Schema.int("categoryId", "Category id from the user's list"),
-                Schema.double("amount", "Amount for this category")
-            )
-        ),
         Schema.str("notes", "Optional free-form note")
     )
 
-    // ── Models (lazy — only the tiers actually used get instantiated) ─
-
-    private val liteModel by lazy {
-        GenerativeModel(
-            modelName = "gemini-2.5-flash-lite",
-            apiKey = BuildConfig.GEMINI_API_KEY,
-            generationConfig = generationConfig {
-                responseMimeType = "application/json"
-                responseSchema = liteSchema
-                temperature = 0f
-            }
+    private val call2Schema = Schema.obj(
+        name = "Call2Result",
+        description = "Itemized receipt with categories",
+        Schema.arr(
+            "lineItems",
+            "One entry per purchased line plus Sales Tax",
+            Schema.obj(
+                name = "LineItem",
+                description = "A purchased line item",
+                Schema.str("description", "Item text as printed on the receipt"),
+                Schema.int("categoryId", "Category id from the provided list")
+            )
         )
-    }
+    )
 
-    private val flashModel by lazy {
-        GenerativeModel(
-            modelName = "gemini-2.5-flash",
-            apiKey = BuildConfig.GEMINI_API_KEY,
-            generationConfig = generationConfig {
-                responseMimeType = "application/json"
-                responseSchema = flashProSchema
-                temperature = 0f
-            }
+    private val call3Schema = Schema.obj(
+        name = "Call3Result",
+        description = "Prices per line item",
+        Schema.arr(
+            "prices",
+            "Parallel array to the input item list; priceCents per item",
+            Schema.obj(
+                name = "ItemPrice",
+                description = "Price in integer cents",
+                Schema.str("description", "Item text (mirrors input)"),
+                Schema.int("priceCents", "Paid price in cents after line discounts")
+            )
         )
-    }
+    )
 
-    private val proModel by lazy {
-        GenerativeModel(
-            modelName = "gemini-2.5-pro",
-            apiKey = BuildConfig.GEMINI_API_KEY,
-            generationConfig = generationConfig {
-                responseMimeType = "application/json"
-                responseSchema = flashProSchema
-                temperature = 0f
-                // NOTE: Gemini 2.5 Pro runs with default thinking (~6500 hidden
-                // tokens ≈ $0.07/call). Harness confirmed thinkingBudget=1024
-                // gives equivalent quality at $0.014/call (5× cheaper, 4×
-                // faster), but generativeai:0.9.0 doesn't expose thinkingConfig
-                // client-side. Upgrade path: swap to raw HTTP or Firebase AI
-                // Logic SDK when convenient. Prompt improvements (T9/combo)
-                // still apply and drive the cset 10/10 quality win.
-            }
-        )
-    }
+    // ── Models (separate instances per call — SDK binds schema to config) ─
+
+    private val call1Model by lazy { liteModel(call1Schema) }
+    private val call2Model by lazy { liteModel(call2Schema) }
+    private val call3Model by lazy { liteModel(call3Schema) }
+
+    private fun liteModel(schema: Schema<*>) = GenerativeModel(
+        modelName = "gemini-2.5-flash-lite",
+        apiKey = BuildConfig.GEMINI_API_KEY,
+        generationConfig = generationConfig {
+            responseMimeType = "application/json"
+            responseSchema = schema
+            temperature = 0f
+        }
+    )
 
     // ── Public API ─────────────────────────────────────────────────
 
     /**
-     * Extract receipt data. Caller picks the preferred tier based on user
-     * intent (see [Tier]). Pro automatically falls back to Flash on failure.
+     * Extract receipt data using the 3-call Lite pipeline.
+     *
+     * @param preSelectedCategoryIds when non-empty, the prompt is narrowed to
+     *   these categories and a soft "try to cover all, but skip if no fit"
+     *   nudge fires. Empty set → full category list is passed with no nudge.
      */
     suspend fun extractFromReceipt(
         context: Context,
         receiptId: String,
         categories: List<Category>,
-        preferredTier: Tier = Tier.FLASH
+        preSelectedCategoryIds: Set<Int> = emptySet()
     ): Result<OcrResult> {
         return try {
             if (BuildConfig.GEMINI_API_KEY.isBlank()) {
@@ -139,36 +125,13 @@ object ReceiptOcrService {
             val bitmap = BitmapFactory.decodeFile(file.absolutePath)
                 ?: return Result.failure(IllegalStateException("Could not decode receipt image"))
 
-            // Fallback chain: PRO → FLASH (if pro fails after retries).
-            // LITE and FLASH don't fall back — failures are network/auth/config,
-            // not capacity, so retrying a different tier won't help.
-            val chain = when (preferredTier) {
-                Tier.PRO -> listOf(Tier.PRO, Tier.FLASH)
-                Tier.FLASH -> listOf(Tier.FLASH)
-                Tier.LITE -> listOf(Tier.LITE)
-            }
-
-            var lastErr: Exception? = null
-            for (tier in chain) {
-                try {
-                    val jsonText = withTimeout(TIMEOUT_MS) {
-                        generateWithRetry(tier, bitmap, categories)
-                    }
-                    bitmap.recycle()
-                    return Result.success(parseOcrResult(jsonText, tier))
-                } catch (ce: CancellationException) {
-                    bitmap.recycle()
-                    throw ce
-                } catch (e: Exception) {
-                    lastErr = e
-                    Log.w(TAG, "Tier $tier failed: ${e.message?.take(120)}")
-                    // Only fall through to next tier for transient failures; if
-                    // the error is clearly config/auth, don't waste the Flash call.
-                    if (!isTransientOrCapacity(e.message)) break
-                }
+            val result = withTimeout(TIMEOUT_MS) {
+                runPipeline(bitmap, categories, preSelectedCategoryIds)
             }
             bitmap.recycle()
-            Result.failure(lastErr ?: IllegalStateException("OCR failed without error"))
+            Result.success(result)
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Exception) {
             Log.w(TAG, "OCR failed for receipt $receiptId: ${e.message}")
             runCatching { FirebaseCrashlytics.getInstance().recordException(e) }
@@ -176,30 +139,138 @@ object ReceiptOcrService {
         }
     }
 
-    // ── Retry + fallback internals ────────────────────────────────
+    // ── Pipeline ───────────────────────────────────────────────────
+
+    private suspend fun runPipeline(
+        bitmap: Bitmap,
+        allCategories: List<Category>,
+        preSelectedCategoryIds: Set<Int>
+    ): OcrResult {
+        val preselected = preSelectedCategoryIds.isNotEmpty()
+        val promptCats = if (preselected) {
+            allCategories.filter { it.id in preSelectedCategoryIds }
+        } else {
+            allCategories.filter { it.tag != "supercharge" && it.tag != "recurring_income" && !it.deleted }
+        }
+
+        // Call 1 — header
+        val c1Json = generateWithRetry(call1Model, bitmap, buildCall1Prompt())
+        val c1 = JSONObject(c1Json)
+        val merchant = c1.optString("merchant").takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("Missing merchant in Call 1")
+        val merchantLegalName = c1.optString("merchantLegalName").takeIf { it.isNotBlank() }
+        val date = c1.optString("date").takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("Missing date in Call 1")
+        val amountCents = c1.optInt("amountCents", -1).takeIf { it >= 0 }
+            ?: throw IllegalStateException("Missing amountCents in Call 1")
+        val notes = c1.optString("notes").takeIf { it.isNotBlank() }
+
+        // Call 2 — items + categories
+        val c2Json = generateWithRetry(call2Model, bitmap, buildCall2Prompt(promptCats, preselected))
+        val c2 = JSONObject(c2Json)
+        val itemsRaw = c2.optJSONArray("lineItems")?.let { arr ->
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val desc = o.optString("description").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val cid = o.optInt("categoryId", -1).takeIf { it != -1 } ?: return@mapNotNull null
+                LineItem(desc, cid)
+            }
+        } ?: emptyList()
+        val items = remapInvalidCategoryIds(itemsRaw, promptCats)
+
+        // Call 3 — per-item prices
+        val c3Json = generateWithRetry(call3Model, bitmap, buildCall3Prompt(items.map { it.description }))
+        val c3 = JSONObject(c3Json)
+        val priceCentsRaw = c3.optJSONArray("prices")?.let { arr ->
+            (0 until arr.length()).map { i ->
+                arr.optJSONObject(i)?.optInt("priceCents", 0) ?: 0
+            }
+        } ?: List(items.size) { 0 }
+        // Align lengths — model occasionally returns fewer entries than requested.
+        val priceCents = List(items.size) { i -> priceCentsRaw.getOrNull(i) ?: 0 }
+
+        // Reconcile to Call 1's amountCents
+        val reconciled = reconcilePrices(items, priceCents, amountCents)
+
+        // Aggregate categoryAmounts (tax rolled into dominant non-tax bucket)
+        val categoryAmounts = aggregateCategoryAmounts(items, reconciled)
+
+        return OcrResult(
+            merchant = merchant,
+            merchantLegalName = merchantLegalName,
+            date = date,
+            amount = amountCents / 100.0,
+            categoryAmounts = categoryAmounts,
+            lineItems = items.map { it.description }.ifEmpty { null },
+            notes = notes
+        )
+    }
+
+    // ── Prompts ────────────────────────────────────────────────────
+
+    private fun buildCall1Prompt(): String =
+        """Extract receipt header data as JSON: {merchant, merchantLegalName?, date, amountCents (integer), notes?}.
+
+- merchant: the consumer brand (e.g. "McDonald's", "Target", "Costco"). Prefer the consumer brand over the legal operator entity. Preserve original language; don't translate.
+- merchantLegalName: optional, only when the legal entity is clearly distinct from the consumer brand.
+- date: YYYY-MM-DD ISO. Receipts often have multiple dates; prefer the transaction date over print/due dates. DD/MM locales: Malaysia, Singapore, Vietnam, most of Europe. MM/DD: US.
+- amountCents: INTEGER number of cents for the final paid total (tax and tip included). Ignore subtotal, pre-tax lines, and separate GST/VAT summary tables. Vietnamese đồng (VND) has no fractional unit — dots in VND amounts are thousand separators; return the integer đồng value."""
+
+    private fun buildCall2Prompt(cats: List<Category>, preselected: Boolean): String {
+        val categoryList = cats.joinToString("\n") { c ->
+            if (c.tag.isNotEmpty()) "  - id=${c.id} name=\"${c.name}\" tag=\"${c.tag}\""
+            else                    "  - id=${c.id} name=\"${c.name}\""
+        }
+        val preselectNudge = if (preselected) {
+            """
+
+  - The categories below are pre-selected by the shopper for this receipt. Try to cover as many of them as reasonably fit — the shopper expects to see items in these specific buckets. But skip a category if no item on the receipt plausibly fits it; never force-fit an item into a bucket that clearly doesn't match (the shopper may have pre-selected a category by accident).
+  - When an item could plausibly fit either a niche/specialty category (e.g. Holidays/Birthdays, Kid's Stuff, Entertainment, Clothes, Health/Pharmacy) or a general catch-all (e.g. Groceries, Home Supplies, Other), prefer the niche category. Niche categories are under-filled by default; err toward the specific bucket when the item has a clear specialty signal."""
+        } else ""
+
+        return """List every PURCHASED item with a category. Return JSON {lineItems: [{description, categoryId}]}.
+
+Rules:
+  - Skip promos, coupons, discounts, tenders, subtotals.
+  - Prefer a concrete consumer category (Groceries, Home Supplies, Health/Pharmacy, Clothes, Entertainment, Holidays, Kid's Stuff) over "Other".
+  - Avoid these unless the item is unambiguously that type: Mortgage/Insurance/PropTax (42007), Insurance (36973), Transportation/Gas (48281 — only fuel/parking/transit), Electric/Gas (17132 — only utility bills), Phone/Internet/Computer (62776 — only service bills), Business, Employment, Farm, Charity.$preselectNudge
+
+Include "Sales Tax" as a line item. Categories:
+$categoryList"""
+    }
+
+    private fun buildCall3Prompt(descriptions: List<String>): String {
+        val listed = descriptions.mapIndexed { i, d -> "  ${i + 1}. $d" }.joinToString("\n")
+        return """You have a receipt image and a list of items the shopper purchased. For each item, find it on the receipt and determine the ACTUAL PAID PRICE — what contributed to the subtotal — in integer cents.
+
+Apply these clues when reading each line:
+  1. Base printed price for the item's line.
+  2. Quantity multiplier: lines like "2 AT 1 FOR ${'$'}X.XX", "3 @ ${'$'}X.XX ea", or "4 FOR ${'$'}X.XX" mean the actual charge is the multiplier × unit price. Use the line's total, not the unit price.
+  3. Line-level coupons or manufacturer rebates (a subsequent line with a negative amount, e.g. "COUPON -${'$'}3.00") reduce that item's price.
+  4. Weight-priced items: use the computed total already printed.
+  5. For "Sales Tax", return the printed tax amount in cents.
+
+Return JSON {prices: [{description, priceCents}]}, one entry per input item, preserving the order given. priceCents is a non-negative integer.
+
+Items:
+$listed"""
+    }
+
+    // ── Retry + transient handling ─────────────────────────────────
 
     private val transientPattern = Regex(
         "503|UNAVAILABLE|overloaded|429|RESOURCE_EXHAUSTED|deadline|fetch failed|network|ECONNRESET|ETIMEDOUT|socket",
         RegexOption.IGNORE_CASE
     )
 
-    private fun isTransientOrCapacity(msg: String?): Boolean =
+    private fun isTransient(msg: String?): Boolean =
         msg?.let { transientPattern.containsMatchIn(it) } ?: false
 
     private suspend fun generateWithRetry(
-        tier: Tier,
+        model: GenerativeModel,
         bitmap: Bitmap,
-        categories: List<Category>
+        prompt: String
     ): String {
-        val model = when (tier) {
-            Tier.LITE -> liteModel
-            Tier.FLASH -> flashModel
-            Tier.PRO -> proModel
-        }
-        val prompt = when (tier) {
-            Tier.LITE -> buildLiteOcrPrompt(categories)
-            Tier.FLASH, Tier.PRO -> buildOcrPrompt(categories)
-        }
         val maxAttempts = 4
         var lastErr: Exception? = null
         for (attempt in 1..maxAttempts) {
@@ -215,81 +286,112 @@ object ReceiptOcrService {
                 throw ce
             } catch (e: Exception) {
                 lastErr = e
-                val transient = isTransientOrCapacity(e.message)
-                if (!transient || attempt == maxAttempts) throw e
-                Log.d(TAG, "Transient $tier error on attempt $attempt/$maxAttempts, retrying: ${e.message?.take(100)}")
-                delay(500L shl (attempt - 1))  // 500ms, 1s, 2s
+                if (!isTransient(e.message) || attempt == maxAttempts) throw e
+                Log.d(TAG, "Transient error on attempt $attempt/$maxAttempts, retrying: ${e.message?.take(100)}")
+                delay(500L shl (attempt - 1))
             }
         }
         throw lastErr ?: IllegalStateException("retry loop exited without result")
     }
 
-    // ── Parsing ───────────────────────────────────────────────────
+    // ── Post-processing ────────────────────────────────────────────
 
-    private fun parseOcrResult(jsonText: String, tier: Tier): OcrResult {
-        val json = JSONObject(jsonText)
-        val merchant = json.optString("merchant").takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("Missing merchant in OCR response")
-        val date = json.optString("date").takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("Missing date in OCR response")
+    internal data class LineItem(val description: String, val categoryId: Int)
 
-        val amount = when (tier) {
-            Tier.LITE -> {
-                val cents = json.optInt("amountCents", -1).takeIf { it >= 0 }
-                    ?: throw IllegalStateException("Missing amountCents in Lite OCR response")
-                cents / 100.0
-            }
-            Tier.FLASH, Tier.PRO -> json.optDouble("amount", Double.NaN).takeIf { !it.isNaN() }
-                ?: throw IllegalStateException("Missing amount in OCR response")
-        }
+    /**
+     * Remap any line-item categoryId not in the provided cats list to a safe
+     * fallback. Needed because when the model can't place an item (commonly
+     * "Sales Tax" when no preselected cat is a natural tax home), it sometimes
+     * emits a hallucinated integer like 99999 or 10000.
+     */
+    internal fun remapInvalidCategoryIds(
+        items: List<LineItem>,
+        cats: List<Category>
+    ): List<LineItem> {
+        val validSet = cats.mapTo(mutableSetOf()) { it.id }
+        if (items.all { it.categoryId in validSet }) return items
 
-        val cats = json.optJSONArray("categoryAmounts")?.let { arr ->
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val cid = o.optInt("categoryId", -1).takeIf { it > 0 } ?: return@mapNotNull null
-                val amt = o.optDouble("amount", Double.NaN).takeIf { !it.isNaN() } ?: return@mapNotNull null
-                OcrCategoryAmount(categoryId = cid, amount = amt)
+        val fallback = when {
+            30426 in validSet -> 30426  // "Other" if available
+            else -> {
+                val counts = HashMap<Int, Int>()
+                for (it in items) if (it.categoryId in validSet) counts[it.categoryId] = (counts[it.categoryId] ?: 0) + 1
+                counts.maxByOrNull { it.value }?.key ?: cats.firstOrNull()?.id ?: return items
             }
         }
-
-        return OcrResult(
-            merchant = merchant,
-            merchantLegalName = json.optString("merchantLegalName").takeIf { it.isNotBlank() },
-            date = date,
-            amount = amount,
-            categoryAmounts = reconcileCategoryAmounts(cats?.takeIf { it.isNotEmpty() }, amount),
-            lineItems = null,  // schema doesn't request it (see OcrPromptBuilder note)
-            notes = json.optString("notes").takeIf { it.isNotBlank() }
-        )
+        return items.map { if (it.categoryId in validSet) it else it.copy(categoryId = fallback) }
     }
 
     /**
-     * Guarantee Σ(categoryAmounts) == amount (to the cent) before handing the
-     * result to the UI. The TransactionDialog Save button enforces this
-     * invariant; if the model returns a split that drifts from the total, the
-     * user would see a save-blocked dialog with no obvious fix.
-     *
-     * Strategy: round each amount to cents, absorb the residual delta into the
-     * largest category. If the residual would push the largest category
-     * negative or above the total (pathological model output), collapse to a
-     * single-category entry so the user at least gets a savable pre-fill.
+     * Scale non-tax items so Σ(prices) == amountCents exactly. Receipt-level
+     * discounts (Target Circle 5%, Walmart DISCOUNT GIVEN, loyalty savings at
+     * subtotal) don't attach to any one line, so we distribute the delta
+     * proportionally and keep the tax line exact. Residual from rounding is
+     * absorbed into the largest non-tax item.
      */
-    internal fun reconcileCategoryAmounts(
-        cats: List<OcrCategoryAmount>?,
-        total: Double
-    ): List<OcrCategoryAmount>? {
-        if (cats.isNullOrEmpty()) return cats
-        val roundedTotal = kotlin.math.round(total * 100.0) / 100.0
-        val rounded = cats.map { it.copy(amount = kotlin.math.round(it.amount * 100.0) / 100.0) }
-        val sum = rounded.sumOf { it.amount }
-        val delta = kotlin.math.round((roundedTotal - sum) * 100.0) / 100.0
-        if (kotlin.math.abs(delta) < 0.005) return rounded
-        val largestIdx = rounded.indices.maxByOrNull { rounded[it].amount } ?: return rounded
-        val largest = rounded[largestIdx]
-        val adjusted = kotlin.math.round((largest.amount + delta) * 100.0) / 100.0
-        if (adjusted <= 0.0 || adjusted > roundedTotal + 0.005) {
-            return listOf(OcrCategoryAmount(categoryId = largest.categoryId, amount = roundedTotal))
+    internal fun reconcilePrices(
+        items: List<LineItem>,
+        rawPriceCents: List<Int>,
+        amountCents: Int
+    ): List<Int> {
+        if (items.isEmpty()) return emptyList()
+        val taxIdx = items.indexOfFirst { isTaxLine(it.description) }
+        val taxCents = if (taxIdx >= 0) rawPriceCents[taxIdx] else 0
+        val targetNonTax = amountCents - taxCents
+        val rawNonTaxSum = rawPriceCents.withIndex().sumOf { (i, c) -> if (i == taxIdx) 0 else c }
+        if (rawNonTaxSum <= 0) return rawPriceCents.toList()
+
+        val scale = targetNonTax.toDouble() / rawNonTaxSum
+        val reconciled = rawPriceCents.mapIndexed { i, c ->
+            if (i == taxIdx) c else kotlin.math.round(c * scale).toInt()
+        }.toMutableList()
+
+        val actualSum = reconciled.sum()
+        val residual = amountCents - actualSum
+        if (residual != 0) {
+            var largestIdx = -1
+            var largestVal = -1
+            for (i in reconciled.indices) {
+                if (i == taxIdx) continue
+                if (reconciled[i] > largestVal) { largestVal = reconciled[i]; largestIdx = i }
+            }
+            if (largestIdx >= 0) reconciled[largestIdx] += residual
         }
-        return rounded.toMutableList().also { it[largestIdx] = largest.copy(amount = adjusted) }
+        return reconciled
+    }
+
+    private fun isTaxLine(desc: String): Boolean =
+        Regex("sales\\s*tax", RegexOption.IGNORE_CASE).containsMatchIn(desc)
+
+    /**
+     * Build categoryAmounts by summing reconciled line prices per categoryId.
+     * Sales Tax is allocated to the dominant non-tax category so the UI sees
+     * one coherent split that matches labelling conventions.
+     */
+    internal fun aggregateCategoryAmounts(
+        items: List<LineItem>,
+        reconciledPriceCents: List<Int>
+    ): List<OcrCategoryAmount>? {
+        if (items.isEmpty()) return null
+        val byCat = LinkedHashMap<Int, Int>()
+        var taxCents = 0
+        for (i in items.indices) {
+            val cents = reconciledPriceCents.getOrNull(i) ?: 0
+            if (isTaxLine(items[i].description)) {
+                taxCents += cents
+            } else {
+                byCat[items[i].categoryId] = (byCat[items[i].categoryId] ?: 0) + cents
+            }
+        }
+        if (byCat.isEmpty()) {
+            // Nothing but tax? Fall through as a single-entry result.
+            val cid = items.firstOrNull()?.categoryId ?: return null
+            return listOf(OcrCategoryAmount(categoryId = cid, amount = taxCents / 100.0))
+        }
+        if (taxCents > 0) {
+            val dominantCid = byCat.maxByOrNull { it.value }?.key
+            if (dominantCid != null) byCat[dominantCid] = (byCat[dominantCid] ?: 0) + taxCents
+        }
+        return byCat.map { (cid, cents) -> OcrCategoryAmount(categoryId = cid, amount = cents / 100.0) }
     }
 }

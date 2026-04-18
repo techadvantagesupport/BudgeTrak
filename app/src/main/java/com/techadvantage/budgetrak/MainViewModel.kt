@@ -2240,25 +2240,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun runOcrOnSlot1(receiptId: String, preSelectedCategoryIds: Set<Int> = emptySet()) {
         if (ocrState is OcrState.Loading) return
         ocrState = OcrState.Loading
-        // Tiered routing:
-        //   0-1 pre-selected → Lite (single-cat duty, simplified prompt, ~5× cheaper).
-        //   2+ pre-selected → Pro (multi-cat duty, better cshare; Pro auto-falls-back
-        //                           to Flash on capacity failures, handled inside the service).
-        // Pre-selected set is also passed so the prompt can constrain its category
-        // list — boosts multi-cat accuracy by narrowing the model's search.
-        val tier = if (preSelectedCategoryIds.size >= 2) {
-            ReceiptOcrService.Tier.PRO
-        } else {
-            ReceiptOcrService.Tier.LITE
-        }
-        val catsForOcr = if (preSelectedCategoryIds.isNotEmpty()) {
-            categories.filter { it.id in preSelectedCategoryIds }
-        } else {
-            categories.toList()
-        }
+        // 3-call Lite pipeline (Call 1 header, Call 2 items+cats, Call 3 prices,
+        // then reconcile). Handles single-cat and multi-cat in one path.
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                ReceiptOcrService.extractFromReceipt(context, receiptId, catsForOcr, tier)
+                ReceiptOcrService.extractFromReceipt(
+                    context, receiptId, categories.toList(), preSelectedCategoryIds
+                )
             }
             ocrState = result.fold(
                 onSuccess = { OcrState.Success(it) },
