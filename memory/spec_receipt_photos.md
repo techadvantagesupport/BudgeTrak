@@ -113,6 +113,21 @@ Long-press-to-delete was removed in 2026-04-18; deletion is exclusively via
 the full-screen viewer's Delete button. See commits `47013da`, `2cee3ba`,
 `a071804`, `c79a574`, `1b2c386`, `180fc38`.
 
+**Toast positioning:** toasts triggered from the photo bar or the AI sparkle
+pass a `windowYPx` to `AppToastState.show()` captured via
+`onGloballyPositioned` on the triggering element. The toast host places the
+message just above the source (falling back to below, then center-of-screen
+if there's no room). `SwipeablePhotoRow` migrated from `android.widget.Toast`
+to the in-app `LocalAppToast` in `f423cb2` so positioning and styling match
+the dialog variant.
+
+**Preselect help banner (subscriber dialogs):** above the category picker,
+only when `isSubscriber && onShowPreselectHelp != null`. Header-background
+row with a help icon + one-line copy. Tapping navigates to Transactions
+Help and auto-scrolls to the "Pre-selected categories & receipt scanning"
+subsection via `MainViewModel.transactionsHelpScrollTo` + a
+`rememberScrollState().animateScrollTo()` on a captured anchor Y.
+
 ## Full deletion chain
 
 User taps a thumbnail → full-screen viewer → Delete button → confirm dialog →
