@@ -2,17 +2,19 @@
 
 | | |
 |---|---|
-| Document / App Version | 2.6 |
+| Document / App Version | 2.7 |
 | Date | April 2026 |
 | Publisher | Tech Advantage LLC |
 | Application ID / Package / Namespace | `com.techadvantage.budgetrak` |
 | Platform | Android 9.0+ (minSdk 28, compile/target SDK 34) |
 | Language / UI | Kotlin 2.0.21, Jetpack Compose + Material 3 |
 | Build | Gradle 8.9 (Kotlin DSL), JVM 17 |
-| Code Size | ~94 Kotlin files, ~47,000 lines |
+| Code Size | ~98 Kotlin files, ~49,000 lines |
 | Status | Release — Internal / Technical Reference |
 
 > Rebranded 2026-04-11 from `com.securesync.app` / `com.syncbudget.app`.
+>
+> **What's new in 2.7 (vs 2.6):** AI Receipt OCR (3-call Lite pipeline, Subscriber-only); AI CSV Categorization (Paid+Subscriber); photo-bar long-press + drag-to-reorder gestures; PDF receipt import; pending-download placeholder handling with explanatory toasts; Cash Flow Simulation promoted from Subscriber-only to Paid+Subscriber; background worker double-fire guard + FCM busy-wait; photo-pipeline hardening (dedupe, orphan cleanup, queue-on-save).
 
 ## Table of Contents
 
@@ -55,9 +57,12 @@ BudgeTrak is a single-Activity Jetpack Compose Android app for personal budget m
 - Solari-style animated flip display with procedural mechanical audio
 - DAILY / WEEKLY / MONTHLY budget periods with auto-refresh and missed-period catch-up
 - SYNC: up to 5 devices, per-field encrypted Firestore docs, filtered listeners with per-collection cursors, RTDB presence
-- Receipt photos (up to 5 per transaction), encrypted Cloud Storage sync, 14-day pruning
+- Receipt photos + PDFs (up to 5 per transaction), encrypted Cloud Storage sync, 14-day pruning
+- Long-press + drag photo reordering in both the transaction-list swipe panel and the Add/Edit dialog; photos can be repositioned among occupied slots with real-time reshuffle animation
+- **AI Receipt OCR** (Subscriber) — Gemini 2.5 Flash-Lite 3-call pipeline auto-fills merchant, date, amount, and category split from a receipt photo; explicit-tap via sparkle icon; long-press-to-pick-target selection
+- **AI CSV Categorization** (Paid + Subscriber) — on-device matcher first, Gemini Flash-Lite fallback for unfamiliar merchants; sends only merchant + amount
 - Savings Goals with Supercharge surplus allocation (Reduce Contributions / Achieve Goal Sooner)
-- Cash-flow simulation with low-point detection
+- Cash-flow simulation with low-point detection (Paid + Subscriber — was Subscriber-only pre-2.7)
 - Amortization of large purchases across budget periods
 - Recurring expenses with 6 repeat types and auto-matching
 - Full transaction CRUD with multi-category pie-chart allocation (drag / calculator / percentage)
@@ -714,7 +719,11 @@ Sync key lives in SecurePrefs (~59 lines) on Android KeyStore-backed AES256-GCM.
 
 ## 11. Auto-Categorization
 
-`AutoCategorizer.kt` (53 lines). Runs only on imported CSV bank-format transactions (§9.3 step 6) and NOT on TransactionDialog manual entry.
+Two layers cooperate on CSV import: a deterministic on-device matcher and an optional AI fallback.
+
+### 11.1 On-Device Matcher (all tiers) — `AutoCategorizer.kt` (53 lines)
+
+Runs only on imported CSV bank-format transactions (§9.3 step 6) and NOT on TransactionDialog manual entry.
 
 **Algorithm:**
 1. Look back 6 months from transaction date
@@ -723,6 +732,18 @@ Sync key lives in SecurePrefs (~59 lines) on Android KeyStore-backed AES256-GCM.
 4. Group by `categoryId`, pick most frequent
 5. Fallback: category with tag `"other"` (system category)
 6. Return `copy(categoryAmounts = [CategoryAmount(catId, full amount)], isUserCategorized = false)`
+
+### 11.2 AI CSV Categorization (Paid + Subscriber, opt-in) — `AiCategorizerService.kt`
+
+Runs only when the deterministic matcher's confidence is low (fewer than 5 historical matches OR <80% category agreement across those matches) AND the user has enabled "AI categorization" in Settings.
+
+- Model: Gemini 2.5 Flash-Lite via Firebase AI Logic SDK
+- Payload per transaction: `{i, merchant, amount}` — index, merchant name, and amount **only**. The transaction date is NOT sent (trimmed in 2.7 for a smaller privacy footprint; merchant is the dominant categorization signal and date adds negligible value).
+- Batched at 100 transactions per call; schema-constrained JSON response
+- On receipt: maps `i → categoryId`, drops any invalid IDs, merges back into the import. `isUserCategorized = false` so the user sees an "unverified" flag until they review.
+- Retry: 3 attempts with exponential backoff on transient errors; total timeout 30 s per call.
+
+Privacy: data is encrypted in transit (HTTPS); Google's Gemini Developer API terms (Blaze tier) provide no-training-use and brief abuse-detection-only logging. No account identifiers, balances, other transactions, or receipt photos are sent.
 
 ## 12. Category Management
 
@@ -1273,27 +1294,37 @@ rename the export after a package change.
 
 ### 17.1 Overview
 
-Users attach up to 5 photos per transaction via
-`receiptId1`..`receiptId5`. Paid users sync encrypted photos across
+Users attach up to 5 photos or PDFs per transaction via
+`receiptId1`..`receiptId5`. Paid users sync encrypted blobs across
 devices via Cloud Storage; free users capture and store locally only.
 
 ### 17.2 Capture
 
 `SwipeablePhotoRow.kt` — swipe-left on a row reveals the photo panel.
-Camera via `ActivityResultContracts.TakePicture()`; gallery via
-`PickMultipleVisualMedia(maxItems = remainingSlots)`. Full-screen
-viewer supports **rotation** (persisted to disk + thumbnail
-regenerated).
+Camera via `ActivityResultContracts.TakePicture()`; gallery/file
+picker via `OpenMultipleDocuments()` filtered to `image/*` and
+`application/pdf`. PDFs are rasterised on import (first page,
+~1500 px long edge, white background, q=95 JPEG) by
+`ReceiptManager.readAsJpegBytes` before the normal resize/compress
+pipeline runs. Full-screen viewer supports **rotation** (persisted to
+disk + thumbnail regenerated) and **delete** (the only path to
+deletion; long-press no longer opens a delete dialog).
 
 ### 17.3 Compression (`ReceiptManager.kt`)
 
 | Parameter    | Value |
 |--------------|-------|
-| Max dim      | 1000 px (proportional) |
+| Max long edge | 1000 px (proportional) |
+| Min short edge | 400 px (`MIN_IMAGE_DIMENSION`) — prevents tall e-receipts from being crushed into unreadable slivers |
 | Target size  | 250 KB per megapixel |
 | Quality      | iterative JPEG: start Q=92, log-linear interpolate, ±10% tolerance, clamp 20–100 |
-| Never re-compresses an already-encoded JPEG |
-| Thumbnail   | 200 px, Q=70, saved alongside |
+| Never re-compresses an already-encoded JPEG when dimensions + target bytes are already in range |
+| Thumbnail    | 200 px, Q=70, saved alongside |
+
+The pipeline is a single service method `processAndSavePhoto(uri)` in
+`ReceiptManager`; both the dialog and the list-row camera/gallery
+paths now call it directly (previously the list-row duplicated the
+pipeline; dedupe landed in 2.7 at ~160 LOC removed).
 
 ### 17.4 Local Storage
 
@@ -1399,6 +1430,54 @@ uploads from other devices.
 | Cloud sync                  | No              | Yes                  |
 | Download from other devices | No              | Yes                  |
 | `photoCapable` in RTDB      | Not set         | Published            |
+
+### 17.13 Thumbnail-Bar Interactions (2.7)
+
+Two renderings of the 5-slot thumbnail bar use one gesture model:
+`SwipeablePhotoRow` (transaction-list swipe-left panel) and the
+Add/Edit dialog's inline bar.
+
+- **Tap** → `FullScreenPhotoViewer` (delete + rotate live inside).
+  On a pending-download placeholder, tap shows a toast
+  ("Waiting for this photo to download from the device that added it")
+  instead of opening the viewer.
+- **Long-press** → picks up the thumbnail; 2 dp blue outline appears.
+  Dialog variant: the highlight persists after release and becomes the
+  AI OCR scan target (see §17.14). List-row variant: highlight clears
+  on release.
+- **Long-press + drag (no lift)** → reorders among occupied slots.
+  Non-dragged thumbnails animate via `animateIntAsState(tween(150))`;
+  dragged thumbnail follows finger directly with
+  `IntOffset` + `zIndex(1f)`. On release, `receiptId1..5` is rewritten
+  in the new visual order, compacting any gaps from prior deletes.
+- **Pending-download placeholders** (receiptId set, thumbnail absent)
+  participate in the reshuffle just like real thumbnails. When the
+  bytes arrive, they land in whichever slot the receiptId ended up in.
+- Position-anchored toasts — gesture-triggered toasts pass a
+  `windowYPx` captured via `onGloballyPositioned` so the toast
+  renders just above the source element via
+  `AppToastState.show(msg, windowYPx)`.
+
+Implementation: `detectDragGesturesAfterLongPress` with
+`rememberUpdatedState` on `occupiedSlots` + `dialogReceiptIds` so
+callbacks (established once per slot index) always see current
+composition state. Long-press without drag toggles the dialog-variant
+highlight against a pre-drag snapshot (so the first press doesn't
+clear itself).
+
+### 17.14 AI Receipt OCR Integration (2.7)
+
+Subscriber-only. The user highlights one thumbnail in the photo bar
+(long-press), then taps the `AutoAwesome` sparkle icon in the
+TransactionDialog header. Pipeline details in §11 (renamed
+"Auto-Categorization" → "AI Auto-Fill"). Pre-selected categories at
+sparkle-tap time constrain the AI to those buckets; empty selection
+lets it choose from the full list. A small help banner above the
+category picker (header-background row, subscriber dialogs only)
+deep-links to a dedicated Transactions Help subsection explaining
+that the AI never modifies the category selection — it only fills
+amounts, so the user must deselect all cats first to let the AI
+re-pick categories on an existing transaction.
 
 ## 18. Home Screen Widget
 
@@ -1815,7 +1894,7 @@ Only `INTERNET` is declared in the manifest. CAMERA and media access are handled
 | compileSdk | 34 |
 | minSdk | 28 |
 | targetSdk | 34 |
-| versionCode / versionName | 3 / 2.6 |
+| versionCode / versionName | 4 / 2.7 |
 | source/target / jvmTarget | Java 17 |
 | compose / buildConfig | enabled |
 | minify / shrinkResources (release) | true |
@@ -1869,7 +1948,8 @@ Do NOT upgrade `core-ktx` past 1.13.1 or Compose BOM past 2024.09.03 — newer v
 | 2.6 | 2026-04-12 | BudgeTrak Dev Team | **SSD/LLD audit against code + conversion to Markdown (2026-04-12).** Rebranded to `com.techadvantage.budgetrak` under Tech Advantage LLC (Apr 11). Full memory audit: clarified the two sync hashes (`cashHash` Layer 2 = hex via `.toString(16)` at MainViewModel.kt:835; `enc_hash` per-doc cache in FirestoreDocSync uses decimal); auto-categorize scope (CSV only, not manual entry); dropped stale `WidgetRefreshWorker` references; aligned Transaction model (no clock fields); corrected screen count (10 navigable + 10 help + QuickStartGuide overlay = 21 total); App Check TTL 4h (Console-set); Cloud Functions Node.js 22. Backup retention default 1 -> 10. Added `autoCapitalize, showWidgetLogo, incomeMode` to backup `localPrefs`. Shipped orphan-no-possession (`markNonPossession` + `checkPhotoLost`). Verified against source: 94 files / 47,192 lines; archive file is `archived_transactions.json`; manifest declares only `INTERNET` (camera/media via runtime request + pickers); `BankFormat` is `{GENERIC_CSV, US_BANK, SECURESYNC_CSV}`. |
 | 2.6.2 | 2026-04-13 | BudgeTrak Dev Team | **Bidirectional scroll affordance.** New `BoxScope.PulsingScrollArrows(scrollState)` in `Theme.kt` replaces the down-only `PulsingScrollArrow` at all 18 dialog callsites — pulsing up-arrow at TopStart when `canScrollBackward`, down-arrow at BottomStart when `canScrollForward`, with standardized paddings that clear `DialogHeader` (topPadding=36.dp) and footer (bottomPadding=50.dp). New `ScrollableDropdownContent { … }` wraps items in every `DropdownMenu` / `ExposedDropdownMenu` (12 callsites including the 24-item hour-of-day selector); caps popup height at 280.dp, indents items by 32.dp on the start edge so text clears the arrow column. Motivation: users with enlarged system font push otherwise-fitting content into scrollable territory. Down-only `PulsingScrollArrow` kept for backward compat. |
 | 2.6.1 | 2026-04-13 | BudgeTrak Dev Team | **FCM wake architecture.** Added two Cloud Functions: `onSyncDataWrite` (Firestore-triggered, fans out high-priority `sync_push` FCM to every group device except the writer — via `lastEditBy` filter) and `presenceHeartbeat` (15-min Pub/Sub cron, wakes devices whose RTDB `lastSeen` is >15 min stale). Closes the 4h46m silent-worker gap observed on Kim's Samsung device (App-Standby Bucket restrictions). Client: `FcmService` now handles `sync_push` + `heartbeat` by enqueueing `BackgroundSyncWorker.runOnce` — now `enqueueUniqueWork(ONESHOT_WORK_NAME, KEEP)` with `setExpedited(RUN_AS_NON_EXPEDITED_WORK_REQUEST)` on API 31+. `pingRtdbLastSeen` + `WakeReceiver` + FCM arrivals all log via `syncEvent()` which now writes to `token_log.txt` in debug builds (was Crashlytics + logcat only). Fixed Layer-1 consistency false-positive on `periodLedger`: `countActiveDocs` skips `deleted=false` filter for that collection since entries don't carry a `deleted` field. SYNC page UI: duplicate "Code expires in 10 minutes" label removed (dialog still shows it); group-ID row gated to debug builds only. Operations: $1 budget alert + 4 Cloud Monitoring policies (function + Firestore rate) configured on billing account `01ADA3-6ACE89-738567`; `sync-23ce9` project migrated into `techadvantagesupport-org`. |
+| 2.7 | 2026-04-18 | BudgeTrak Dev Team | **AI features + photo-bar UX overhaul.** Shipped **AI Receipt OCR** (Subscriber, explicit-tap via `AutoAwesome` sparkle icon) — Gemini 2.5 Flash-Lite 3-call pipeline with Call 1 routing probe (`multiCategoryLikely` hint lets single-cat receipts finish in 1 API call; multi-cat proceeds to Call 2 items+cats then Call 3 per-item prices); proportional reconciliation keeps Σ(line items) = Call 1 total; invalid-categoryId remap handles tax-line hallucinations. Shipped **AI CSV Categorization** (Paid+Sub, opt-in) — on-device matcher handles high-confidence rows; Flash-Lite called only when <5 matches or <80% agreement; payload is merchant+amount only (date removed in this release for a narrower privacy footprint). Photo-bar gesture overhaul: long-press selects the AI scan target (blue outline, dialog only — persists after release); long-press+drag reorders photos among occupied slots with real-time reshuffle animation (both the dialog thumb bar and the list-row `SwipeablePhotoRow`); pending-download placeholders participate in reorder and show an explanatory toast on tap; delete moved exclusively to the full-screen viewer. Photo-pipeline hardening: dedupe (SwipeablePhotoRow calls `processAndSavePhoto` directly, ~160 LOC removed); 400 px min-edge floor fixes unreadable tall e-receipts; PDF import via `PdfRenderer` (first page at ~1500 px, JPEG q=95); orphan cleanup prunes stale pending-upload entries; queue-on-save moves upload-queue insertion from photo-capture to `saveTransactions` so cancelled dialogs don't leak orphans. Background worker: `AtomicBoolean isRunning` double-fire guard (avoids two Tier-3 runs 118 ms apart seen in Kim's diag dump); FCM `handleWakeForSync` busy-waits up to 9 s on `isRunning` so Doze-aggressive OEMs don't kill the process before WorkManager dispatches. Cash Flow Simulation tier changed from Subscriber-only to Paid+Subscriber (entry button on `SavingsGoalsScreen`). Anchored toasts (`AppToastState.show(msg, windowYPx)`) render near triggering element instead of at default mid-screen. Memory system consolidated: `~/.claude/projects/.../memory/` is now a symlink to the repo's `memory/` directory (tracked + pushed); un-tracked `private-notes/` sibling for personal content. 98 files / 49,088 lines. |
 
 ---
 
-BudgeTrak SSD v2.6 — April 2026 — END OF DOCUMENT
+BudgeTrak SSD v2.7 — April 2026 — END OF DOCUMENT

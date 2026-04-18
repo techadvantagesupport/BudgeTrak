@@ -19,8 +19,8 @@ android {
         applicationId = "com.techadvantage.budgetrak"
         minSdk = 28
         targetSdk = 34
-        versionCode = 3
-        versionName = "2.6"
+        versionCode = 4
+        versionName = "2.7"
     }
 
     buildTypes {
