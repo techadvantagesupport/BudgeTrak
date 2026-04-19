@@ -154,17 +154,34 @@ class MainActivity : ComponentActivity() {
         /** True when the app is visible to the user. Background workers check this to skip. */
         @Volatile var isAppActive = false
 
-        /** Extracts an image URI from an ACTION_SEND intent, or null if none. */
-        internal fun extractSharedImageUri(intent: android.content.Intent?): android.net.Uri? {
-            if (intent == null) return null
-            if (intent.action != android.content.Intent.ACTION_SEND) return null
-            val type = intent.type ?: return null
-            if (!type.startsWith("image/")) return null
-            return if (android.os.Build.VERSION.SDK_INT >= 33) {
-                intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM) as? android.net.Uri
+        /**
+         * Extracts image URIs from an ACTION_SEND or ACTION_SEND_MULTIPLE intent.
+         * Returns empty list if the intent isn't a relevant share.
+         */
+        internal fun extractSharedImageUris(intent: android.content.Intent?): List<android.net.Uri> {
+            if (intent == null) return emptyList()
+            val type = intent.type ?: return emptyList()
+            if (!type.startsWith("image/")) return emptyList()
+            return when (intent.action) {
+                android.content.Intent.ACTION_SEND -> {
+                    val u = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM) as? android.net.Uri
+                    }
+                    listOfNotNull(u)
+                }
+                android.content.Intent.ACTION_SEND_MULTIPLE -> {
+                    val list = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        intent.getParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableArrayListExtra<android.net.Uri>(android.content.Intent.EXTRA_STREAM)
+                    }
+                    list ?: emptyList()
+                }
+                else -> emptyList()
             }
         }
     }
@@ -172,9 +189,10 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val uri = extractSharedImageUri(intent) ?: return
+        val uris = extractSharedImageUris(intent)
+        if (uris.isEmpty()) return
         val vm = androidx.lifecycle.ViewModelProvider(this)[MainViewModel::class.java]
-        vm.handleSharedImage(uri)
+        vm.handleSharedImages(uris)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -221,7 +239,7 @@ class MainActivity : ComponentActivity() {
             // Widget intent + share-intent (check once, forward to VM)
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 vm.handleWidgetIntent(intent?.action)
-                vm.handleSharedImage(extractSharedImageUri(intent))
+                vm.handleSharedImages(extractSharedImageUris(intent))
             }
 
             // ── Loading gate: block all UI until data is ready ──
@@ -254,12 +272,13 @@ class MainActivity : ComponentActivity() {
                       vm.archiveToastMessage = null
                   }
               }
-              // Consume shared-image intent once data is loaded. Keyed on the Uri so
-              // subsequent shares (non-null → processed → null → non-null) retrigger.
-              val pendingShare = vm.pendingSharedImageUri
-              LaunchedEffect(pendingShare) {
-                  if (pendingShare != null) {
-                      vm.consumePendingSharedImage(canAttachPhotos = vm.isPaidUser || vm.isSubscriber)
+              // Consume shared-image intent(s) once data is loaded. Keyed on list size
+              // so subsequent shares (cleared → refilled) retrigger. The VM's route
+              // logic picks the right target based on whether a dialog is open.
+              val pendingShareCount = vm.pendingSharedImageUris.size
+              LaunchedEffect(pendingShareCount) {
+                  if (pendingShareCount > 0) {
+                      vm.consumePendingSharedImages(canAttachPhotos = vm.isPaidUser || vm.isSubscriber)
                   }
               }
               // Free-user gate: when a shared image is discarded, show a 5s upgrade toast.
@@ -267,6 +286,20 @@ class MainActivity : ComponentActivity() {
                   if (vm.sharedPhotoBlockedToastPending) {
                       toastState.show(vm.strings.settings.sharedPhotoNeedsUpgrade, durationMs = 5000L)
                       vm.sharedPhotoBlockedToastPending = false
+                  }
+              }
+              // Share-while-other-dialog-open: drop URIs + ask user to close the dialog.
+              LaunchedEffect(vm.shareBlockedByDialogToastPending) {
+                  if (vm.shareBlockedByDialogToastPending) {
+                      toastState.show(vm.strings.settings.shareBlockedByOpenDialog, durationMs = 5000L)
+                      vm.shareBlockedByDialogToastPending = false
+                  }
+              }
+              // Share-overflow: dialog absorbed as many URIs as fit; the rest were dropped.
+              LaunchedEffect(vm.shareOverflowToastPending) {
+                  if (vm.shareOverflowToastPending) {
+                      toastState.show(vm.strings.settings.shareOverflowDiscarded, durationMs = 5000L)
+                      vm.shareOverflowToastPending = false
                   }
               }
               Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
@@ -921,7 +954,11 @@ class MainActivity : ComponentActivity() {
                         vm.saveAmortizationEntries(listOf(vm.amortizationEntries[idx]))
                     }
                 },
-                autoCapitalize = vm.autoCapitalize
+                autoCapitalize = vm.autoCapitalize,
+                onOpenStateChange = { open -> if (open) vm.transactionDialogOpenCount++ else vm.transactionDialogOpenCount-- },
+                pendingSharedImageUris = vm.pendingSharedImageUris,
+                onConsumeSharedImageUris = { vm.pendingSharedImageUris.clear() },
+                onShareOverflow = { vm.shareOverflowToastPending = true }
             )
         }
 
@@ -976,7 +1013,11 @@ class MainActivity : ComponentActivity() {
                         vm.saveAmortizationEntries(listOf(vm.amortizationEntries[idx]))
                     }
                 },
-                autoCapitalize = vm.autoCapitalize
+                autoCapitalize = vm.autoCapitalize,
+                onOpenStateChange = { open -> if (open) vm.transactionDialogOpenCount++ else vm.transactionDialogOpenCount-- },
+                pendingSharedImageUris = vm.pendingSharedImageUris,
+                onConsumeSharedImageUris = { vm.pendingSharedImageUris.clear() },
+                onShareOverflow = { vm.shareOverflowToastPending = true }
             )
         }
 
@@ -2155,7 +2196,11 @@ class MainActivity : ComponentActivity() {
             onShowPreselectHelp = {
                 vm.transactionsHelpScrollTo = "preselected_cats"
                 vm.currentScreen = "transactions_help"
-            }
+            },
+            onDialogOpenStateChange = { open -> if (open) vm.transactionDialogOpenCount++ else vm.transactionDialogOpenCount-- },
+            pendingSharedImageUris = vm.pendingSharedImageUris,
+            onConsumeSharedImageUris = { vm.pendingSharedImageUris.clear() },
+            onShareOverflow = { vm.shareOverflowToastPending = true }
         )
     }
 

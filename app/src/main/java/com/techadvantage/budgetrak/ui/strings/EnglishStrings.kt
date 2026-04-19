@@ -213,6 +213,8 @@ object EnglishStrings : AppStrings {
         deletePhotoConfirm = "Remove this receipt photo?",
         upgradeForPhotos = "Upgrade for receipt photos",
         sharedPhotoNeedsUpgrade = "Adding photos or receipts to transactions requires a one-time paid upgrade or subscription",
+        shareBlockedByOpenDialog = "Please finish or close the open dialog, then try sharing again",
+        shareOverflowDiscarded = "Only 5 photos per transaction — extra shared photos were discarded",
         pendingPhotoTapped = "Waiting for this photo to download from the device that added it",
         aiOcrIconDesc = "AI Receipt Scanner",
         aiOcrComingSoon = "AI receipt scanning is coming soon",

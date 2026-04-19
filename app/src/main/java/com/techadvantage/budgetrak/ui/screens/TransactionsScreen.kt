@@ -97,6 +97,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -306,7 +307,11 @@ fun TransactionsScreen(
     ocrState: com.techadvantage.budgetrak.data.ocr.OcrState = com.techadvantage.budgetrak.data.ocr.OcrState.Idle,
     onRunOcr: ((String, Set<Int>) -> Unit)? = null,
     onClearOcrState: (() -> Unit)? = null,
-    onShowPreselectHelp: (() -> Unit)? = null
+    onShowPreselectHelp: (() -> Unit)? = null,
+    onDialogOpenStateChange: ((open: Boolean) -> Unit)? = null,
+    pendingSharedImageUris: List<android.net.Uri> = emptyList(),
+    onConsumeSharedImageUris: (() -> Unit)? = null,
+    onShareOverflow: (() -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val customColors = LocalSyncBudgetColors.current
@@ -1325,7 +1330,11 @@ fun TransactionsScreen(
             },
             onAddAmortization = onAddAmortization,
             onDeleteAmortization = onDeleteAmortization,
-            autoCapitalize = autoCapitalize
+            autoCapitalize = autoCapitalize,
+            onOpenStateChange = onDialogOpenStateChange,
+            pendingSharedImageUris = pendingSharedImageUris,
+            onConsumeSharedImageUris = onConsumeSharedImageUris,
+            onShareOverflow = onShareOverflow
         )
     }
 
@@ -1391,7 +1400,11 @@ fun TransactionsScreen(
             },
             onAddAmortization = onAddAmortization,
             onDeleteAmortization = onDeleteAmortization,
-            autoCapitalize = autoCapitalize
+            autoCapitalize = autoCapitalize,
+            onOpenStateChange = onDialogOpenStateChange,
+            pendingSharedImageUris = pendingSharedImageUris,
+            onConsumeSharedImageUris = onConsumeSharedImageUris,
+            onShareOverflow = onShareOverflow
         )
     }
 
@@ -1484,7 +1497,11 @@ fun TransactionsScreen(
             onDelete = { onDeleteTransaction(txn); editingTransaction = null },
             onAddAmortization = onAddAmortization,
             onDeleteAmortization = onDeleteAmortization,
-            autoCapitalize = autoCapitalize
+            autoCapitalize = autoCapitalize,
+            onOpenStateChange = onDialogOpenStateChange,
+            pendingSharedImageUris = pendingSharedImageUris,
+            onConsumeSharedImageUris = onConsumeSharedImageUris,
+            onShareOverflow = onShareOverflow
         )
     }
 
@@ -3056,7 +3073,17 @@ fun TransactionDialog(
     onDelete: (() -> Unit)? = null,
     onAddAmortization: ((AmortizationEntry) -> Unit)? = null,
     onDeleteAmortization: ((AmortizationEntry) -> Unit)? = null,
-    autoCapitalize: Boolean = true
+    autoCapitalize: Boolean = true,
+    // Share-intent plumbing: MainActivity updates onOpenStateChange so the VM
+    // can route incoming shared images INTO this dialog instead of opening a
+    // competing one. pendingSharedImageUris is a live list the VM refills when
+    // a share arrives while the dialog is already visible — the dialog absorbs
+    // up to (5 - occupied) URIs into empty slots and fires onShareOverflow
+    // when the share contained more than can fit.
+    onOpenStateChange: ((open: Boolean) -> Unit)? = null,
+    pendingSharedImageUris: List<android.net.Uri> = emptyList(),
+    onConsumeSharedImageUris: (() -> Unit)? = null,
+    onShareOverflow: (() -> Unit)? = null
 ) {
     val S = LocalStrings.current
     val maxDecimals = CURRENCY_DECIMALS[currencySymbol] ?: 2
@@ -3104,6 +3131,15 @@ fun TransactionDialog(
     var addModeReceiptId3 by remember { mutableStateOf<String?>(null) }
     var addModeReceiptId4 by remember { mutableStateOf<String?>(null) }
     var addModeReceiptId5 by remember { mutableStateOf<String?>(null) }
+
+    // Share-intent: notify VM so it knows a TransactionDialog is alive and can
+    // route incoming ACTION_SEND images into this dialog instead of discarding
+    // or opening a second dialog. Counter-based so overlapping dialog instances
+    // (should not happen in practice) don't prematurely decrement.
+    DisposableEffect(Unit) {
+        onOpenStateChange?.invoke(true)
+        onDispose { onOpenStateChange?.invoke(false) }
+    }
 
     // Photo slot the user has highlighted (long-pressed) as the AI OCR target.
     // -1 means no slot highlighted — AI icon tap prompts the user to long-press
@@ -3226,6 +3262,61 @@ fun TransactionDialog(
                 }
             }
         }
+    }
+
+    // Share-intent absorber: when the VM hands us shared URIs (either at dialog
+    // open time or while the dialog is already visible), fill empty receipt
+    // slots in order, discard overflow, toast the overflow count once.
+    // Mirrors the dialogGalleryLauncher pipeline so behaviour matches a gallery
+    // multi-pick the user might have done inside the dialog instead.
+    LaunchedEffect(pendingSharedImageUris.size) {
+        if (pendingSharedImageUris.isEmpty()) return@LaunchedEffect
+        val uris = pendingSharedImageUris.toList()
+        val remaining = if (isEdit && editTransaction != null) {
+            5 - listOfNotNull(editTransaction.receiptId1, editTransaction.receiptId2, editTransaction.receiptId3, editTransaction.receiptId4, editTransaction.receiptId5).size
+        } else {
+            5 - listOfNotNull(addModeReceiptId1, addModeReceiptId2, addModeReceiptId3, addModeReceiptId4, addModeReceiptId5).size
+        }
+        val toProcess = uris.take(remaining.coerceAtLeast(0))
+        val overflowed = uris.size > toProcess.size
+        // Clear immediately so any concurrent share arriving mid-absorption
+        // doesn't double-process these same URIs.
+        onConsumeSharedImageUris?.invoke()
+        if (toProcess.isNotEmpty()) {
+            dialogPhotoScope.launch(Dispatchers.IO) {
+                var currentTxn = editTransaction
+                for (uri in toProcess) {
+                    val rid = ReceiptManager.processAndSavePhoto(context, uri) ?: continue
+                    withContext(Dispatchers.Main) {
+                        if (isEdit && currentTxn != null) {
+                            val slot = ReceiptManager.nextEmptySlot(currentTxn!!)
+                            if (slot != null) {
+                                val updated = when (slot) {
+                                    1 -> currentTxn!!.copy(receiptId1 = rid)
+                                    2 -> currentTxn!!.copy(receiptId2 = rid)
+                                    3 -> currentTxn!!.copy(receiptId3 = rid)
+                                    4 -> currentTxn!!.copy(receiptId4 = rid)
+                                    5 -> currentTxn!!.copy(receiptId5 = rid)
+                                    else -> currentTxn!!
+                                }
+                                currentTxn = updated
+                                onUpdatePhoto?.invoke(updated)
+                            }
+                        } else {
+                            when {
+                                addModeReceiptId1 == null -> addModeReceiptId1 = rid
+                                addModeReceiptId2 == null -> addModeReceiptId2 = rid
+                                addModeReceiptId3 == null -> addModeReceiptId3 = rid
+                                addModeReceiptId4 == null -> addModeReceiptId4 = rid
+                                addModeReceiptId5 == null -> addModeReceiptId5 = rid
+                            }
+                            addedPhotoIds.add(rid)
+                        }
+                    }
+                }
+            }
+        }
+        if (overflowed) onShareOverflow?.invoke()
     }
 
     // Category selection

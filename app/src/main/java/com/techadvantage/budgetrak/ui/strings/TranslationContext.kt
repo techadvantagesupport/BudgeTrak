@@ -229,6 +229,8 @@ object TranslationContext {
         "deletePhotoConfirm" to "Dialog body asking if user wants to remove the receipt photo.",
         "upgradeForPhotos" to "Toast message shown to free users explaining photos require paid upgrade.",
         "sharedPhotoNeedsUpgrade" to "5-second toast shown when a free user shares an image to BudgeTrak: the Add Expense dialog still opens but the photo is discarded because photos are a paid/subscriber feature.",
+        "shareBlockedByOpenDialog" to "Toast shown when the user shares an image to BudgeTrak while any non-transaction dialog (Recurring Expense, Income Source, Savings Goal, Amortization, Backup, CSV import, etc.) is open, or while the user is on any non-dashboard screen. The shared URI is discarded so in-flight edits don't get interrupted; the user is asked to close the dialog and try again. Under ~14 words.",
+        "shareOverflowDiscarded" to "Toast shown when the user shares more images than fit in the remaining receipt slots (5 per transaction). Extra images are silently discarded. Should read neutrally, no blame. Under ~14 words.",
         "pendingPhotoTapped" to "Short toast when the user taps a receipt-photo placeholder in the transaction's photo bar. The placeholder represents a photo added on another SYNC device whose bytes haven't finished syncing to this device yet. Keep the message reassuring (it will arrive), action-free, under ~12 words.",
         // AI OCR placeholder (feature not yet implemented)
         "aiOcrIconDesc" to "Accessibility content description for the AI receipt scanner icon in the add-transaction dialog header.",

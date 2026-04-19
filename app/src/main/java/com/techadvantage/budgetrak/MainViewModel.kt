@@ -109,13 +109,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var dashboardShowAddExpense by mutableStateOf(false)
 
     // ── Share-intent image (receipt shared from another app) ──
-    // Set by MainActivity on ACTION_SEND; consumed by a LaunchedEffect gated on dataLoaded.
-    var pendingSharedImageUri by mutableStateOf<android.net.Uri?>(null)
-    // After processing, holds the receiptId so TransactionDialog can seed it into slot 1.
+    // Set by MainActivity on ACTION_SEND / ACTION_SEND_MULTIPLE; consumed by a
+    // LaunchedEffect gated on dataLoaded. List so multiple shared images go into
+    // multiple photo slots on the resulting transaction dialog.
+    val pendingSharedImageUris = mutableStateListOf<android.net.Uri>()
+    // After processing the first URI, holds the receiptId so a fresh TransactionDialog
+    // can seed it into slot 1 via initialReceiptId1. Any additional shared URIs are
+    // absorbed post-open by TransactionDialog's LaunchedEffect.
     var pendingSharedReceiptId by mutableStateOf<String?>(null)
     // Signals MainActivity to show a 5s "photos require paid/subscriber" toast when a
     // free user shares an image (dialog still opens, but the photo is discarded).
     var sharedPhotoBlockedToastPending by mutableStateOf(false)
+    // Signals MainActivity to show a toast when a share arrives while a non-transaction
+    // dialog or off-dashboard screen is active — URIs are dropped; user asked to retry.
+    var shareBlockedByDialogToastPending by mutableStateOf(false)
+    // Signals MainActivity to show a toast when more photos were shared than fit
+    // in the remaining receipt slots — overflow is discarded.
+    var shareOverflowToastPending by mutableStateOf(false)
+    // TransactionDialog increments/decrements this via DisposableEffect so share-
+    // handling code can route shared images into an open dialog instead of dropping
+    // them or opening a competing second dialog.
+    var transactionDialogOpenCount by mutableIntStateOf(0)
+    val transactionDialogOpen: Boolean get() = transactionDialogOpenCount > 0
 
     // ── AI OCR ──
     var ocrState by mutableStateOf<OcrState>(OcrState.Idle)
@@ -2192,31 +2207,82 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Called by MainActivity when the app receives a shared image via ACTION_SEND.
-     * Stashes the URI; the LaunchedEffect in MainActivity consumes it once dataLoaded is true.
+     * Called by MainActivity when the app receives shared images via ACTION_SEND
+     * or ACTION_SEND_MULTIPLE. Appends to the pending list; the LaunchedEffect
+     * in MainActivity consumes the list once dataLoaded is true.
      */
-    fun handleSharedImage(uri: android.net.Uri?) {
-        if (uri == null) return
-        pendingSharedImageUri = uri
+    fun handleSharedImages(uris: List<android.net.Uri>) {
+        if (uris.isEmpty()) return
+        pendingSharedImageUris.addAll(uris)
     }
 
     /**
-     * Processes a queued shared image: persists to the receipt store, queues for sync,
-     * then routes to Dashboard and opens the Add Expense dialog with the receipt pre-seeded.
+     * True when any dialog that would lose unsaved state if interrupted is open,
+     * EXCLUDING the TransactionDialog (which we route shared images INTO).
      *
-     * Free users: dialog still opens (so they can record the transaction), but the photo
-     * is discarded and a 5s upgrade toast is shown. Receipt photos require Paid or Subscriber.
-     *
-     * Runs in viewModelScope so that state writes triggering recomposition (which cancel
-     * the caller's LaunchedEffect) do not cancel the photo-processing work.
-     *
-     * For paid/subscriber users, pendingSharedReceiptId is set *before* the dialog is
-     * opened so that TransactionDialog's `remember { mutableStateOf(initialReceiptId1) }`
-     * captures the receipt id on first composition.
+     * Checked in consumePendingSharedImages so shares arriving mid-edit of a
+     * Recurring / Income / Savings Goal / Amortization / Backup / etc. dialog
+     * are bounced with a friendly toast rather than silently absorbed into the
+     * wrong place or forcing a competing dialog open.
      */
-    fun consumePendingSharedImage(canAttachPhotos: Boolean) {
-        val uri = pendingSharedImageUri ?: return
-        pendingSharedImageUri = null
+    fun anyNonTransactionDialogOpen(): Boolean {
+        if (currentScreen != "main") return true
+        return dashShowManualDuplicateDialog ||
+            dashShowRecurringDialog ||
+            dashShowAmortizationDialog ||
+            dashShowBudgetIncomeDialog ||
+            showBackupPasswordDialog ||
+            showDisableBackupDialog ||
+            showRestoreDialog ||
+            showSavePhotosDialog ||
+            pendingREAmountUpdate != null ||
+            pendingISAmountUpdate != null
+    }
+
+    /**
+     * Consume queued shared image URIs. Routes based on current dialog state:
+     *
+     *   - Non-transaction dialog open (or off-dashboard screen) → discard all
+     *     URIs, show a blocking toast asking the user to close dialogs first.
+     *     This prevents losing in-flight edits of RE/IS/SG/backup/CSV dialogs
+     *     and avoids competing dialog overlays.
+     *   - TransactionDialog already open → leave URIs in pendingSharedImageUris.
+     *     The dialog's LaunchedEffect absorbs up to the remaining empty slots,
+     *     discards overflow, and fires shareOverflowToastPending if any dropped.
+     *   - No dialog open → process the FIRST URI to a receiptId (slot-1 seed)
+     *     and open the Add Expense dialog. Any additional URIs stay in
+     *     pendingSharedImageUris for the dialog to absorb into slots 2-5.
+     *
+     * Free users: dialog still opens (so they can record the transaction), but
+     * all photos are discarded and a 5s upgrade toast is shown.
+     *
+     * Runs in viewModelScope so state writes (recomposition → LaunchedEffect
+     * cancellation) don't kill the photo-processing work mid-flight.
+     */
+    fun consumePendingSharedImages(canAttachPhotos: Boolean) {
+        if (pendingSharedImageUris.isEmpty()) return
+
+        // Gate 1: blocking dialog → drop everything + toast.
+        if (anyNonTransactionDialogOpen()) {
+            pendingSharedImageUris.clear()
+            shareBlockedByDialogToastPending = true
+            return
+        }
+
+        // Gate 2: TransactionDialog already open → leave list; dialog absorbs.
+        if (transactionDialogOpen) {
+            if (!canAttachPhotos) {
+                pendingSharedImageUris.clear()
+                sharedPhotoBlockedToastPending = true
+            }
+            // else: the open dialog's LaunchedEffect picks up pendingSharedImageUris.
+            return
+        }
+
+        // Gate 3: no dialog open — open a fresh Add Expense dialog.
+        val uris = pendingSharedImageUris.toList()
+        pendingSharedImageUris.clear()
+
         viewModelScope.launch {
             currentScreen = "main"
             if (!canAttachPhotos) {
@@ -2224,14 +2290,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 sharedPhotoBlockedToastPending = true
                 return@launch
             }
+            // Process the FIRST uri now so TransactionDialog can seed slot 1
+            // via initialReceiptId1 on its first composition. Remaining URIs
+            // are handed to the dialog via pendingSharedImageUris for async
+            // absorption into slots 2-5.
+            val first = uris.first()
             val receiptId = withContext(Dispatchers.IO) {
-                com.techadvantage.budgetrak.data.sync.ReceiptManager.processAndSavePhoto(context, uri)
+                com.techadvantage.budgetrak.data.sync.ReceiptManager.processAndSavePhoto(context, first)
             }
             if (receiptId != null) {
-                // Queue-for-upload handled by saveTransactions when the user
-                // actually saves the dialog — skipping the queue here prevents
-                // orphans if the user cancels instead.
+                // Queue-for-upload happens at dialog-save time (saveTransactions);
+                // if the user cancels, the receipt becomes an orphan that
+                // background cleanup will prune.
                 pendingSharedReceiptId = receiptId
+            }
+            if (uris.size > 1) {
+                // Re-queue slots 2..N for post-open absorption.
+                pendingSharedImageUris.addAll(uris.drop(1))
             }
             dashboardShowAddExpense = true
         }
