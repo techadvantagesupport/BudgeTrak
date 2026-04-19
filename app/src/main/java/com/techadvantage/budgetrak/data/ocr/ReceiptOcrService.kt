@@ -1,8 +1,6 @@
 package com.techadvantage.budgetrak.data.ocr
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.Schema
@@ -118,16 +116,23 @@ object ReceiptOcrService {
                 return Result.failure(IllegalStateException("GEMINI_API_KEY missing from local.properties"))
             }
             val file = ReceiptManager.getReceiptFile(context, receiptId)
-            if (!file.exists()) {
+            if (!file.exists() || file.length() == 0L) {
                 return Result.failure(IllegalStateException("Receipt file not found: $receiptId"))
             }
-            val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-                ?: return Result.failure(IllegalStateException("Could not decode receipt image"))
+            // Read raw bytes instead of decoding to a Bitmap: the GenerativeAI
+            // SDK's content { image(bitmap) } path re-encodes every Bitmap at
+            // JPEG quality 80 before sending to Gemini (see
+            // com.google.ai.client.generativeai.internal.util.ConversionsKt.
+            // encodeBitmapToBase64Png). That silently degraded our carefully
+            // stored q=92+ receipts to q=80 in-flight — enough to flip marginal
+            // OCR decisions (e.g. Amazon brake pads from Transportation/Gas to
+            // Home Supplies). Passing raw bytes via addBlob("image/jpeg", …)
+            // bypasses the SDK re-encode entirely.
+            val bytes = file.readBytes()
 
             val result = withTimeout(TIMEOUT_MS) {
-                runPipeline(bitmap, categories, preSelectedCategoryIds)
+                runPipeline(bytes, categories, preSelectedCategoryIds)
             }
-            bitmap.recycle()
             Result.success(result)
         } catch (ce: CancellationException) {
             throw ce
@@ -155,7 +160,7 @@ object ReceiptOcrService {
     )
 
     private suspend fun runPipeline(
-        bitmap: Bitmap,
+        imageBytes: ByteArray,
         allCategories: List<Category>,
         preSelectedCategoryIds: Set<Int>
     ): OcrResult {
@@ -166,7 +171,7 @@ object ReceiptOcrService {
             allCategories.filter { it.tag != "supercharge" && it.tag != "recurring_income" && !it.deleted }
         }
 
-        val c1 = runCall1(bitmap, preSelectedCategoryIds, promptCats)
+        val c1 = runCall1(imageBytes, preSelectedCategoryIds, promptCats)
 
         // Route:
         //   preSelect.size == 1  → trust the single preselected cat (1 call)
@@ -179,18 +184,18 @@ object ReceiptOcrService {
         }
 
         return if (multiPath) {
-            runMultiCat(bitmap, c1, promptCats)
+            runMultiCat(imageBytes, c1, promptCats)
         } else {
             buildSingleCatResult(c1, preSelectedCategoryIds, promptCats)
         }
     }
 
     private suspend fun runCall1(
-        bitmap: Bitmap,
+        imageBytes: ByteArray,
         preSelectedCategoryIds: Set<Int>,
         promptCats: List<Category>
     ): Call1Result {
-        val json = JSONObject(generateWithRetry(call1Model, bitmap, buildCall1Prompt(preSelectedCategoryIds, promptCats)))
+        val json = JSONObject(generateWithRetry(call1Model, imageBytes, buildCall1Prompt(preSelectedCategoryIds, promptCats)))
         val merchant = json.optString("merchant").takeIf { it.isNotBlank() }
             ?: throw IllegalStateException("Missing merchant in Call 1")
         val merchantLegalName = json.optString("merchantLegalName").takeIf { it.isNotBlank() }
@@ -248,13 +253,13 @@ object ReceiptOcrService {
     }
 
     private suspend fun runMultiCat(
-        bitmap: Bitmap,
+        imageBytes: ByteArray,
         c1: Call1Result,
         promptCats: List<Category>
     ): OcrResult {
         val items = collapseItemsToLineItems(c1.items, promptCats)
 
-        val c3Json = generateWithRetry(call3Model, bitmap, buildCall3Prompt(items.map { it.description }))
+        val c3Json = generateWithRetry(call3Model, imageBytes, buildCall3Prompt(items.map { it.description }))
         val c3 = JSONObject(c3Json)
         val priceCentsRaw = c3.optJSONArray("prices")?.let { arr ->
             (0 until arr.length()).map { i ->
@@ -347,7 +352,7 @@ $listed"""
 
     private suspend fun generateWithRetry(
         model: GenerativeModel,
-        bitmap: Bitmap,
+        imageBytes: ByteArray,
         prompt: String
     ): String {
         val maxAttempts = 4
@@ -356,7 +361,9 @@ $listed"""
             try {
                 val response = model.generateContent(
                     content {
-                        image(bitmap)
+                        // blob(...) bypasses the SDK's Bitmap→JPEG re-encode
+                        // (fixed quality 80). See the note in extractFromReceipt.
+                        blob("image/jpeg", imageBytes)
                         text(prompt)
                     }
                 )
