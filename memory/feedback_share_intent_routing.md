@@ -13,33 +13,34 @@ just foregrounded the app and silently dropped the image — user saw nothing
 happen. Worse edge cases included competing dialogs overlaying in-flight RE/IS
 edits, or the CSV import dedup/match flow getting interrupted.
 
-**How to apply (routing rules, implemented in `MainViewModel.consumePendingSharedImages`):**
+**How to apply (routing rules, implemented in `MainViewModel.consumePendingSharedImages`).**
+Gate order matters — Gate 1 runs BEFORE Gate 2:
 
-1. **Any DIALOG or in-flight multi-step user process** → discard URIs and show
-   `strings.settings.shareBlockedByOpenDialog`. Being on a non-dashboard SCREEN
-   (Transactions list, Help pages, Settings, etc.) by itself is NOT a blocker;
-   the share handler navigates to the dashboard before opening the Add
-   Expense dialog in those cases.
+1. **TransactionDialog already open** → absorb. Route URIs into that dialog's
+   next empty receipt slots, silently discard overflow beyond 5, fire
+   `strings.settings.shareOverflowDiscarded` if any overflow occurred.
+   Must be checked first because `AdAwareDialog` auto-registers the
+   TransactionDialog itself in `shareBlockingDialogCount` — if the block-gate
+   ran first, multi-share would bounce its second image after opening the
+   dialog with the first. Transaction dialog signals its aliveness via
+   `vm.transactionDialogOpenCount` (a distinct counter from the generic one).
+2. **Any OTHER dialog or in-flight multi-step user process** → discard URIs
+   and show `strings.settings.shareBlockedByOpenDialog`. Being on a
+   non-dashboard SCREEN (Transactions list, Help pages, Settings, etc.) by
+   itself is NOT a blocker; the share handler navigates to the dashboard
+   before opening the Add Expense dialog in those cases.
    `anyNonTransactionDialogOpen()` checks:
    `dashShowManualDuplicateDialog`, `dashShowRecurringDialog`,
    `dashShowAmortizationDialog`, `dashShowBudgetIncomeDialog`,
    `showBackupPasswordDialog`, `showDisableBackupDialog`, `showRestoreDialog`,
-   `showSavePhotosDialog`, pending-amount-update prompts, and
+   `showSavePhotosDialog`, pending-amount-update prompts,
    `csvImportInProgress` (set by TransactionsScreen while the sequential CSV
-   duplicate-check phase is active; losing the match-queue progress was the
-   one "screen-level" case worth protecting). Other CSV stages (format select,
-   parsing, complete) are safe — navigation just discards the UI and the user
-   re-imports if they care.
-2. **TransactionDialog already open** → route URIs into that dialog's next
-   empty receipt slots, silently discard overflow beyond 5, fire
-   `strings.settings.shareOverflowDiscarded` if any overflow occurred.
-   Transaction dialog signals its aliveness via
-   `vm.transactionDialogOpenCount` (incremented/decremented by a
-   `DisposableEffect` inside `TransactionDialog`).
-3. **No dialog open** → set `currentScreen = "main"`, process first URI to a
-   receiptId (slot 1 seed via `pendingSharedReceiptId` + `initialReceiptId1`),
+   duplicate-check phase is active), AND `shareBlockingDialogCount > 0`
+   (the app-wide dialog-open counter; see last paragraph below).
+3. **Nothing blocking** → set `currentScreen = "main"`, process first URI to
+   a receiptId (slot 1 seed via `pendingSharedReceiptId` + `initialReceiptId1`),
    open the Add Expense dialog, let the dialog's absorber fill slots 2-5 from
-   the remainder. Overflow toast same as case 2. Works whether the user was
+   the remainder. Overflow toast same as case 1. Works whether the user was
    on the dashboard or anywhere else when the share arrived.
 
 Free (non-paid) users still see the dialog open, but every shared photo is

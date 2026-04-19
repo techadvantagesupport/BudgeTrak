@@ -2268,18 +2268,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Consume queued shared image URIs. Routes based on current dialog state:
+     * Consume queued shared image URIs. Routes based on current dialog state.
+     * Gate order matters — see below.
      *
-     *   - Non-transaction dialog open (or off-dashboard screen) → discard all
-     *     URIs, show a blocking toast asking the user to close dialogs first.
-     *     This prevents losing in-flight edits of RE/IS/SG/backup/CSV dialogs
-     *     and avoids competing dialog overlays.
-     *   - TransactionDialog already open → leave URIs in pendingSharedImageUris.
-     *     The dialog's LaunchedEffect absorbs up to the remaining empty slots,
-     *     discards overflow, and fires shareOverflowToastPending if any dropped.
-     *   - No dialog open → process the FIRST URI to a receiptId (slot-1 seed)
-     *     and open the Add Expense dialog. Any additional URIs stay in
-     *     pendingSharedImageUris for the dialog to absorb into slots 2-5.
+     *   Gate 1: TransactionDialog already open → leave URIs in the list; the
+     *     dialog's LaunchedEffect absorbs up to the remaining empty slots,
+     *     discards overflow, and fires shareOverflowToastPending if any
+     *     dropped. Checked FIRST because AdAwareDialog auto-registers the
+     *     TransactionDialog itself in shareBlockingDialogCount; if Gate 2
+     *     ran first, multi-share would bounce its second+ image after
+     *     opening the dialog with the first.
+     *   Gate 2: some OTHER dialog open (RE/IS/SG/AE/Category edit, backup
+     *     password, restore, save photos, amount-update prompt) or CSV
+     *     import's duplicate-check phase → discard URIs and toast. Protects
+     *     in-flight user edits on non-dashboard screens.
+     *   Gate 3: nothing blocking → process the FIRST URI to a receiptId
+     *     (slot-1 seed via pendingSharedReceiptId + initialReceiptId1),
+     *     open the Add Expense dialog, and leave the remainder in
+     *     pendingSharedImageUris for the dialog's absorber to fill slots
+     *     2-5. Works whether the user was on the dashboard or elsewhere.
      *
      * Free users: dialog still opens (so they can record the transaction), but
      * all photos are discarded and a 5s upgrade toast is shown.
@@ -2290,20 +2297,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun consumePendingSharedImages(canAttachPhotos: Boolean) {
         if (pendingSharedImageUris.isEmpty()) return
 
-        // Gate 1: blocking dialog → drop everything + toast.
-        if (anyNonTransactionDialogOpen()) {
-            pendingSharedImageUris.clear()
-            shareBlockedByDialogToastPending = true
-            return
-        }
-
-        // Gate 2: TransactionDialog already open → leave list; dialog absorbs.
+        // Gate 1: TransactionDialog already open → absorb regardless of what
+        // else is open. Must run BEFORE the generic block-gate because the
+        // AdAwareDialog wrapper auto-registers TransactionDialog itself in
+        // shareBlockingDialogCount — checking the block-gate first would bounce
+        // the second image of a multi-share that opened the dialog with the
+        // first image.
         if (transactionDialogOpen) {
             if (!canAttachPhotos) {
                 pendingSharedImageUris.clear()
                 sharedPhotoBlockedToastPending = true
             }
             // else: the open dialog's LaunchedEffect picks up pendingSharedImageUris.
+            return
+        }
+
+        // Gate 2: some OTHER dialog open or CSV-import mid-flow → drop + toast.
+        if (anyNonTransactionDialogOpen()) {
+            pendingSharedImageUris.clear()
+            shareBlockedByDialogToastPending = true
             return
         }
 
