@@ -168,7 +168,7 @@ Mismatch re-check: `checksumMismatchAt` → `recheckConsistency()` bypasses 24 h
 ## Future Work
 - [Subscriber feature ideas](project_subscriber_feature_ideas.md).
 - [OCR/AI receipt capture plan](project_ocr_receipt_capture.md).
-- [OCR pipeline decisions — V10 2-call shipped](project_ocr_pipeline_decisions.md) — category-agnostic 5-step scoring prompt; Call 2 removed; `\btax\b` regex; 4-round iteration methodology; 3/3 Amazon receipts correct.
+- [OCR pipeline decisions — V17 split-pipeline shipped](project_ocr_pipeline_decisions.md) — image→itemNames + image+text→scored categories + prices; text-anchor decouples categorisation from JPEG encoder variance; explicit EXCLUDE list in Call 1 for Amazon-style Order Summary rows; 3/3 Amazon receipts correct on device.
 - [AI CSV categorization](project_ai_csv_categorization.md) — **shipped 2026-04-16**. Flash-Lite, hybrid heuristic+AI (≥5 matches & ≥80% agreement skips AI), opt-in, Paid+Sub.
 - [Widget photo support (designed)](project_widget_photos.md).
 - [Pre-launch TODO](project_prelaunch_todo.md) — most done; App Check integrity level deferred.

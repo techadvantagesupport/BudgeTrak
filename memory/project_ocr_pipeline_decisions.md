@@ -4,12 +4,11 @@ description: Final shipping config for BudgeTrak receipt OCR plus alternatives a
 type: project
 originSessionId: a00b436a-3ced-4e78-a40e-780a8f5acff8
 ---
-# Shipping config (V10 2-call, locked 2026-04-19)
+# Shipping config (V17 split-pipeline, locked 2026-04-20)
 
-**Wired into the Android app as of 2026-04-19**. The 2-call V10 pipeline lives in
+**Wired into the Android app as of 2026-04-20**. The split pipeline lives in
 `app/src/main/java/.../data/ocr/ReceiptOcrService.kt`. Single entry point:
 `ReceiptOcrService.extractFromReceipt(context, receiptId, categories, preSelectedCategoryIds)`.
-Call 2 was removed entirely; its work is now done by Call 1's per-item scoring.
 
 **Model:** Gemini 2.5 Flash-Lite (`gemini-2.5-flash-lite`). No Flash or Pro fallback — Lite is reliable.
 
@@ -18,28 +17,40 @@ name except the generic concept of "Other". "Other" is resolved at runtime via
 `categories.find { it.tag == "other" }?.id`, never hardcoded. Works for any
 custom category list (rename, delete, reorder, localize — all safe).
 
-**2-call pipeline:**
-1. **Call 1** — merchant, merchantLegalName, date (YYYY-MM-DD), `amountCents`
-   (integer cents), plus `items[{description, scores:[{categoryId, score 0-100,
-   reason}]}]` (up to 3 scored cats per item), plus `multiCategoryLikely` and
-   `topChoice`. Prompt is the V10 5-step procedure per line item:
-     Step 1 (ITEM) → Step 2 (FUNCTION) → Step 3 (DOMAIN) → Step 4 (SCAN category
-     names) → Step 5 (SCORE up to 3 cats 0-100, direct match 80-100, synonym
-     50-75, weak 20-50).
-   Only skipped when `preSelectedCategoryIds.size == 1` (header-only prompt).
-2. **Call 3** — per-item `priceCents` (integer cents). Unchanged from the old
-   3-call pipeline. Considers quantity multipliers, line-level coupons, rebates,
-   weight-priced lines. Input: item descriptions collapsed from Call 1.
+**Split pipeline (2-3 calls):**
+1. **Call 1 (image → extract)**: merchant, merchantLegalName, date (YYYY-MM-DD),
+   `amountCents` (integer cents), `itemNames[]` (just strings — actual purchased
+   products from the receipt). Prompt has explicit EXCLUDE list for summary
+   rows ("Subtotal", "Grand Total", "Shipping & Handling", "Total before tax",
+   payment tenders, order metadata). Without this list the model conflates
+   Amazon-style Order Summary rows with actual products on some device encodings.
+2. **Call 2 (image + item names as text → categorise)**: returns `items[{description,
+   scores:[{categoryId, score 0-100, reason}]}]`, `multiCategoryLikely`, `topChoice`.
+   The item-name list from Call 1 is included as TEXT in the prompt so the model
+   has a stable anchor for categorisation even when Call 1's image interpretation
+   drifts slightly on a different JPEG encoder. The image is still sent so Call 2
+   can disambiguate ambiguous item names (e.g. "Ceramic Disc" = brake rotor vs
+   ceramic plate) using visual context.
+   Step 1 (ITEM) → Step 2 (FUNCTION) → Step 3 (DOMAIN) → Step 4 (SCAN category
+   names) → Step 5 (SCORE 0-100, direct match 80-100, synonym 50-75, weak 20-50).
+3. **Call 3 (image → prices, multi-cat only)**: per-item `priceCents`. Considers
+   quantity multipliers, line-level coupons, rebates, weight-priced lines.
 
 **Route decision (code-side, in `runPipeline`):**
-- `preSelect.size == 1` → trust the single preselected cat (1 API call).
-- `preSelect.size >= 2` → multi path always (2 calls).
-- `preSelect.isEmpty()` → `deriveMulti()` checks per-item top-1 cats (excluding
-  tax lines via `\btax\b` regex). ≥2 distinct top-1 cats → multi (2 calls).
-  0 or 1 distinct → single short-circuit using model's `topChoice` (1 call).
+- `preSelect.size == 1` → trust the single preselected cat, skip Calls 2 + 3. 1 API call.
+- Empty `itemNames` (unreadable receipt) → put whole amount in Other. 1 API call.
+- `preSelect.size >= 2` → multi path (all 3 calls).
+- `preSelect.isEmpty()` → run Call 2; `deriveMulti()` checks per-item top-1 cats
+  (excluding tax lines via `\btax\b` regex). ≥2 distinct top-1 cats → multi (3
+  calls). 0 or 1 distinct → single short-circuit using Call 2's `topChoice` (2
+  calls).
 
-Cost: single-cat = 1 API call. Multi-cat = 2 calls. Down from 3 calls in the
-pre-2026-04-19 architecture.
+Cost: 1-call path (preselect=1 or unreadable): unchanged from V10. Single-cat: 2
+calls (up from 1 in V10). Multi-cat: 3 calls (up from 2 in V10). The extra call
+is worth it — V10's all-in-one Call 1 was sensitive to JPEG-encoder variance
+(same stored receipt flipped Transportation/Gas ↔ Home Supplies depending on
+libjpeg-turbo vs Android Bitmap.compress). Split pipeline grounds categorisation
+in stable text.
 
 **Post-processing (pure code, no API call):**
 - **`deriveMulti`** — per-item top-1 cats → unique cats set. ≥2 = multi.
