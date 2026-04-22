@@ -333,8 +333,16 @@ object ReceiptOcrService {
                 raw.chunked(3500).forEachIndexed { i, chunk -> Log.d(TAG, "Call1r raw[$i]: $chunk") }
             }
             val json = JSONObject(raw)
+            // Merchant: empty doesn't carry meaningful signal, so fall back
+            // to C1 if C1.5 returns empty.
             val merchant = json.optString("merchant").takeIf { it.isNotBlank() } ?: c1.merchant
-            val date = json.optString("date").takeIf { it.isNotBlank() } ?: c1.date
+            // Date: empty IS a meaningful signal from C1.5 — it means "no
+            // calendar date was found in the transcript, don't invent one."
+            // Only fall back to C1 if the field is truly absent from the
+            // response (malformed JSON). An empty string "" propagates as-is
+            // so the UI can show today's default instead of C1's hallucinated
+            // 2023-10-27 on dateless receipts.
+            val date = if (json.has("date")) json.optString("date") else c1.date
             val amountCents = json.optInt("amountCents", -1).takeIf { it >= 0 } ?: c1.amountCents
             val notes = json.optString("notes").takeIf { it.isNotBlank() }
             Call1Reconciled(merchant, date, amountCents, notes)
