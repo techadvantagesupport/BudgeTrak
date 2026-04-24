@@ -22,16 +22,21 @@ originSessionId: ea9e173a-ca3d-4f87-b67a-ceac73953250
 
 **Verdict:** photo sync surface is properly gated. FCM fan-out via `onImageLedgerWrite` + the v2.7 writer-membership check in `collectRecipientTokens` is a defense-in-depth layer on top.
 
-## General-security observations (out-of-scope for photo audit, worth tracking)
+## General-security fixes (deployed 2026-04-23)
 
-### Group doc readable by any authenticated user
-`firestore.rules:11` → `match /groups/{groupId} { allow read: if request.auth != null; }` — not `isMember`. An authenticated-but-non-member can poll and see `imageLedgerFlagClock`, `deviceChecksums` (SHA-hashed cash-per-device), `familyTimezone`, `expiresAt`, `status`. Likely required for the pairing-code join flow (new device verifies groupId exists before submitting its members entry); tightening needs care.
+### ✅ Group doc: split `read` into `get`/`list`, forbid `list`
+`firestore.rules` — was `allow read: if request.auth != null` on `match /groups/{groupId}`. Now `allow get: if request.auth != null; allow list: if false;`. Blocks authenticated-but-non-member attackers from enumerating every group's `deviceChecksums`, flag clocks, metadata. `get`-by-ID is preserved so `getGroupHealthStatus` (dissolution detection) still works. No client code relied on `list` of groups; `presenceHeartbeat` Cloud Function uses Admin SDK (rules bypass).
 
-### Pairing code readable by any authenticated user
-`firestore.rules:57-62` → `allow read, delete: if request.auth != null`. An attacker who knows a pairing code can retrieve `encryptedKey` and offline-brute-force the pairing password. Protection depends on code length + password strength. TTL is 10 min (memory).
+### ✅ Pairing codes: split `read` into `get`/`list`, forbid `list`
+`firestore.rules` — pairing code doc IDs ARE the 6-character codes. With `allow read` (including `list`), any authenticated user could have enumerated every active code. Now `allow get: if request.auth != null; allow list: if false;`. The redeem flow uses `get` by ID (the joining device must already know the code). `create`/`delete` unchanged. Deployed 2026-04-23.
+
+## Remaining observations
 
 ### RTDB presence writable without membership check
-`database.rules.json:7-10` → `.write: auth != null` for `groups/$groupId/presence/$deviceId`. Any authenticated user can inject fake presence entries. Cannot escalate to FCM spam (requires real `devices/{id}/fcmToken` entry, which is Firestore-gated), but pollutes the presence roster. RTDB rules can't cross-reference Firestore, so tightening requires either Cloud-Functions-based validation or a rule-language workaround.
+`database.rules.json:7-10` → `.write: auth != null` for `groups/$groupId/presence/$deviceId`. Any authenticated user can inject fake presence entries. **Cannot escalate to FCM spam**: `presenceHeartbeat` Cloud Function filters stale devices via `tokensForDevices(groupId, staleIds)` which reads Firestore `devices/{id}` — attacker-injected presence entries won't have a matching Firestore devices doc (that requires `isMember`), so no FCM sent. Worst case is RTDB node bloat that could slow `RealtimePresenceService.getDevices()` reads for real users. RTDB rules can't cross-reference Firestore; tightening requires Cloud Functions (periodic prune of orphan presence entries) or migrating presence to Firestore. Low priority — vandalism only.
+
+### No explicit App Check check in rules
+App Check enforcement lives at the project/bucket level (Firebase Console), not in rule expressions. If that toggle is ever flipped off, rules alone don't catch it. Mitigation: a monitoring alert on `request.auth.token.firebase_app_check == null` rejected requests — not currently set up.
 
 ### No explicit App Check check in rules
 App Check enforcement lives at the project/bucket level (Firebase Console), not in rule expressions. If that toggle is ever flipped off, rules alone don't catch it. Mitigation: a monitoring alert on `request.auth.token.firebase_app_check == null` rejected requests — not currently set up.
