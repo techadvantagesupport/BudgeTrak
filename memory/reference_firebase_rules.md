@@ -32,8 +32,12 @@ originSessionId: ea9e173a-ca3d-4f87-b67a-ceac73953250
 
 ## Remaining observations
 
-### RTDB presence writable without membership check
-`database.rules.json:7-10` → `.write: auth != null` for `groups/$groupId/presence/$deviceId`. Any authenticated user can inject fake presence entries. **Cannot escalate to FCM spam**: `presenceHeartbeat` Cloud Function filters stale devices via `tokensForDevices(groupId, staleIds)` which reads Firestore `devices/{id}` — attacker-injected presence entries won't have a matching Firestore devices doc (that requires `isMember`), so no FCM sent. Worst case is RTDB node bloat that could slow `RealtimePresenceService.getDevices()` reads for real users. RTDB rules can't cross-reference Firestore; tightening requires Cloud Functions (periodic prune of orphan presence entries) or migrating presence to Firestore. Low priority — vandalism only.
+### ✅ RTDB orphan presence sweep (mitigates the RTDB write gap)
+`database.rules.json:7-10` allows any authenticated user to write `groups/$groupId/presence/$deviceId`. RTDB rules can't cross-reference Firestore, so this gap can't be closed at the rule level. Attack ceiling is node bloat — `presenceHeartbeat` Cloud Function filters stale devices via Firestore `devices/{id}/fcmToken` (gated by `isMember`), so orphan presence entries can't escalate to FCM spam.
+
+**Cloud Function `presenceOrphanCleanup`** (deployed 2026-04-23) runs every Sunday 03:00 UTC. Walks each group's RTDB presence node, bulk-fetches the corresponding Firestore `devices/{deviceId}` docs via `db().getAll(...refs)`, and removes any RTDB presence entry whose matching Firestore device doesn't exist or has `removed: true`. Log-only when nothing to prune; groupsChecked + totalPruned counters at end.
+
+Not a strict replacement for rule enforcement (fresh orphans live up to a week between sweeps) but mitigates long-term bloat. Same O(n) sequential scaling concern as `presenceHeartbeat` — acceptable at current scale, tracked alongside in `project_prelaunch_todo.md`.
 
 ### No explicit App Check check in rules
 App Check enforcement lives at the project/bucket level (Firebase Console), not in rule expressions. If that toggle is ever flipped off, rules alone don't catch it. Mitigation: a monitoring alert on `request.auth.token.firebase_app_check == null` rejected requests — not currently set up.

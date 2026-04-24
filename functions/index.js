@@ -203,6 +203,75 @@ exports.presenceHeartbeat = functions.pubsub
     return null;
   });
 
+// ─── 4. Weekly orphan-presence cleanup ────────────────────────────────
+//
+// RTDB presence rules (`database.rules.json`) allow any authenticated user
+// to write to `groups/$gid/presence/$deviceId` — they can't cross-reference
+// Firestore to enforce group membership. That means a malicious or
+// malformed client could inject fake presence entries for arbitrary
+// (groupId, deviceId) pairs. This can't escalate to FCM spam
+// (`tokensForDevices` looks up Firestore `devices/{id}/fcmToken`, which
+// requires `isMember` to write), but it bloats the RTDB presence node
+// and slows `RealtimePresenceService.getDevices()` for legitimate users.
+//
+// This weekly sweep walks every group's presence entries, checks that a
+// matching `devices/{deviceId}` exists in Firestore (with `removed` not
+// true), and removes any orphan RTDB entries. Runs Sunday 03:00 UTC —
+// low-traffic window; weekly cadence keeps cost negligible.
+//
+// Scale note: sequential walk has the same O(n) scaling concern as
+// `presenceHeartbeat`. Fine at the current scale (< 1K groups); tracked
+// alongside the heartbeat scaling TODO in `project_prelaunch_todo.md`.
+
+exports.presenceOrphanCleanup = functions.pubsub
+  .schedule('every sunday 03:00')
+  .timeZone('UTC')
+  .onRun(async () => {
+    const groupsSnap = await db().collection('groups').get();
+    let totalPruned = 0;
+    let groupsChecked = 0;
+
+    for (const groupDoc of groupsSnap.docs) {
+      const groupId = groupDoc.id;
+      try {
+        const presenceSnap = await rtdb().ref(`groups/${groupId}/presence`).once('value');
+        const presence = presenceSnap.val() || {};
+        const presentIds = Object.keys(presence);
+        if (presentIds.length === 0) continue;
+
+        // Bulk-fetch device docs so N presence entries cost N reads at most
+        // (no retry cost for missing docs — getAll returns non-existent snapshots).
+        const deviceRefs = presentIds.map(id =>
+          db().doc(`groups/${groupId}/devices/${id}`)
+        );
+        const deviceDocs = await db().getAll(...deviceRefs);
+
+        const removals = [];
+        for (let i = 0; i < presentIds.length; i++) {
+          const deviceId = presentIds[i];
+          const devDoc = deviceDocs[i];
+          const isLegit = devDoc.exists && devDoc.data()?.removed !== true;
+          if (!isLegit) {
+            removals.push(rtdb().ref(`groups/${groupId}/presence/${deviceId}`).remove());
+            console.log(`presenceOrphanCleanup: pruning ${groupId}/${deviceId}`);
+          }
+        }
+        if (removals.length > 0) {
+          await Promise.all(removals);
+          totalPruned += removals.length;
+        }
+        groupsChecked++;
+      } catch (e) {
+        console.warn(`presenceOrphanCleanup: group ${groupId} failed: ${e.message}`);
+      }
+    }
+
+    console.log(
+      `presenceOrphanCleanup: checked ${groupsChecked} group(s), pruned ${totalPruned} orphan presence entrie(s)`
+    );
+    return null;
+  });
+
 // ─── Helpers ─────────────────────────────────────────────────────────
 
 async function collectRecipientTokens(groupId, writerDeviceId) {

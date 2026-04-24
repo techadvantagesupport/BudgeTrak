@@ -1565,6 +1565,14 @@ Writer skipped via `after.lastEditBy` (client writes `incrementContentVersion`, 
 
 Peers' `BackgroundSyncWorker.runOnce` uses `enqueueUniqueWork(KEEP)` so bursts (e.g. batch rotation) collapse into one `syncReceipts()` run per peer.
 
+### 7.26.2b `presenceOrphanCleanup` — scheduled (v2.7)
+
+Weekly pub/sub (`every sunday 03:00 UTC`). Walks every group's RTDB presence node, bulk-fetches the corresponding Firestore `devices/{deviceId}` via `db.getAll(...refs)`, and removes any RTDB presence entry whose matching Firestore device is absent or `removed = true`. Mitigates the RTDB presence write gap (rules allow any authenticated user to write presence; can't cross-reference Firestore to enforce membership). Orphan presence can't escalate to FCM spam — `presenceHeartbeat` gates FCM sends via Firestore `devices/{id}/fcmToken` which requires `isMember` — but it can bloat the RTDB node and slow `RealtimePresenceService.getDevices()` for legitimate users.
+
+Counters logged: `groupsChecked`, `totalPruned`.
+
+**Scale caveat:** sequential per-group walk, same O(n) concern as `presenceHeartbeat`. Fine at current scale; upgrade alongside the heartbeat (tracked in `project_prelaunch_todo.md`).
+
 ### 7.26.3 `presenceHeartbeat` — scheduled (v2.6)
 
 Pub/Sub schedule `every 15 minutes` (UTC). Walks all groups in Firestore; for each, reads RTDB `groups/{gid}/presence`; collects `deviceId`s whose `lastSeen < now − 15 min`; calls `tokensForDevices(gid, staleIds)` → `sendFcm(tokens, {type:"heartbeat", groupId}, "heartbeat")`.
