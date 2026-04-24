@@ -1110,11 +1110,42 @@ WeakReference.
 | Tier | Condition | Work |
 |------|-----------|------|
 | 1 | `MainActivity.isAppActive` | Return — foreground owns it |
-| 2 | ViewModel alive, `isSyncConfigured` | Proactive App Check refresh (35-min threshold, 10-s timeouts); restart dead `docSync` listeners; RTDB `lastSeen` ping via `.await()` |
-| 3 | ViewModel dead | Anon auth (if sync) → App Check refresh → short-lived `FirestoreDocSync` (`awaitInitialSync(60 s)`, `stopListeners(graceful=true)`, `awaitDeserializationComplete(1 s)`) → `SyncMergeProcessor.processBatch` → save → period refresh or cash recompute → push results + `persistBackgroundPushKeys` → conflict push-back → consistency recheck → RTDB ping → receipt sync (paid) → `updateAllWidgets` |
+| 2 | ViewModel alive, `isSyncConfigured` | Proactive App Check refresh (35-min threshold, 10-s timeouts); restart dead `docSync` listeners; RTDB `lastSeen` ping; receipt sync (v2.7, paid/sub only, gated on `!vm.isReceiptSyncActive()`) |
+| 3 | ViewModel dead | Anon auth (if sync) → App Check refresh → short-lived `FirestoreDocSync` (`awaitInitialSync(60 s)`, `stopListeners(graceful=true)`, `awaitDeserializationComplete(1 s)`) → `SyncMergeProcessor.processBatch` → save → **receipt sync (paid, v2.7 order change — moved to step 2b)** → period refresh or cash recompute → push results + `persistBackgroundPushKeys` → conflict push-back → consistency recheck → RTDB ping → `updateAllWidgets` |
 
 Tiers 2–3 short-circuit on `isSyncConfigured == false` — solo users
 skip Auth / App Check / RTDB / Firestore entirely.
+
+**Tier 3 receipt-sync positioning (v2.7):** receipt sync was
+previously Step 6 (after period refresh, pushes, consistency, RTDB
+ping). Samsung power management was observed cancelling Tier 3
+runs ~1 min 48 s into the cycle, routinely hitting receipt sync
+mid-flight. Moved to Step 2b — immediately after the initial
+Firestore merge — so it runs while the worker is young and has the
+best chance of completing before any system-level cancellation. The
+later steps (period refresh, pushes, consistency, RTDB ping, widget
+update) tolerate cancellation: period refresh retries on next run,
+pushes are idempotent, consistency has a 1-h cooldown, widget
+catches up on next data change.
+
+**Cancellation handling (v2.7):** outer `doWork()` catches
+`CancellationException` explicitly and logs `stopReason` (API 31+)
+before rethrowing so WorkManager sees the worker as stopped.
+`ImageLedgerService.downloadFromCloud` / `getFlagClock` /
+`getLedgerEntry` rethrow `CancellationException` instead of
+swallowing it as a generic `Exception`, so structured-concurrency
+cancellation propagates cleanly. `ReceiptSyncManager.syncReceipts`
+logs phase boundaries (step1…step4) so tomorrow's dump can pinpoint
+the phase each cycle reached before completion or cancellation.
+
+**Persistent receipt-sync logging (v2.7):** all five
+`ReceiptSyncManager` construction sites route their `syncLog`
+callback through `BudgeTrakApplication.syncEvent`, so receipt-sync
+events land in `token_log.txt` (128 KB rotate) + Crashlytics custom
+log + logcat, surviving process death. Context-prefixed messages:
+`ReceiptSync(Tier2)`, `ReceiptSync(Tier3)`, `ReceiptSync(SyncNow)`,
+`ReceiptSync(onBatch)`, `ReceiptSync(UploadDrainer)`,
+`ReceiptSync(FgRetry)`.
 
 ### 16.14 WakeReceiver
 

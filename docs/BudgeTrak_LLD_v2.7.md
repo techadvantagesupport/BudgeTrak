@@ -1323,24 +1323,27 @@ One-shot worker triggered by FCM `debug_request` (debug builds only). Replaced t
 | Tier | Condition | Action |
 |---|---|---|
 | 1 | `MainActivity.isAppActive == true` | `Result.success()` — foreground owns sync |
-| 2 | `MainViewModel.instance?.get() != null` | If `isSyncConfigured`: proactive AppCheck refresh (35-min threshold, 10 s timeout), restart dead listeners via `docSync.startListeners()` on Main, `pingRtdbLastSeen()`. Return success |
+| 2 | `MainViewModel.instance?.get() != null` | If `isSyncConfigured`: proactive AppCheck refresh (35-min threshold, 10 s timeout), restart dead listeners via `docSync.startListeners()` on Main, `pingRtdbLastSeen()`, **v2.7: receipt sync** for paid/sub (gated on `!vm.isReceiptSyncActive()`). Return success |
 | 3 | ViewModel dead | Full sync (see below) |
 
-**Tier-3 flow** (all Firestore/RTDB blocks gated by `groupId != null`; solo users skip auth/AppCheck/RTDB/Firestore):
+**Tier-3 flow** (all Firestore/RTDB blocks gated by `groupId != null`; solo users skip auth/AppCheck/RTDB/Firestore). v2.7 order — receipt sync moved from step 11 to step 2b, and outer `doWork` catches/rethrows `CancellationException` so WorkManager sees stops cleanly:
+
 1. Anonymous Firebase Auth (gated — only when `groupId != null`).
 2. Proactive AppCheck refresh (same 35-min threshold).
 3. `syncFromFirestore`: spin up temporary `FirestoreDocSync`, `startListeners()`, `awaitInitialSync(60_000)`, `awaitDeserializationComplete()`, `stopListeners(graceful=true)`, drain another 1 s, then `SyncMergeProcessor.processBatch(...)` on `Dispatchers.Default`.
 4. `saveMergeResult` → repositories; apply `settingsPrefsToApply`; archive incoming pre-cutoff transactions.
-5. `runPeriodRefresh` → builds `RefreshConfig`, calls `PeriodRefreshService.refreshIfNeeded`.
-6. If no period boundary crossed, `recomputeCashFromDisk()` keeps widget accurate.
-7. Push refresh results: new PLE via `createDocIfAbsent`; SG via `fieldUpdate(sg, setOf("totalSavedSoFar"))`; RE via `fieldUpdate(re, setOf("setAsideSoFar","isAccelerated"))`. Then `persistBackgroundPushKeys` writes to `sync_engine/bgPushKeys` for next listener's echo suppression.
-8. Push sync side effects: delete remapped category docs, push conflicted transactions with `fieldUpdate(txn, setOf("isUserCategorized"))`.
-9. Consistency re-check: if `app_prefs.checksumMismatchAt` is >1 h old and a live ViewModel exists, `vm.recheckConsistency()`.
-10. `pingRtdbLastSeen(ctx)` — RTDB `groups/{gid}/presence/{did}/lastSeen = ServerValue.TIMESTAMP` via `.await()`. Emits `syncEvent("RTDB lastSeen pinged")` on success, `syncEvent("RTDB lastSeen ping failed: …")` on exception. Same behavior in Tier 2.
-11. Paid-user receipt sync: `TransactionRepository.load` → `RealtimePresenceService.getDevices(gid)` → `ReceiptSyncManager(...).syncReceipts(txns, devices)`.
+5. **Step 2b (v2.7): Paid-user receipt sync** — `TransactionRepository.load` → `RealtimePresenceService.getDevices(gid)` → `ReceiptSyncManager(...).syncReceipts(txns, devices)`. Moved from step 11 because Samsung power management was observed cancelling Tier 3 cycles ~1m48s in, consistently hitting receipt sync when it was last. Now runs while the worker is young; later steps tolerate cancellation better.
+6. `runPeriodRefresh` → builds `RefreshConfig`, calls `PeriodRefreshService.refreshIfNeeded`.
+7. If no period boundary crossed, `recomputeCashFromDisk()` keeps widget accurate.
+8. Push refresh results: new PLE via `createDocIfAbsent`; SG via `fieldUpdate(sg, setOf("totalSavedSoFar"))`; RE via `fieldUpdate(re, setOf("setAsideSoFar","isAccelerated"))`. Then `persistBackgroundPushKeys` writes to `sync_engine/bgPushKeys` for next listener's echo suppression.
+9. Push sync side effects: delete remapped category docs, push conflicted transactions with `fieldUpdate(txn, setOf("isUserCategorized"))`.
+10. Consistency re-check: if `app_prefs.checksumMismatchAt` is >1 h old and a live ViewModel exists, `vm.recheckConsistency()`.
+11. `pingRtdbLastSeen(ctx)` — RTDB `groups/{gid}/presence/{did}/lastSeen = ServerValue.TIMESTAMP` via `.await()`. Emits `syncEvent("RTDB lastSeen pinged")` on success, `syncEvent("RTDB lastSeen ping failed: …")` on exception. Same behavior in Tier 2.
 12. `BudgetWidgetProvider.updateAllWidgets(ctx)`.
 
-Exceptions are caught and converted to `Result.success()` so the next scheduled run isn't penalized.
+**Diagnostic logs (v2.7):** Tier 3 entry emits `Worker Tier 3: ViewModel dead, full sync (standbyBucket=N)` via `UsageStatsManager.appStandbyBucket`; exit emits `Worker Tier 3: complete in Xms`. On cancellation the outer catch logs `BackgroundSyncWorker: CANCELLED (stopReason=N msg=…)` before rethrowing (API 31+ `stopReason` distinguishes power / quota / standby-bucket causes).
+
+Exceptions are caught and converted to `Result.success()` so the next scheduled run isn't penalized. `CancellationException` is rethrown explicitly so WorkManager records the stop.
 
 ---
 
@@ -1413,7 +1416,8 @@ Firestore CRUD for `groups/{gid}/imageLedger/*` and Cloud Storage for `groups/{g
 | Method | Description |
 |---|---|
 | `uploadToCloud(gid, rid, bytes): Boolean` | 60 s timeout; updates `lastUploadError` on failure |
-| `downloadFromCloud(gid, rid): ByteArray?` | 60 s, 2 MB max |
+| `downloadFromCloud(gid, rid): ByteArray?` | 30 s (v2.7, down from 60 s — 200 KB receipts transfer in seconds), 2 MB max. Rethrows `CancellationException` cleanly so Samsung-canceled workers don't waste subsequent suspension points |
+| `getFlagClock(gid): Long` + `getLedgerEntry(gid, rid)` (v2.7 update) | Same 30 s timeout pattern; also rethrow `CancellationException` instead of swallowing as generic Exception |
 | `existsInCloud(gid, rid)` / `deleteFromCloud(gid, rid)` | Metadata read / hard delete |
 | `purgeOrphanedCloudFiles(gid): Int` | Lists cloud + reads full ledger; deletes files with no ledger entry and >10 min old |
 | `createLedgerEntry(gid, rid, originatorDeviceId)` | After successful upload of a fresh receipt; writes `contentVersion = 0`. **Does NOT bump flag clock** — peers discover via transaction-sync `onBatchChanged`, and pruning is triggered inline at every download site |
@@ -1440,7 +1444,7 @@ Coordinates receipt photo sync. Paid devices only. Constructor: `(context, group
 Constants: `STALE_ASSIGNMENT_MS = 5 min`, `FOURTEEN_DAYS_MS`, `MAX_DOWNLOAD_RETRIES = 3`, `SPEED_STALENESS_MS = 24 h`, `SNAPSHOT_THRESHOLD = 50`, `SNAPSHOT_STALE_MS = 2 h`, `BATCH_RECOVERY_CAP = 50`, `SNAPSHOT_GRACE_PERIOD_MS = 5 min`, `SNAPSHOT_MAGIC = "SNAP"`.
 
 **Public entry points** (called from `MainViewModel` foreground drainers and `BackgroundSyncWorker` Tier 2/3):
-- `syncReceipts(transactions, allDevices)` — full 5-step pipeline below.
+- `syncReceipts(transactions, allDevices)` — full 5-step pipeline below. v2.7 emits phase-boundary `syncEvent` logs (`syncReceipts START/step1/step2/step3/step3b/step4/END`, with elapsed-ms on END) and a `CANCELLED after Nms` log on `CancellationException`, rethrown to the caller. Runs through all 5 `ReceiptSyncManager` construction sites' persistent log channel (Tier2/Tier3/SyncNow/onBatch/UploadDrainer/FgRetry).
 - `processPendingUploads(): Int` — drains upload queue in chunks of 5; returns # completed. Used by `MainViewModel.kickUploadDrainer` in a backoff loop so photos reach Cloud Storage without waiting for Sync-Now.
 - `downloadReceiptWithRetry(receiptId, photoCapableDeviceIds): Boolean` — single-receipt download + save + `markPossession` + `pruneCheckTransaction` + retry counter. On 3rd real failure with `uploadedAt > 0`, deletes ledger entry and creates recovery request. Used by `onBatchChanged` fast path, `kickFgDownloadRetry` coroutine, and `processRecovery`.
 

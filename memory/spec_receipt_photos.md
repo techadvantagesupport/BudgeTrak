@@ -56,10 +56,17 @@ When `FirestoreDocSync` delivers transactions, the VM scans arriving `receiptIdN
 Catches Layer 1 misses. In-memory set of stuck receiptIds; coroutine on `viewModelScope` drains it with 30s→60s→2m→5m→10m backoff. Each attempt goes through `downloadReceiptWithRetry`, which handles the 3-retry counter and escalates to a recovery request on persistent failure. Self-filters: drops ids no longer referenced in transactions, or that appeared locally via another path. Resets backoff on any success; exits when set is empty.
 
 ### Layer 3 — Background coverage (`BackgroundSyncWorker` Tier 2 + Tier 3)
-- **Tier 2** (ViewModel alive, app backgrounded): creates a transient `ReceiptSyncManager`, calls `syncReceipts()`. Catches cases where foreground drainers didn't fire (Doze, CPU throttling). Cheap no-op when nothing's to do (pending queue empty + flag clock unchanged + no missing referenced receipts).
-- **Tier 3** (ViewModel dead, process restarted): already calls `syncReceipts()` as part of full BG sync.
+- **Tier 2** (ViewModel alive, app backgrounded): creates a transient `ReceiptSyncManager`, calls `syncReceipts()`. Catches cases where foreground drainers didn't fire (Doze, CPU throttling). Gated on `!vm.isReceiptSyncActive()` so doesn't duplicate work. Cheap no-op when nothing's to do.
+- **Tier 3** (ViewModel dead, process restarted): `syncReceipts()` runs as **step 2b**, immediately after `syncFromFirestore`+`saveMergeResult`. Prior build had it as step 6 (after period refresh, pushes, consistency, RTDB ping); Samsung power management was observed cancelling cycles ~1m48s in, consistently hitting receipt sync when it was last. Earlier position maximizes completion odds; the later Tier 3 steps (period refresh, pushes, consistency, RTDB, widget) are more cancellation-tolerant (retries, idempotency, 1h cooldowns).
 
 All four layers ultimately funnel their download logic through `ReceiptSyncManager.downloadReceiptWithRetry` — the single download helper with the 3-retry-then-convert-to-recovery-request self-healing. All four funnel their upload logic through `ReceiptSyncManager.processPendingUploads`.
+
+### Cancellation resilience + persistent logging (v2.7)
+- **`CancellationException` rethrown** (not swallowed): `ImageLedgerService.downloadFromCloud` / `getFlagClock` / `getLedgerEntry` and `BackgroundSyncWorker.doWork` now catch `CancellationException` separately and rethrow. Previously the generic `catch (e: Exception)` swallowed cancellation as a null return, causing the coroutine to continue through subsequent suspension points only to throw again — wasting cycles and confusing structured-concurrency assumptions.
+- **Download timeout** shortened from 60s → 30s in `downloadFromCloud`.
+- **`syncReceipts` phase-boundary logs**: `step1 processPendingUploads done`, `step2 processLedgerOperations done`, `step3 processRecovery done`, `step3b processSnapshotLifecycle done`, `step4 processStalePruning done`, plus `syncReceipts START/END/CANCELLED` with elapsed-ms. Diagnoses exactly which phase each cycle reaches before completion or cancellation.
+- **Persistent logging**: all five `ReceiptSyncManager` construction sites (MainViewModel × 4 + BGWorker × 2) route `syncLog` through `BudgeTrakApplication.syncEvent`, so events land in `token_log.txt` (128KB rotate) + Crashlytics + logcat. Survives process death. Context-prefixed: `ReceiptSync(Tier2)`, `ReceiptSync(Tier3)`, `ReceiptSync(SyncNow)`, `ReceiptSync(onBatch)`, `ReceiptSync(UploadDrainer)`, `ReceiptSync(FgRetry)`.
+- **`BackgroundSyncWorker` cancellation log** records `stopReason` (API 31+) + message when worker is stopped by system — distinguishes power-management / quota / standby-bucket causes in post-mortem dumps.
 
 ## Flag clock bumps (and why creation doesn't)
 
