@@ -55,11 +55,17 @@ object ImageLedgerService {
     suspend fun downloadFromCloud(groupId: String, receiptId: String): ByteArray? {
         if (!isValidReceiptId(receiptId)) { Log.w(TAG, "Invalid receiptId: $receiptId"); return null }
         return try {
-            withTimeout(60_000L) {
+            withTimeout(30_000L) {
                 val ref = storage.reference.child("groups/$groupId/receipts/$receiptId.enc")
                 // Max 2MB per receipt (generous limit for ~200KB encrypted)
                 ref.getBytes(2 * 1024 * 1024).await()
             }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Propagate cooperative cancellation so the parent worker can
+            // unwind cleanly instead of continuing to the next suspension
+            // point only to throw there. Swallowing cancellation confuses
+            // structured concurrency and wastes subsequent work.
+            throw ce
         } catch (e: Exception) {
             Log.w(TAG, "Download failed for $receiptId: ${e.message}")
             null
@@ -430,6 +436,8 @@ object ImageLedgerService {
                 if (!snap.exists()) return@withTimeout null
                 parseLedgerEntry(snap)
             }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            throw ce
         } catch (e: Exception) {
             Log.w(TAG, "Get ledger entry failed for $receiptId: ${e.message}")
             null
@@ -478,6 +486,8 @@ object ImageLedgerService {
                 val snap = groupRef(groupId).get().await()
                 snap.getLong("imageLedgerFlagClock") ?: 0L
             }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            throw ce
         } catch (e: Exception) {
             Log.w(TAG, "Get flag clock failed: ${e.message}")
             0L

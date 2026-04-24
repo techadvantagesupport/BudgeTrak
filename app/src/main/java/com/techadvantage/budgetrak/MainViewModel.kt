@@ -1708,7 +1708,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             .toSet()
                         val receiptSync = com.techadvantage.budgetrak.data.sync.ReceiptSyncManager(
                             context, currentGroupId, localDeviceId, currentKey
-                        ) { msg -> android.util.Log.i("ReceiptSync", msg) }
+                        ) { msg -> BudgeTrakApplication.syncEvent("ReceiptSync(onBatch): $msg") }
                         viewModelScope.launch {
                             missingReceiptIds.chunked(5).forEach { chunk ->
                                 kotlinx.coroutines.coroutineScope {
@@ -2143,7 +2143,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     try {
                         val receiptSync = com.techadvantage.budgetrak.data.sync.ReceiptSyncManager(
                             context, gId, localDeviceId, key
-                        )
+                        ) { msg -> BudgeTrakApplication.syncEvent("ReceiptSync(SyncNow): $msg") }
                         val updatedTxns = receiptSync.syncReceipts(transactions.toList(), syncDevices)
                         if (updatedTxns != transactions.toList()) {
                             transactions.clear()
@@ -2186,7 +2186,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             var backoffMs = 30_000L
             val receiptSync = com.techadvantage.budgetrak.data.sync.ReceiptSyncManager(
                 context, gId, localDeviceId, key
-            ) { msg -> android.util.Log.i("UploadDrainer", msg) }
+            ) { msg -> BudgeTrakApplication.syncEvent("ReceiptSync(UploadDrainer): $msg") }
             try {
                 while (isActive) {
                     val pendingBefore = com.techadvantage.budgetrak.data.sync.ReceiptManager
@@ -2259,7 +2259,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             var step = 0
             val receiptSync = com.techadvantage.budgetrak.data.sync.ReceiptSyncManager(
                 context, gId, localDeviceId, key
-            ) { msg -> android.util.Log.i("FgDownloadRetry", msg) }
+            ) { msg -> BudgeTrakApplication.syncEvent("ReceiptSync(FgRetry): $msg") }
             try {
                 while (isActive) {
                     kotlinx.coroutines.delay(backoffs[step.coerceAtMost(backoffs.size - 1)])

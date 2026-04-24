@@ -170,7 +170,10 @@ class BackgroundSyncWorker(
                                 val devices = RealtimePresenceService.getDevices(gid)
                                 val receiptSync = ReceiptSyncManager(
                                     applicationContext, gid, deviceId, key
-                                ) { msg -> Log.i(TAG, "Receipt (Tier 2): $msg") }
+                                ) { msg ->
+                                    com.techadvantage.budgetrak.BudgeTrakApplication
+                                        .syncEvent("ReceiptSync(Tier2): $msg")
+                                }
                                 receiptSync.syncReceipts(txns, devices)
                             } else {
                                 Log.i(TAG, "Tier 2 receipt sync skipped: gid=${gid != null} key=${key != null} device=${deviceId.isNotBlank()}")
@@ -185,7 +188,14 @@ class BackgroundSyncWorker(
             }
 
             // ViewModel is dead (process restarted) — run full background sync
-            com.techadvantage.budgetrak.BudgeTrakApplication.syncEvent("Worker Tier 3: ViewModel dead, full sync")
+            val tier3StartMs = System.currentTimeMillis()
+            val standbyBucket = try {
+                val usm = applicationContext.getSystemService(Context.USAGE_STATS_SERVICE)
+                    as? android.app.usage.UsageStatsManager
+                usm?.appStandbyBucket ?: -1
+            } catch (_: Exception) { -1 }
+            com.techadvantage.budgetrak.BudgeTrakApplication
+                .syncEvent("Worker Tier 3: ViewModel dead, full sync (standbyBucket=$standbyBucket)")
 
             val syncPrefs = applicationContext.getSharedPreferences("sync_engine", Context.MODE_PRIVATE)
             val groupId = syncPrefs.getString("groupId", null)
@@ -248,6 +258,42 @@ class BackgroundSyncWorker(
                 saveMergeResult(mergeResult, syncPrefs)
             }
 
+            // ── Step 2b: Background receipt photo sync — moved earlier (v2.7) ──
+            // Samsung power-management frequently cancels Tier 3 workers before
+            // the 10-min WorkManager timeout; see token_log cancellations in
+            // the 2026-04-24 dump. By running receipt sync right after the
+            // initial Firestore merge — while the worker is still young and
+            // the process is fresh — we give the receipt-sync pipeline its
+            // best chance to complete before any cancellation hits. The later
+            // Tier-3 phases (period refresh, pushes, consistency recheck,
+            // RTDB ping, widget update) are more tolerant of cancellation:
+            // period refresh retries on the next run, pushes idempotent,
+            // consistency is gated by its own 1h cooldown.
+            if (groupId != null && encryptionKey != null && deviceId != null) {
+                try {
+                    val appPrefsReceipt = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                    val photoCapable = appPrefsReceipt.getBoolean("isPaidUser", false) ||
+                            appPrefsReceipt.getBoolean("isSubscriber", false)
+                    if (photoCapable) {
+                        val txns = TransactionRepository.load(applicationContext)
+                        val devices = RealtimePresenceService.getDevices(groupId)
+                        val receiptSync = ReceiptSyncManager(
+                            applicationContext, groupId, deviceId, encryptionKey
+                        ) { msg ->
+                            com.techadvantage.budgetrak.BudgeTrakApplication
+                                .syncEvent("ReceiptSync(Tier3): $msg")
+                        }
+                        receiptSync.syncReceipts(txns, devices)
+                    }
+                } catch (ce: kotlinx.coroutines.CancellationException) {
+                    com.techadvantage.budgetrak.BudgeTrakApplication
+                        .syncEvent("Tier 3: receipt sync CANCELLED (worker being stopped)")
+                    throw ce
+                } catch (e: Exception) {
+                    Log.w(TAG, "Background receipt sync failed: ${e.message}")
+                }
+            }
+
             // ── Step 3: Run period refresh from (possibly updated) local data ──
             val appPrefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             val refreshResult = runPeriodRefresh(appPrefs)
@@ -291,31 +337,30 @@ class BackgroundSyncWorker(
             }
 
             // ── Step 5: RTDB lastSeen ping (device roster freshness) ──
+            // Receipt sync moved to Step 2b so it runs before any potential
+            // cancellation from Samsung power management.
             pingRtdbLastSeen(applicationContext)
-
-            // ── Step 6: Background receipt photo sync (paid users only) ──
-            if (groupId != null && encryptionKey != null && deviceId != null) {
-                try {
-                    val appPrefsReceipt = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                    val photoCapable = appPrefsReceipt.getBoolean("isPaidUser", false) ||
-                            appPrefsReceipt.getBoolean("isSubscriber", false)
-                    if (photoCapable) {
-                        val txns = TransactionRepository.load(applicationContext)
-                        val devices = RealtimePresenceService.getDevices(groupId)
-                        val receiptSync = ReceiptSyncManager(
-                            applicationContext, groupId, deviceId, encryptionKey
-                        ) { msg -> Log.i(TAG, "Receipt: $msg") }
-                        receiptSync.syncReceipts(txns, devices)
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Background receipt sync failed: ${e.message}")
-                }
-            }
 
             // ── Step 7: Update widget ──
             BudgetWidgetProvider.updateAllWidgets(applicationContext)
 
+            val elapsedMs = System.currentTimeMillis() - tier3StartMs
+            com.techadvantage.budgetrak.BudgeTrakApplication
+                .syncEvent("Worker Tier 3: complete in ${elapsedMs}ms")
             return Result.success()
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Worker was cancelled by the system (Samsung power management,
+            // App Standby bucket transition, quota exhaustion, process
+            // death). Log stopReason where available (API 31+) so tomorrow's
+            // dump can distinguish root causes. Do NOT catch-and-return-success
+            // here — let CancellationException propagate so WorkManager sees
+            // the worker as stopped.
+            val reason = try {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) stopReason else -1
+            } catch (_: Throwable) { -1 }
+            com.techadvantage.budgetrak.BudgeTrakApplication
+                .syncEvent("BackgroundSyncWorker: CANCELLED (stopReason=$reason msg=${ce.message})")
+            throw ce
         } catch (e: Exception) {
             Log.e(TAG, "BackgroundSyncWorker failed: ${e.message}", e)
             return Result.success() // don't retry, wait for next scheduled run

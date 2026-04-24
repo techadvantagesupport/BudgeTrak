@@ -68,32 +68,50 @@ class ReceiptSyncManager(
     ): List<Transaction> {
         val photoCapableDeviceIds = allDevices.filter { it.photoCapable }.map { it.deviceId }.toSet()
         var txns = transactions.toMutableList()
+        val startNs = System.nanoTime()
 
-        // Step 1: Process pending uploads (upload-first, then create ledger)
-        processPendingUploads()
+        try {
+            syncLog("syncReceipts START (txns=${transactions.size} photoCapable=${photoCapableDeviceIds.size})")
 
-        // Step 2: Check flag clock and handle ledger-driven operations
-        val ledgerCache = processLedgerOperations(txns, photoCapableDeviceIds, allDevices)
-        txns = ledgerCache.first
+            // Step 1: Process pending uploads (upload-first, then create ledger)
+            val uploaded = processPendingUploads()
+            syncLog("step1 processPendingUploads done (uploaded=$uploaded)")
 
-        // Step 3: Handle recovery for missing local files (with snapshot support)
-        txns = processRecovery(txns, photoCapableDeviceIds, allDevices)
+            // Step 2: Check flag clock and handle ledger-driven operations
+            val ledgerCache = processLedgerOperations(txns, photoCapableDeviceIds, allDevices)
+            txns = ledgerCache.first
+            syncLog("step2 processLedgerOperations done (ledgerRead=${ledgerCache.second != null})")
 
-        // Step 3b: Process snapshot lifecycle (build/download if requested)
-        processSnapshotLifecycle(txns, photoCapableDeviceIds, allDevices)
+            // Step 3: Handle recovery for missing local files (with snapshot support)
+            txns = processRecovery(txns, photoCapableDeviceIds, allDevices)
+            syncLog("step3 processRecovery done")
 
-        // Step 4: Check for stale pruning duty (14-day cleanup, reuses ledger if cached)
-        processStalePruning(photoCapableDeviceIds, allDevices, ledgerCache.second)
+            // Step 3b: Process snapshot lifecycle (build/download if requested)
+            processSnapshotLifecycle(txns, photoCapableDeviceIds, allDevices)
+            syncLog("step3b processSnapshotLifecycle done")
 
-        // Mark this device as "caught up" so future `processLedgerOperations`
-        // can safely contribute non-possession markers to photo-lost detection.
-        // Before this flag, a newly-joined device might mark every recovery
-        // request as non-possessed before its recovery sweep had a chance to
-        // pull the files, prematurely tipping the photo-lost tally to "all
-        // devices report false" and deleting still-recoverable photos.
-        if (!prefs.getBoolean(KEY_INITIAL_SYNC_COMPLETE, false)) {
-            prefs.edit().putBoolean(KEY_INITIAL_SYNC_COMPLETE, true).apply()
-            syncLog("Receipt sync: initial sync complete — non-possession gate lifted")
+            // Step 4: Check for stale pruning duty (14-day cleanup, reuses ledger if cached)
+            processStalePruning(photoCapableDeviceIds, allDevices, ledgerCache.second)
+            syncLog("step4 processStalePruning done")
+
+            // Mark this device as "caught up" so future `processLedgerOperations`
+            // can safely contribute non-possession markers to photo-lost detection.
+            if (!prefs.getBoolean(KEY_INITIAL_SYNC_COMPLETE, false)) {
+                prefs.edit().putBoolean(KEY_INITIAL_SYNC_COMPLETE, true).apply()
+                syncLog("initial sync complete — non-possession gate lifted")
+            }
+
+            val elapsedMs = (System.nanoTime() - startNs) / 1_000_000
+            syncLog("syncReceipts END (completed in ${elapsedMs}ms)")
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Tier 3 worker may be cancelled mid-flight by Samsung's power
+            // management (Standby bucket constraints) before WorkManager's
+            // 10-min limit. Log which phase we reached so tomorrow's dump
+            // can quantify cancellation rate; then rethrow so the coroutine
+            // unwinds cleanly.
+            val elapsedMs = (System.nanoTime() - startNs) / 1_000_000
+            syncLog("syncReceipts CANCELLED after ${elapsedMs}ms: ${ce.message}")
+            throw ce
         }
 
         return txns
