@@ -39,10 +39,17 @@ data class Transaction(
     val deleted: Boolean = false
 )
 
+// Full positive Int range so two devices in a sync group are vanishingly
+// unlikely to pick the same id concurrently (~1 in 2.1B per pair). The
+// merge processor and Firestore docId both key by Transaction.id, so a
+// cross-device collision silently overwrites one side. The same range is
+// used by all entity-id generators (RE/IS/AE/SG/Category) for the same
+// reason — keep them in sync if you change one. Existing low-range ids
+// from prior versions remain valid.
 fun generateTransactionId(existingIds: Set<Int>): Int {
     var id: Int
     do {
-        id = (0..65535).random()
+        id = (1..Int.MAX_VALUE).random()
     } while (id in existingIds)
     return id
 }

@@ -1449,7 +1449,7 @@ private fun AddCategoryDialog(
                                 if (name.isNotBlank() && selectedIcon != null) {
                                     var id: Int
                                     do {
-                                        id = (0..65535).random()
+                                        id = (1..Int.MAX_VALUE).random()
                                     } while (id in existingIds)
                                     onSave(Category(id, name.trim(), selectedIcon!!))
                                 } else {

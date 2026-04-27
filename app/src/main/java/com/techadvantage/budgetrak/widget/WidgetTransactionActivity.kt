@@ -575,10 +575,10 @@ class WidgetTransactionActivity : ComponentActivity() {
                     val dup = duplicateMatches.first()
                     val txn = pendingTxn!!
                     Dialog(
-                        onDismissRequest = {
-                            duplicateMatches = emptyList()
-                            pendingTxn = null
-                        }
+                        // Non-dismissable: tap-outside / back must NOT silently
+                        // drop the new transaction. User has to pick one of the
+                        // three buttons explicitly.
+                        onDismissRequest = { /* require explicit choice */ }
                     ) {
                         Surface(shape = dialogShape, color = MaterialTheme.colorScheme.surface) {
                             Column {

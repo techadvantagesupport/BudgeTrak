@@ -459,7 +459,9 @@ object TranslationContext {
         "discardChangesTitle" to "Title for confirmation dialog when user tries to close a transaction form with unsaved changes.",
         "discardChangesBody" to "Body text for the discard-changes confirmation dialog, asking if the user wants to discard unsaved edits.",
         "discard" to "Button label to confirm discarding unsaved changes in the transaction form.",
-        "keepEditing" to "Button label to cancel the discard action and continue editing the transaction form."
+        "keepEditing" to "Button label to cancel the discard action and continue editing the transaction form.",
+        "multiCategoryAmountsInvalid" to "Toast shown when the user taps Save in the transaction dialog with multi-category mode active but the total or one of the per-category amounts is missing, zero, or unparseable. Tells the user the form needs valid amounts before saving.",
+        "editFailedTransactionMissing" to "Toast shown when the user taps Save on an edit dialog but the underlying transaction has been removed from the active list (e.g., archive cutoff applied during the edit, or sync delivered a tombstone purge). Indicates the edit could not be persisted."
     )
 
     // ── Savings Goals Strings ──

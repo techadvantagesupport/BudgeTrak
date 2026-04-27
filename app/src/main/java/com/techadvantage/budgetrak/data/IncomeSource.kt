@@ -22,7 +22,7 @@ data class IncomeSource(
 fun generateIncomeSourceId(existingIds: Set<Int>): Int {
     var id: Int
     do {
-        id = (0..65535).random()
+        id = (1..Int.MAX_VALUE).random()
     } while (id in existingIds)
     return id
 }

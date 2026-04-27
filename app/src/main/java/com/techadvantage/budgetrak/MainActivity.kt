@@ -2052,6 +2052,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     vm.saveTransactions(listOf(vm.transactions[index]))
+                } else {
+                    // Edit target was removed from the active list between dialog open
+                    // and Save (archive cutoff fired, tombstone purge ran, etc). Surface
+                    // a toast so the user knows the edit didn't land — without this the
+                    // dialog closes successfully-looking and the edits silently vanish.
+                    toastState.show(vm.strings.transactions.editFailedTransactionMissing, durationMs = 5000L)
                 }
                 vm.recomputeCash()
             },

@@ -1089,22 +1089,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val stamped = txn.copy(
             deviceId = localDeviceId,
         )
-        // If linking to a savings goal, deduct from goal's totalSavedSoFar
-        if (stamped.linkedSavingsGoalId != null) {
-            val gIdx = savingsGoals.indexOfFirst { it.id == stamped.linkedSavingsGoalId }
-            if (gIdx >= 0) {
-                val g = savingsGoals[gIdx]
-                savingsGoals[gIdx] = g.copy(
-                    totalSavedSoFar = maxOf(0.0, g.totalSavedSoFar - stamped.amount),
-                )
-                saveSavingsGoals(listOf(savingsGoals[gIdx]))
-            }
-        }
-        // Guard against duplicate IDs (e.g., double-tap or recomposition replay)
+        // Guard against duplicate IDs (e.g., double-tap or recomposition replay).
+        // All side effects of "adding a transaction" — savings-goal deduction,
+        // local list mutation, disk write, Firestore push — are gated together
+        // so a re-entry is a complete no-op. Pre-2026-04-27 the SG deduction and
+        // the Firestore push happened outside the guard, which could
+        // double-deduct on double-tap and leak "saved on Firestore but missing
+        // locally" state when stamped collided with an existing local row.
         if (transactions.none { it.id == stamped.id }) {
+            // If linking to a savings goal, deduct from goal's totalSavedSoFar
+            if (stamped.linkedSavingsGoalId != null) {
+                val gIdx = savingsGoals.indexOfFirst { it.id == stamped.linkedSavingsGoalId }
+                if (gIdx >= 0) {
+                    val g = savingsGoals[gIdx]
+                    savingsGoals[gIdx] = g.copy(
+                        totalSavedSoFar = maxOf(0.0, g.totalSavedSoFar - stamped.amount),
+                    )
+                    saveSavingsGoals(listOf(savingsGoals[gIdx]))
+                }
+            }
             transactions.add(stamped)
+            saveTransactions(listOf(stamped))
         }
-        saveTransactions(listOf(stamped))
         recomputeCash()
         if (archiveThreshold > 0 && activeTransactions.size > archiveThreshold) {
             checkAndTriggerArchive()
@@ -2325,17 +2331,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!dataLoaded) return  // Initial async load in progress
         syncTrigger++
         android.util.Log.i("OnResume", "onResume called: dataLoaded=$dataLoaded txns=${transactions.size} pl=${periodLedger.size} availableCash=$availableCash")
-        // Reload transactions from disk on resume to pick up widget-added entries
+        // Reload transactions from disk on resume to pick up widget-added entries.
+        //
+        // Add-only merge: pull in any IDs that are on disk but not in memory.
+        // Never clear+addAll from disk — the disk read is async and races against
+        // (a) in-flight saves on Main and (b) the sync merge's deferred
+        // withContext(Dispatchers.IO) write in onBatchChanged. Both can leave
+        // memory ahead of disk briefly; a wholesale replace would clobber the
+        // newer in-memory state and silently revert just-saved transactions.
+        // The widget's only disk effect is adding new transactions (and the
+        // rare Keep-New tombstone, which sync resolves separately), so an
+        // additive merge covers the original intent without the data-loss risk.
         viewModelScope.launch {
             val diskTransactions = withContext(Dispatchers.IO) { TransactionRepository.load(context) }
-            if (diskTransactions.size != transactions.size ||
-                diskTransactions.map { it.id }.toSet() != transactions.map { it.id }.toSet()) {
-                android.util.Log.i("OnResume", "Transaction mismatch: memory=${transactions.size} disk=${diskTransactions.size}, reloading")
-                transactions.clear()
-                transactions.addAll(diskTransactions)
+            val memoryIds = transactions.map { it.id }.toSet()
+            val diskOnly = diskTransactions.filter { it.id !in memoryIds }
+            if (diskOnly.isNotEmpty()) {
+                android.util.Log.i("OnResume", "Adding ${diskOnly.size} disk-only transactions to memory (likely widget adds)")
+                transactions.addAll(diskOnly)
                 recomputeCash()
             } else {
-                android.util.Log.i("OnResume", "Transactions match disk, no reload needed")
+                android.util.Log.i("OnResume", "No disk-only transactions, no merge needed")
             }
         }
 
@@ -2703,7 +2719,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (byTag >= 0) continue
                 val usedIds = loadedCats.map { it.id }.toSet()
                 var id: Int
-                do { id = (0..65535).random() } while (id in usedIds)
+                do { id = (1..Int.MAX_VALUE).random() } while (id in usedIds)
                 val name = getDefaultCategoryName(def.tag, strings) ?: def.tag
                 val devId = SyncIdGenerator.getOrCreateDeviceId(context)
                 loadedCats.add(Category(id = id, name = name, iconName = def.iconName, tag = def.tag,

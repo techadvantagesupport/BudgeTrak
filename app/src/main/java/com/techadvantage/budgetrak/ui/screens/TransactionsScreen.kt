@@ -2640,8 +2640,11 @@ fun DuplicateResolutionDialog(
     val S = LocalStrings.current
     var selectedIndex by remember { mutableIntStateOf(0) }
     MatchDialogCard(
+        // Non-dismissable: tap-outside / back must NOT silently drop the new
+        // transaction. The user has to make an explicit choice via the buttons
+        // below (Keep Existing / Keep New / Keep Both, plus Ignore All on import).
+        onDismiss = {},
         title = S.transactions.duplicateDetected,
-        onDismiss = onKeepExisting,
         buttons = {
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -4789,15 +4792,28 @@ fun TransactionDialog(
                                     totalAmount = amt
                                     catAmounts = listOf(CategoryAmount(selectedCats[0].id, amt))
                                 } else {
+                                    // Multi-category validation: surface a toast on every
+                                    // bail-out path so the user knows their tap was rejected
+                                    // (the multi-category fields don't have isError styling
+                                    // tied to showValidation, so without this the dialog
+                                    // looked dead — see audit notes 2026-04-27).
                                     if (usePercentage) {
-                                        val total = totalAmountText.toDoubleOrNull() ?: return@DialogPrimaryButton
-                                        if (total < 0) return@DialogPrimaryButton
+                                        val total = totalAmountText.toDoubleOrNull()
+                                        if (total == null || total < 0) {
+                                            showValidation = true
+                                            toastState.show(S.transactions.multiCategoryAmountsInvalid)
+                                            return@DialogPrimaryButton
+                                        }
                                         catAmounts = selectedCats.mapNotNull { cat ->
                                             val pct = (categoryAmountTexts[cat.id] ?: "").toIntOrNull()
                                             if (pct != null && pct > 0) CategoryAmount(cat.id, total * pct / 100.0)
                                             else null
                                         }
-                                        if (catAmounts.isEmpty()) return@DialogPrimaryButton
+                                        if (catAmounts.isEmpty()) {
+                                            showValidation = true
+                                            toastState.show(S.transactions.multiCategoryAmountsInvalid)
+                                            return@DialogPrimaryButton
+                                        }
                                         totalAmount = total
                                     } else {
                                         val total = totalAmountText.toDoubleOrNull()
@@ -4805,7 +4821,11 @@ fun TransactionDialog(
                                             val amt = (categoryAmountTexts[cat.id] ?: "").toDoubleOrNull()
                                             if (amt != null && amt > 0) CategoryAmount(cat.id, amt) else null
                                         }
-                                        if (catAmounts.isEmpty()) return@DialogPrimaryButton
+                                        if (catAmounts.isEmpty()) {
+                                            showValidation = true
+                                            toastState.show(S.transactions.multiCategoryAmountsInvalid)
+                                            return@DialogPrimaryButton
+                                        }
                                         var catSum = catAmounts.sumOf { it.amount }
                                         // Nudge the largest category to fix rounding drift
                                         // from pie chart splits (up to 1 cent per category)

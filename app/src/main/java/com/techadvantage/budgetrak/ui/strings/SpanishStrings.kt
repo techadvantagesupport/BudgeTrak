@@ -459,7 +459,9 @@ object SpanishStrings : AppStrings {
         archivedNotEditable = "Las transacciones archivadas no se pueden editar",
         editDescriptionAlso = "Editar descripci\u00f3n tambi\u00e9n",
         newDescription = "Nueva descripci\u00f3n",
-        clearDescriptionConfirm = { count -> "Esto borrar\u00e1 la descripci\u00f3n en las $count transacciones seleccionadas. \u00bfContinuar?" }
+        clearDescriptionConfirm = { count -> "Esto borrar\u00e1 la descripci\u00f3n en las $count transacciones seleccionadas. \u00bfContinuar?" },
+        multiCategoryAmountsInvalid = "Ingresa un monto v\u00e1lido para cada categor\u00eda seleccionada.",
+        editFailedTransactionMissing = "No se pudo guardar \u2014 esta transacci\u00f3n ya no est\u00e1 disponible."
     )
 
     override val savingsGoals = SavingsGoalsStrings(

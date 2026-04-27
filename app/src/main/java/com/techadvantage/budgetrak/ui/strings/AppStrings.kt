@@ -489,7 +489,10 @@ data class TransactionsStrings(
     val archivedNotEditable: String,
     val editDescriptionAlso: String,
     val newDescription: String,
-    val clearDescriptionConfirm: (Int) -> String
+    val clearDescriptionConfirm: (Int) -> String,
+    // Save-time validation toasts
+    val multiCategoryAmountsInvalid: String,
+    val editFailedTransactionMissing: String
 )
 
 data class SavingsGoalsStrings(

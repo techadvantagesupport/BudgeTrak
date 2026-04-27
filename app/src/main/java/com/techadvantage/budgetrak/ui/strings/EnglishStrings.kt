@@ -459,7 +459,9 @@ object EnglishStrings : AppStrings {
         archivedNotEditable = "Archived transactions cannot be edited",
         editDescriptionAlso = "Edit Description also",
         newDescription = "New description",
-        clearDescriptionConfirm = { count -> "This will clear the description on all $count selected transactions. Continue?" }
+        clearDescriptionConfirm = { count -> "This will clear the description on all $count selected transactions. Continue?" },
+        multiCategoryAmountsInvalid = "Please enter a valid amount for each selected category.",
+        editFailedTransactionMissing = "Couldn't save \u2014 this transaction is no longer available."
     )
 
     override val savingsGoals = SavingsGoalsStrings(
