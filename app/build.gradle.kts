@@ -23,8 +23,31 @@ android {
         versionName = "2.7"
     }
 
+    signingConfigs {
+        create("release") {
+            val localProps = Properties()
+            val localPropsFile = rootProject.file("local.properties")
+            if (localPropsFile.exists()) {
+                localPropsFile.inputStream().use { localProps.load(it) }
+            }
+            val keystorePath = localProps.getProperty("BUDGETRAK_KEYSTORE_FILE", "")
+            val keystorePassword = localProps.getProperty("BUDGETRAK_KEYSTORE_PASSWORD", "")
+            val keystoreAlias = localProps.getProperty("BUDGETRAK_KEY_ALIAS", "upload")
+            if (keystorePath.isNotEmpty() && keystorePassword.isNotEmpty()) {
+                val ksFile = file(keystorePath)
+                if (ksFile.exists()) {
+                    storeFile = ksFile
+                    storePassword = keystorePassword
+                    keyAlias = keystoreAlias
+                    keyPassword = keystorePassword
+                }
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
