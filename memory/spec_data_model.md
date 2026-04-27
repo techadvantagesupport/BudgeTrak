@@ -22,7 +22,7 @@ type: reference
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
-| id | Int | — | unique per device at creation |
+| id | Int | — | random `(1..Int.MAX_VALUE).random()` rejected against local existingIds. Was `0..65535` pre-2026-04-27 (16-bit range made cross-device collisions a real risk); full positive Int range drops collision probability to ~1 in 2.1B per concurrent pair. Old low-range ids remain valid. Same range is used by all entity-id generators (RE/IS/AE/SG/Category) |
 | type | TransactionType | — | EXPENSE or INCOME |
 | date | LocalDate | — | transaction date |
 | source | String | — | vendor / bank / payer |

@@ -457,7 +457,7 @@ cash = carryForwardBalance
 
 | Property | Type | Description |
 |---|---|---|
-| id | Int | 0-65535 random |
+| id | Int | random `(1..Int.MAX_VALUE)` rejected against existing ids (was `0..65535` pre-2026-04-27) |
 | name | String | Goal name |
 | targetAmount | Double | Total to save |
 | targetDate | LocalDate? | Deadline (null = fixed-contribution) |
@@ -488,7 +488,7 @@ File: `future_expenditures.json` (legacy name). Repository migrates legacy field
 
 | Property | Type | Description |
 |---|---|---|
-| id | Int | 0-65535 random |
+| id | Int | random `(1..Int.MAX_VALUE)` rejected against existing ids (was `0..65535` pre-2026-04-27) |
 | source | String | Merchant |
 | description | String | Optional |
 | amount | Double | Total purchase |
@@ -514,7 +514,7 @@ File: `future_expenditures.json` (legacy name). Repository migrates legacy field
 
 | Property | Type | Description |
 |---|---|---|
-| id | Int | 0-65535 random |
+| id | Int | random `(1..Int.MAX_VALUE)` rejected against existing ids (was `0..65535` pre-2026-04-27) |
 | source | String | Merchant |
 | description | String | Optional |
 | amount | Double | Per-occurrence |
@@ -572,7 +572,7 @@ For MONTHS/BI_MONTHLY, `isRecurringDateCloseEnough()` applies +/- 2 day toleranc
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| id | Int | req | 0-65535 random |
+| id | Int | req | random `(1..Int.MAX_VALUE)` rejected against local existing ids (was `0..65535` pre-2026-04-27; full positive Int range drops cross-device collision probability to ≈1 in 2.1B per concurrent pair) |
 | type | TransactionType | req | EXPENSE or INCOME |
 | date | LocalDate | req | Transaction date |
 | source | String | req | Merchant |
@@ -609,6 +609,14 @@ For MONTHS/BI_MONTHLY, `isRecurringDateCloseEnough()` applies +/- 2 day toleranc
 ### 8.3 Operations
 
 Add / Edit / Delete (tombstone) / Bulk Category Change / Bulk Merchant Edit / Select All / Search by Date, Text, Amount / Filter by Category, Type.
+
+**Save-path invariants (2026-04-27 audit):**
+
+- **Atomic add** — `addTransactionWithBudgetEffect` gates ALL side effects (savings-goal deduction, local list mutation, disk write, Firestore push) behind one `transactions.none { it.id == stamped.id }` check. Double-tap or recomposition replay is a complete no-op rather than partial side effects (pre-fix the SG deduction and Firestore push happened outside the guard).
+- **Duplicate dialog non-dismissable** — `DuplicateResolutionDialog` (`TransactionsScreen.kt`) and the widget's inline duplicate dialog (`WidgetTransactionActivity.kt`) require an explicit Keep Existing / Keep New / Keep Both choice; tap-outside and back are no-ops. Pre-fix dismiss silently dropped the new transaction.
+- **Multi-category save validation surfaces** — every silent `return@DialogPrimaryButton` in the multi-category branch sets `showValidation = true` and shows `S.transactions.multiCategoryAmountsInvalid` so the dialog never looks dead on bad input.
+- **Edit no-op surfaced** — when `onUpdateTransaction`'s `indexOfFirst` returns -1 (target archived or tombstone-purged mid-edit) the user gets a 5 s toast (`editFailedTransactionMissing`) instead of a successful-looking dialog close.
+- **`onResume` add-only merge** — `MainViewModel.onResume` reloads disk and ADDs disk-only ids to memory; never overwrites in-memory state. Avoids races against in-flight saves (which write to disk synchronously on Main while the IO read is suspended) and pending sync-merge disk writes (which update memory synchronously and disk via `withContext(IO)` separately).
 
 ### 8.4 Linked Transaction Lifecycle
 
@@ -2175,6 +2183,7 @@ Do NOT upgrade `core-ktx` past 1.13.1 or Compose BOM past 2024.09.03 — newer v
 | 2.6 | 2026-04-12 | BudgeTrak Dev Team | **SSD/LLD audit against code + conversion to Markdown (2026-04-12).** Rebranded to `com.techadvantage.budgetrak` under Tech Advantage LLC (Apr 11). Full memory audit: clarified the two sync hashes (`cashHash` Layer 2 = hex via `.toString(16)` at MainViewModel.kt:835; `enc_hash` per-doc cache in FirestoreDocSync uses decimal); auto-categorize scope (CSV only, not manual entry); dropped stale `WidgetRefreshWorker` references; aligned Transaction model (no clock fields); corrected screen count (10 navigable + 10 help + QuickStartGuide overlay = 21 total); App Check TTL 4h (Console-set); Cloud Functions Node.js 22. Backup retention default 1 -> 10. Added `autoCapitalize, showWidgetLogo, incomeMode` to backup `localPrefs`. Shipped orphan-no-possession (`markNonPossession` + `checkPhotoLost`). Verified against source: 94 files / 47,192 lines; archive file is `archived_transactions.json`; manifest declares only `INTERNET` (camera/media via runtime request + pickers); `BankFormat` is `{GENERIC_CSV, US_BANK, SECURESYNC_CSV}`. |
 | 2.6.2 | 2026-04-13 | BudgeTrak Dev Team | **Bidirectional scroll affordance.** New `BoxScope.PulsingScrollArrows(scrollState)` in `Theme.kt` replaces the down-only `PulsingScrollArrow` at all 18 dialog callsites — pulsing up-arrow at TopStart when `canScrollBackward`, down-arrow at BottomStart when `canScrollForward`, with standardized paddings that clear `DialogHeader` (topPadding=36.dp) and footer (bottomPadding=50.dp). New `ScrollableDropdownContent { … }` wraps items in every `DropdownMenu` / `ExposedDropdownMenu` (12 callsites including the 24-item hour-of-day selector); caps popup height at 280.dp, indents items by 32.dp on the start edge so text clears the arrow column. Motivation: users with enlarged system font push otherwise-fitting content into scrollable territory. Down-only `PulsingScrollArrow` kept for backward compat. |
 | 2.6.1 | 2026-04-13 | BudgeTrak Dev Team | **FCM wake architecture.** Added two Cloud Functions: `onSyncDataWrite` (Firestore-triggered, fans out high-priority `sync_push` FCM to every group device except the writer — via `lastEditBy` filter) and `presenceHeartbeat` (15-min Pub/Sub cron, wakes devices whose RTDB `lastSeen` is >15 min stale). Closes the 4h46m silent-worker gap observed on Kim's Samsung device (App-Standby Bucket restrictions). Client: `FcmService` now handles `sync_push` + `heartbeat` by enqueueing `BackgroundSyncWorker.runOnce` — now `enqueueUniqueWork(ONESHOT_WORK_NAME, KEEP)` with `setExpedited(RUN_AS_NON_EXPEDITED_WORK_REQUEST)` on API 31+. `pingRtdbLastSeen` + `WakeReceiver` + FCM arrivals all log via `syncEvent()` which now writes to `token_log.txt` in debug builds (was Crashlytics + logcat only). Fixed Layer-1 consistency false-positive on `periodLedger`: `countActiveDocs` skips `deleted=false` filter for that collection since entries don't carry a `deleted` field. SYNC page UI: duplicate "Code expires in 10 minutes" label removed (dialog still shows it); group-ID row gated to debug builds only. Operations: $1 budget alert + 4 Cloud Monitoring policies (function + Firestore rate) configured on billing account `01ADA3-6ACE89-738567`; `sync-23ce9` project migrated into `techadvantagesupport-org`. |
+| 2.7.1 | 2026-04-27 | BudgeTrak Dev Team | **Transaction save audit.** Six silent-loss vectors closed: (1) `DuplicateResolutionDialog` non-dismissable on dashboard, transactions screen, and widget — tap-outside / back are no-ops, user must pick Keep Existing / Keep New / Keep Both / Ignore All. (2) `MainViewModel.onResume` disk reload changed to add-only merge — never overwrites in-memory state, eliminating races against in-flight saves and pending sync-merge disk writes. (3) Entity-id generators (Transaction / RE / IS / AE / SG / Category seed / Settings inline) widened from `0..65535` to `1..Int.MAX_VALUE` — cross-device collision probability drops from ~1 in 600 per heavy-user group/year to ~1 in 40 M (no schema change, existing low-range ids remain valid). (4) Multi-category save path sets `showValidation` and shows toast `S.transactions.multiCategoryAmountsInvalid` on every silent return — dialog no longer looks dead on bad input. (5) `onUpdateTransaction` shows `S.transactions.editFailedTransactionMissing` toast when the edit target was archived / tombstone-purged mid-edit, instead of silently closing the dialog. (6) `addTransactionWithBudgetEffect` now fully atomic: SG deduction + local list mutation + disk write + Firestore push are all gated by one dedup check, so double-tap or recomposition replay is a complete no-op. New `feedback_silent_save_failures.md` memory captures the audit method. |
 | 2.7 | 2026-04-18 | BudgeTrak Dev Team | **AI features + photo-bar UX overhaul.** Shipped **AI Receipt OCR** (Subscriber, explicit-tap via `AutoAwesome` sparkle icon) — Gemini 2.5 Flash-Lite 3-call pipeline with Call 1 routing probe (`multiCategoryLikely` hint lets single-cat receipts finish in 1 API call; multi-cat proceeds to Call 2 items+cats then Call 3 per-item prices); proportional reconciliation keeps Σ(line items) = Call 1 total; invalid-categoryId remap handles tax-line hallucinations. Shipped **AI CSV Categorization** (Paid+Sub, opt-in) — on-device matcher handles high-confidence rows; Flash-Lite called only when <5 matches or <80% agreement; payload is merchant+amount only (date removed in this release for a narrower privacy footprint). Photo-bar gesture overhaul: long-press selects the AI scan target (blue outline, dialog only — persists after release); long-press+drag reorders photos among occupied slots with real-time reshuffle animation (both the dialog thumb bar and the list-row `SwipeablePhotoRow`); pending-download placeholders participate in reorder and show an explanatory toast on tap; delete moved exclusively to the full-screen viewer. Photo-pipeline hardening: dedupe (SwipeablePhotoRow calls `processAndSavePhoto` directly, ~160 LOC removed); 400 px min-edge floor fixes unreadable tall e-receipts; PDF import via `PdfRenderer` (first page at ~1500 px, JPEG q=95); orphan cleanup prunes stale pending-upload entries; queue-on-save moves upload-queue insertion from photo-capture to `saveTransactions` so cancelled dialogs don't leak orphans. Background worker: `AtomicBoolean isRunning` double-fire guard (avoids two Tier-3 runs 118 ms apart seen in Kim's diag dump); FCM `handleWakeForSync` busy-waits up to 9 s on `isRunning` so Doze-aggressive OEMs don't kill the process before WorkManager dispatches. Cash Flow Simulation tier changed from Subscriber-only to Paid+Subscriber (entry button on `SavingsGoalsScreen`). Anchored toasts (`AppToastState.show(msg, windowYPx)`) render near triggering element instead of at default mid-screen. Memory system consolidated: `~/.claude/projects/.../memory/` is now a symlink to the repo's `memory/` directory (tracked + pushed); un-tracked `private-notes/` sibling for personal content. 98 files / 49,088 lines. |
 
 ---

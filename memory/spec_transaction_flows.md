@@ -12,11 +12,15 @@ All transaction creation (in-app, widget, CSV, future OCR) enters through:
 
 | Step | Function | Line | Behavior |
 |---|---|---|---|
-| 1 | `runMatchingChain(txn)` | 1071 | duplicate detection; if dupes found, shows dupe dialog — otherwise → step 2 |
-| 2 | `runLinkingChain(txn)` | 1019 | checks RE / AE / IncomeSource matches; shows match dialog if any — otherwise → step 3 |
-| 3 | `addTransactionWithBudgetEffect(txn)` | 991 | SG deduction, `transactions.add`, `saveTransactions(listOf(stamped))`, `recomputeCash()`, archive-check if over threshold |
+| 1 | `runMatchingChain(txn)` | 1201 | duplicate detection; if dupes found, shows dupe dialog — otherwise → step 2 |
+| 2 | `runLinkingChain(txn)` | 1149 | checks RE / AE / IncomeSource matches; shows match dialog if any — otherwise → step 3 |
+| 3 | `addTransactionWithBudgetEffect(txn)` | 1088 | dedup-by-id guard, then atomically: SG deduction, `transactions.add`, `saveTransactions(listOf(stamped))`. After the guard: `recomputeCash()`, archive-check if over threshold |
 
 New entry points should call `runMatchingChain(txn)` at the top so they inherit dedupe + matching for free.
+
+**Atomicity invariant (2026-04-27):** `addTransactionWithBudgetEffect` gates ALL add side effects (SG deduction + local list mutation + disk write + Firestore push) behind one `transactions.none { it.id == stamped.id }` check. A double-tap or recomposition replay is a complete no-op rather than re-deducting the SG or pushing a different-content txn under an existing id. Pre-2026-04-27 the SG deduction and Firestore push happened outside the guard, which could double-deduct on double-tap and leak "saved on Firestore but missing locally" state.
+
+**Duplicate dialog is non-dismissable** (`DuplicateResolutionDialog` in `TransactionsScreen.kt:2644`, dashboard wiring `MainActivity.kt:1031-1064`, widget at `WidgetTransactionActivity.kt:578`): tap-outside and back are no-ops; user must pick Keep Existing / Keep New / Keep Both (and Ignore All on import). Pre-2026-04-27 dismiss meant Keep Existing — silently dropped the new transaction.
 
 ## TransactionDialog (`ui/screens/TransactionsScreen.kt`)
 
@@ -25,6 +29,7 @@ Used for both add and edit. Fields: date, source/merchant, description, category
 - **Auto-capitalize**: merchant and description run through `TitleCaseUtil.toApaTitleCase()` on input when Settings `autoCapitalize` is on (default). `TransactionsScreen.kt:3562, 3618`.
 - **Auto-categorize on manual entry**: does **not** fire in `TransactionDialog`. Auto-categorization is CSV-bank-import only (see CSV section below). Memory previously claimed this fired on merchant-length match — that was wrong.
 - **Receipt photos**: view/add/delete via swipe-left panel; full-screen viewer supports rotation.
+- **Save validation**: every silent `return@DialogPrimaryButton` in the multi-category save branch (`~4796-4815`) sets `showValidation = true` and shows `S.transactions.multiCategoryAmountsInvalid` so the dialog never looks dead. Single-category mode already used `showValidation` for inline `isError` styling on source/category/amount; multi-category fields don't have showValidation-tied styling so the toast is the user-facing signal.
 
 ## Edit flow
 
@@ -32,6 +37,7 @@ Used for both add and edit. Fields: date, source/merchant, description, category
 - `saveTransactions(hint = listOf(updated))` → Firestore diffs `enc_*` fields against `lastKnownState` and pushes only changed fields (`FirestoreDocSync.pushRecord`). There is no per-field clock advancement; changed-field detection is encryption-hash-based.
 - Manual unlink detection in the dialog's save handler: if `prev.linked*Id != null` and updated `linked*Id == null`, set remembered amount to 0.0 and (for SG) restore `goal.totalSavedSoFar += savedAmount`.
 - Edit-RE-amount confirmation: when changing an RE's amount, a dialog asks "apply to past linked transactions?" and either updates or leaves linkedRecurringExpenseAmount on existing transactions.
+- **Edit no-op surfaced as toast** (`MainActivity.kt:2058-2063`, 2026-04-27): if `vm.transactions.indexOfFirst { it.id == updated.id }` returns -1 (target was archived or tombstone-purged mid-edit), the user gets a 5 s toast `S.transactions.editFailedTransactionMissing`. Pre-2026-04-27 the entire body was guarded by `if (index >= 0)` and the `else` branch did nothing — the dialog closed successfully-looking and the edit silently vanished.
 
 ## Delete
 
